@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { AuthService } from "../../auth/AuthService";
 import type { PullRequest, PullResponse, PushRequest, PushResponse } from "./types";
 
 function getBaseUrl(): string {
@@ -11,9 +12,17 @@ function getBaseUrl(): string {
 }
 
 export async function pushChanges(req: PushRequest): Promise<PushResponse> {
+  const accessToken = await AuthService.getAccessToken();
+  if (!accessToken) {
+    return { accepted: [], rejected: [] };
+  }
+
   const res = await fetch(`${getBaseUrl()}/sync/push`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
     body: JSON.stringify(req),
   });
 
@@ -25,11 +34,18 @@ export async function pushChanges(req: PushRequest): Promise<PushResponse> {
 }
 
 export async function pullChanges(req: PullRequest): Promise<PullResponse> {
+  const accessToken = await AuthService.getAccessToken();
+  if (!accessToken) {
+    return { cursor: req.cursor ?? "", changes: [] };
+  }
+
   const url = new URL(`${getBaseUrl()}/sync/pull`);
   url.searchParams.set("deviceId", req.deviceId);
   if (req.cursor) url.searchParams.set("cursor", req.cursor);
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
   if (!res.ok) {
     throw new Error(`pull failed: ${res.status}`);
   }

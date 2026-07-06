@@ -6,6 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { makeId, type DeckRecord, upgradeDeck } from "../src/models/deck";
 import { addDeck } from "../src/storage/decks";
 
+const APP_BG = "#2FA4A3";
+
 export default function CreateDeck() {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -34,21 +36,26 @@ export default function CreateDeck() {
   }
   
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: APP_BG }}>
       <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, gap: 16 }}>
-        <Text style={{ fontSize: 24, fontWeight: "700" }}>Create deck</Text>
+        <Text style={{ fontSize: 24, fontWeight: "700", color: "white" }}>
+          Create deck
+        </Text>
 
         <TextInput
           value={title}
           onChangeText={setTitle}
           placeholder="Deck title"
+          placeholderTextColor="rgba(255,255,255,0.7)"
           autoFocus
           style={{
             borderWidth: 1,
-            borderColor: "rgba(0, 0, 0, 0.12)",
+            borderColor: "rgba(255,255,255,0.35)",
+            backgroundColor: "rgba(255,255,255,0.16)",
             padding: 14,
             borderRadius: 12,
             fontSize: 16,
+            color: "white",
           }}
         />
 
@@ -60,10 +67,11 @@ export default function CreateDeck() {
               paddingHorizontal: 14,
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: "rgba(0, 0, 0, 0.12)",
+              borderColor: "rgba(255,255,255,0.35)",
+              backgroundColor: "rgba(255,255,255,0.12)",
             }}
           >
-            <Text style={{ fontWeight: "600" }}>Cancel</Text>
+            <Text style={{ color: "white", fontWeight: "600" }}>Cancel</Text>
           </Pressable>
 
           <Pressable
@@ -73,10 +81,11 @@ export default function CreateDeck() {
               paddingHorizontal: 14,
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: "rgba(0, 0, 0, 0.12)",
+              borderColor: "rgba(255,255,255,0.35)",
+              backgroundColor: "rgba(255,255,255,0.2)",
             }}
           >
-            <Text style={{ fontWeight: "600" }}>Create</Text>
+            <Text style={{ color: "white", fontWeight: "700" }}>Create</Text>
           </Pressable>
         </View>
       </View>

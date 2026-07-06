@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AuthService } from "../src/auth/AuthService";
+import { onAuthChanged } from "../src/auth/authSignal";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { onSyncComplete } from "../src/cloud/sync/syncSignal";
 import type { DeckRecord } from "../src/models/deck";
@@ -25,6 +27,7 @@ export default function DecksHome() {
   const [decks, setDecksState] = useState<DeckRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [mutating, setMutating] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
 
   const loadDecks = useCallback(async () => {
     const allDecks = await getDecksAll();
@@ -33,17 +36,23 @@ export default function DecksHome() {
     setLoaded(true);
   }, []);
 
+  const refreshAuthState = useCallback(async () => {
+    const token = await AuthService.getAccessToken();
+    setSignedIn(!!token);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       let alive = true;
       (async () => {
         await loadDecks();
+        await refreshAuthState();
         if (!alive) return;
       })();
       return () => {
         alive = false;
       };
-    }, [loadDecks])
+    }, [loadDecks, refreshAuthState])
   );
 
   useEffect(() => {
@@ -52,6 +61,22 @@ export default function DecksHome() {
     });
     return unsub;
   }, [loadDecks]);
+
+  useEffect(() => onAuthChanged(setSignedIn), []);
+
+  const onSignOut = async () => {
+    await AuthService.signOut();
+    await refreshAuthState();
+  };
+
+  const authButton = (
+    <Pressable
+      onPress={signedIn ? onSignOut : () => router.push("/sign-in")}
+      style={styles.newDeckBtn}
+    >
+      <Text style={styles.newDeckBtnText}>{signedIn ? "Sign out" : "Sign in"}</Text>
+    </Pressable>
+  );
 
   const confirmDelete = (deck: DeckRecord) => {
     if (mutating) return;
@@ -126,6 +151,8 @@ export default function DecksHome() {
         <Text style={styles.emptyTitle}>Interval</Text>
         <Text style={styles.emptySubtitle}>You do not have any decks yet.</Text>
 
+        {authButton}
+
         <Pressable
           onPress={() => router.push({ pathname: "/recently-deleted" as any })}
           style={styles.newDeckBtn}
@@ -163,6 +190,7 @@ export default function DecksHome() {
         </Pressable>
 
         <View style={styles.headerButtons}>
+          {authButton}
           {__DEV__ && (
             <Pressable
               onPress={() => router.push({ pathname: "/dev-tools" as any })}

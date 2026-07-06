@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.15)",
   },
   newDeckBtnText: { fontSize: 16, fontWeight: "700", color: "white" },
-  title: { marginTop: 16, fontSize: 30, fontWeight: "800", color: "black" },
+  title: { marginTop: 16, fontSize: 30, fontWeight: "800", color: "white" },
   note: { marginTop: 6, color: "white", opacity: 0.75 },
   list: { paddingTop: 14, paddingBottom: 24, gap: 12 },
   emptyCard: {
