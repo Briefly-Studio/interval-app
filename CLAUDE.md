@@ -1,0 +1,209 @@
+# Interval Engineering Guide
+
+## Project Overview
+
+Interval is an offline-first mobile flashcard and study application built with:
+
+- React Native
+- Expo
+- Expo Router
+- TypeScript
+- AsyncStorage
+- Expo SecureStore
+- AWS Cognito
+- API Gateway
+- Lambda
+- DynamoDB
+
+The application was previously called Briefly, so some storage keys, filenames, comments, and package metadata may still use that name.
+
+## Core Product Rule
+
+The app must remain useful without an account.
+
+Users must be able to:
+
+- create and edit decks locally
+- create and edit cards locally
+- complete study sessions locally
+- continue working offline
+
+Authentication exists to provide:
+
+- cloud backup
+- cross-device synchronization
+- account ownership
+- user data isolation
+
+Do not make sign-in mandatory unless explicitly approved.
+
+## Current Architecture
+
+Core entities:
+
+- deck
+- card
+- session
+
+Records generally include:
+
+- id
+- updatedAt
+- rev
+- dirty
+- deletedAt
+
+Deletion uses soft-delete tombstones.
+
+The sync flow is:
+
+1. collect dirty local records
+2. push changes to AWS
+3. mark accepted records clean
+4. pull remote changes using a cursor
+5. apply remote changes locally
+6. persist the new cursor
+
+The device ID is persisted in Expo SecureStore.
+
+## AWS Resources
+
+Region:
+
+- us-east-2
+
+API Gateway HTTP API:
+
+- API ID: 4oge9e46jf
+- stage: prod
+
+Routes:
+
+- POST /sync/push
+- GET /sync/pull
+
+Lambda functions:
+
+- IntervalSyncPush
+- IntervalSyncPull
+
+DynamoDB tables:
+
+- Interval_Records
+- Interval_Changes
+
+Cognito:
+
+- user pool: IntervalUserPool
+- pool ID: us-east-2_UwGRm5dye
+- app client: IntervalMobile
+- app client ID: 2bjbtn3qbdrcsa9k60095p5lto
+- no client secret
+
+Do not hardcode deployment URLs, credentials, tokens, or secrets.
+
+## Current Unfinished Backend Task
+
+The historical DynamoDB owner partition was:
+
+- U#public
+
+It must become:
+
+- U#<Cognito sub>
+
+The Cognito sub must be read from trusted authorizer claims.
+
+Possible event shapes:
+
+HTTP API JWT authorizer:
+
+event.requestContext.authorizer.jwt.claims.sub
+
+REST API Cognito authorizer:
+
+event.requestContext.authorizer.claims.sub
+
+Never accept the user ID from the request body or query parameters.
+
+The authenticated sync flow still needs to be validated end-to-end.
+
+Do not assume per-user partitioning is complete.
+
+## Current Known Technical Debt
+
+- Refresh tokens are stored but not used.
+- Expired access tokens are not refreshed automatically.
+- Rejected sync changes are not surfaced clearly.
+- src/cloud/sync/meta.ts appears unused and duplicates device/cursor logic.
+- dev reset logic may leave orphaned per-deck card keys.
+- README and some Briefly naming are outdated.
+- Lambda source code is not yet stored in this repository.
+- AWS infrastructure is not yet managed through Infrastructure as Code.
+
+## Engineering Rules
+
+1. Preserve offline-first behavior.
+2. Do not force authentication for local use.
+3. Never expose or commit secrets.
+4. Never print JWTs, access tokens, refresh tokens, passwords, or complete claims.
+5. Do not trust user identity from client input.
+6. Prefer small, reversible, testable changes.
+7. Do not deploy AWS changes without explicit approval.
+8. Do not run destructive AWS commands without explicit approval.
+9. Do not introduce major frameworks or rewrites without a concrete need.
+10. Explain planned file changes before substantial edits.
+11. Clearly separate confirmed facts from assumptions.
+12. Run TypeScript and lint checks after approved code changes.
+13. Show diffs before committing.
+14. Do not commit or push unless explicitly instructed.
+15. Do not modify unrelated files.
+
+## Collaboration Workflow
+
+The human user is:
+
+- product owner
+- final decision-maker
+- tester
+- deployment approver
+
+ChatGPT is used for:
+
+- architecture
+- AWS strategy
+- implementation planning
+- debugging
+- security review
+- reviewing diffs and results
+
+Claude Code is used for:
+
+- repository inspection
+- approved multi-file implementation
+- refactoring
+- local validation
+- future AWS CLI and Infrastructure as Code work under supervision
+
+Before substantial changes:
+
+1. inspect relevant files
+2. summarize findings
+3. propose the smallest safe plan
+4. list files to be changed
+5. wait for approval
+6. implement
+7. run checks
+8. show the diff and results
+
+## Local Validation
+
+Preferred safe checks:
+
+- git status
+- git diff
+- npx tsc --noEmit
+- npm run lint
+
+Do not install new packages without approval.
+Do not deploy anything without approval.
