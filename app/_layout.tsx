@@ -15,12 +15,6 @@ export default function Layout() {
   const [importing, setImporting] = useState(false);
   const didSyncRef = useRef(false);
 
-  useEffect(() => {
-    if (didSyncRef.current) return;
-    didSyncRef.current = true;
-    SyncService.syncOnce().catch(console.warn);
-  }, []);
-
   const extractFileUri = (url: string): string | null => {
     const decoded = decodeURIComponent(url);
     if (decoded.startsWith("file://")) return decoded;
