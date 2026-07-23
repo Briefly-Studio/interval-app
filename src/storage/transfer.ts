@@ -1,3 +1,4 @@
+import { AuthService } from "../auth/AuthService";
 import { type CardRecord, upgradeCard } from "../models/card";
 import { type DeckRecord, upgradeDeck } from "../models/deck";
 import { buildExportPayload, validatePayload } from "../domain/deckTransfer";
@@ -6,19 +7,22 @@ import { getDeckById, addDeck } from "./decks";
 import { getSessionsForDeck } from "./sessions";
 
 export async function exportDeckToJson(deckId: string): Promise<string> {
-  const deck = await getDeckById(deckId);
+  const scope = await AuthService.getActiveScope();
+  const deck = await getDeckById(scope, deckId);
   if (!deck) {
     throw new Error("Deck not found");
   }
 
-  const cards = await getCards(deckId);
-  const sessions = await getSessionsForDeck(deckId);
+  const cards = await getCards(scope, deckId);
+  const sessions = await getSessionsForDeck(scope, deckId);
 
   const payload = buildExportPayload(deck, cards);
   return JSON.stringify({ ...payload, sessions }, null, 2);
 }
 
 export async function importDeckFromJson(raw: string): Promise<{ newDeckId: string }> {
+  const scope = await AuthService.getActiveScope();
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -45,7 +49,7 @@ export async function importDeckFromJson(raw: string): Promise<{ newDeckId: stri
     dirty: true,
   };
 
-  await addDeck(deck);
+  await addDeck(scope, deck);
 
   const timestamp = Date.now();
   const newCards: CardRecord[] = payload.cards.map((card, index) => ({
@@ -62,7 +66,7 @@ export async function importDeckFromJson(raw: string): Promise<{ newDeckId: stri
     dirty: true,
   }));
 
-  await setCards(newDeckId, newCards);
+  await setCards(scope, newDeckId, newCards);
 
   return { newDeckId };
 }

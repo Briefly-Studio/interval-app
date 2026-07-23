@@ -1,10 +1,12 @@
-const listeners = new Set<(signedIn: boolean) => void>();
+import type { WorkspaceScope } from "../storage/workspaceScope";
 
-export function onAuthChanged(cb: (signedIn: boolean) => void): () => void {
+const listeners = new Set<(scope: WorkspaceScope) => void>();
+
+export function onWorkspaceChanged(cb: (scope: WorkspaceScope) => void): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);
 }
 
-export function emitAuthChanged(signedIn: boolean): void {
-  listeners.forEach((listener) => listener(signedIn));
+export function emitWorkspaceChanged(scope: WorkspaceScope): void {
+  listeners.forEach((listener) => listener(scope));
 }

@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { AuthService } from "../src/auth/AuthService";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import type { DeckRecord } from "../src/models/deck";
 import { getCardsAll, setCards } from "../src/storage/cards";
@@ -28,7 +29,8 @@ export default function RecentlyDeletedScreen() {
   const [showExpired, setShowExpired] = useState(false);
 
   const loadDeleted = useCallback(async () => {
-    const allDecks = await getDecksAll();
+    const scope = await AuthService.getActiveScope();
+    const allDecks = await getDecksAll(scope);
     const cutoff = Date.now() - TRASH_DAYS * 24 * 60 * 60 * 1000;
     const deleted = allDecks
       .filter((deck) => {
@@ -61,7 +63,8 @@ export default function RecentlyDeletedScreen() {
   );
 
   const restoreDeck = async (deck: DeckRecord) => {
-    const allDecks = await getDecksAll();
+    const scope = await AuthService.getActiveScope();
+    const allDecks = await getDecksAll(scope);
     const now = new Date().toISOString();
     let newRev = 0;
     const updated = allDecks.map((item) => {
@@ -76,8 +79,8 @@ export default function RecentlyDeletedScreen() {
         lastSyncedAt: undefined,
       };
     });
-    await setDecks(updated);
-    const allCards = await getCardsAll(deck.id);
+    await setDecks(scope, updated);
+    const allCards = await getCardsAll(scope, deck.id);
     const updatedCards = allCards.map((card) => {
       if (!card.deletedAt) return card;
       return {
@@ -88,20 +91,21 @@ export default function RecentlyDeletedScreen() {
         dirty: true,
       };
     });
-    await setCards(deck.id, updatedCards);
+    await setCards(scope, deck.id, updatedCards);
     await SyncService.syncOnce();
     await loadDeleted();
     Alert.alert("Restored");
   };
 
   const purgeDeleted = async () => {
-    const allDecks = await getDecksAll();
+    const scope = await AuthService.getActiveScope();
+    const allDecks = await getDecksAll(scope);
     const deletedIds = allDecks.filter((d) => d.deletedAt).map((d) => d.id);
     const updated = allDecks.filter((d) => !d.deletedAt);
-    await setDecks(updated);
+    await setDecks(scope, updated);
     for (const id of deletedIds) {
       try {
-        await AsyncStorage.removeItem(cardsKeyForDeck(id));
+        await AsyncStorage.removeItem(cardsKeyForDeck(scope, id));
       } catch {
         // ignore
       }

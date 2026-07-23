@@ -1,5 +1,4 @@
 import Constants from "expo-constants";
-import { AuthService } from "../../auth/AuthService";
 import type { PullRequest, PullResponse, PushRequest, PushResponse } from "./types";
 
 function getBaseUrl(): string {
@@ -11,12 +10,10 @@ function getBaseUrl(): string {
   return apiBaseUrl;
 }
 
-export async function pushChanges(req: PushRequest): Promise<PushResponse> {
-  const accessToken = await AuthService.getAccessToken();
-  if (!accessToken) {
-    return { accepted: [], rejected: [] };
-  }
-
+export async function pushChanges(
+  accessToken: string,
+  req: PushRequest
+): Promise<PushResponse> {
   const res = await fetch(`${getBaseUrl()}/sync/push`, {
     method: "POST",
     headers: {
@@ -33,12 +30,10 @@ export async function pushChanges(req: PushRequest): Promise<PushResponse> {
   return (await res.json()) as PushResponse;
 }
 
-export async function pullChanges(req: PullRequest): Promise<PullResponse> {
-  const accessToken = await AuthService.getAccessToken();
-  if (!accessToken) {
-    return { cursor: req.cursor ?? "", changes: [] };
-  }
-
+export async function pullChanges(
+  accessToken: string,
+  req: PullRequest
+): Promise<PullResponse> {
   const url = new URL(`${getBaseUrl()}/sync/pull`);
   url.searchParams.set("deviceId", req.deviceId);
   if (req.cursor) url.searchParams.set("cursor", req.cursor);

@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AuthService } from "../../../src/auth/AuthService";
 import type { StudySession } from "../../../src/models/session";
 import { deleteSessionsForDeck, getSessionsForDeck } from "../../../src/storage/sessions";
 
@@ -40,7 +41,8 @@ export default function DeckHistoryScreen() {
 
       (async () => {
         if (!deckId) return;
-        const s = await getSessionsForDeck(deckId);
+        const scope = await AuthService.getActiveScope();
+        const s = await getSessionsForDeck(scope, deckId);
         if (alive) {
           setSessions(s);
           setLoaded(true);
@@ -71,7 +73,8 @@ export default function DeckHistoryScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteSessionsForDeck(deckId);
+              const scope = await AuthService.getActiveScope();
+              await deleteSessionsForDeck(scope, deckId);
               setSessions([]);
             } catch {
               Alert.alert("Couldn’t clear history", "Please try again.");

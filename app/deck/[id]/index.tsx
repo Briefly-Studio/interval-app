@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AuthService } from "../../../src/auth/AuthService";
 import { computeDeckStats } from "../../../src/domain/deckStats";
 import { formatDuration, formatTimestamp } from "../../../src/domain/sessionFormat";
 import type { Card } from "../../../src/models/card";
@@ -59,9 +60,10 @@ export default function DeckDetails() {
 
       (async () => {
         if (!id) return;
-        const d = await getDeckById(id);
-        const c = await getCards(id);
-        const s = await getSessionsForDeck(id);
+        const scope = await AuthService.getActiveScope();
+        const d = await getDeckById(scope, id);
+        const c = await getCards(scope, id);
+        const s = await getSessionsForDeck(scope, id);
 
         if (alive) {
           setDeck(d);
@@ -89,7 +91,8 @@ export default function DeckDetails() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          const updated = await deleteCard(id, card.id);
+          const scope = await AuthService.getActiveScope();
+          const updated = await deleteCard(scope, id, card.id);
           setCards(updated);
         },
       },
@@ -102,7 +105,8 @@ export default function DeckDetails() {
       {
         text: "Easy",
         onPress: async () => {
-          const updated = await updateAllCardsDifficulty(id, "easy");
+          const scope = await AuthService.getActiveScope();
+          const updated = await updateAllCardsDifficulty(scope, id, "easy");
           setCards(updated);
           Alert.alert("Updated all cards to Easy");
         },
@@ -110,7 +114,8 @@ export default function DeckDetails() {
       {
         text: "Medium",
         onPress: async () => {
-          const updated = await updateAllCardsDifficulty(id, "medium");
+          const scope = await AuthService.getActiveScope();
+          const updated = await updateAllCardsDifficulty(scope, id, "medium");
           setCards(updated);
           Alert.alert("Updated all cards to Medium");
         },
@@ -118,7 +123,8 @@ export default function DeckDetails() {
       {
         text: "Hard",
         onPress: async () => {
-          const updated = await updateAllCardsDifficulty(id, "hard");
+          const scope = await AuthService.getActiveScope();
+          const updated = await updateAllCardsDifficulty(scope, id, "hard");
           setCards(updated);
           Alert.alert("Updated all cards to Hard");
         },

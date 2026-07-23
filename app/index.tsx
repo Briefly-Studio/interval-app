@@ -13,12 +13,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AuthService } from "../src/auth/AuthService";
-import { onAuthChanged } from "../src/auth/authSignal";
+import { onWorkspaceChanged } from "../src/auth/authSignal";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { onSyncComplete } from "../src/cloud/sync/syncSignal";
 import type { DeckRecord } from "../src/models/deck";
 import { deleteCardsForDeck } from "../src/storage/cards";
 import { deleteDeckById, getDecksAll, setDecks } from "../src/storage/decks";
+import type { WorkspaceScope } from "../src/storage/workspaceScope";
 
 const APP_BG = "#2FA4A3"; // teal background like original
 
@@ -27,46 +28,59 @@ export default function DecksHome() {
   const [decks, setDecksState] = useState<DeckRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [mutating, setMutating] = useState(false);
-  const [signedIn, setSignedIn] = useState(false);
+  const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
+  const signedIn = scope.kind === "user";
 
-  const loadDecks = useCallback(async () => {
-    const allDecks = await getDecksAll();
+  const loadDecks = useCallback(async (activeScope: WorkspaceScope) => {
+    const allDecks = await getDecksAll(activeScope);
     const data = allDecks.filter((deck) => !deck.deletedAt);
     setDecksState(data);
     setLoaded(true);
   }, []);
 
-  const refreshAuthState = useCallback(async () => {
-    const token = await AuthService.getAccessToken();
-    setSignedIn(!!token);
-  }, []);
+  // Resolves the active workspace once, then reloads the deck list for that exact scope —
+  // this is what makes sign-in/sign-out/account-switch show the right workspace's decks.
+  const refreshWorkspace = useCallback(async () => {
+    const activeScope = await AuthService.getActiveScope();
+    setScope(activeScope);
+    await loadDecks(activeScope);
+  }, [loadDecks]);
 
   useFocusEffect(
     useCallback(() => {
       let alive = true;
       (async () => {
-        await loadDecks();
-        await refreshAuthState();
         if (!alive) return;
+        await refreshWorkspace();
       })();
       return () => {
         alive = false;
       };
-    }, [loadDecks, refreshAuthState])
+    }, [refreshWorkspace])
   );
 
   useEffect(() => {
     const unsub = onSyncComplete(() => {
-      loadDecks();
+      refreshWorkspace();
     });
     return unsub;
-  }, [loadDecks]);
+  }, [refreshWorkspace]);
 
-  useEffect(() => onAuthChanged(setSignedIn), []);
+  useEffect(
+    () =>
+      onWorkspaceChanged((newScope) => {
+        setScope(newScope);
+        loadDecks(newScope);
+      }),
+    [loadDecks]
+  );
 
   const onSignOut = async () => {
     await AuthService.signOut();
-    await refreshAuthState();
+    // Belt-and-suspenders: signOut() already emits a workspace-changed event that the
+    // subscription above reacts to, but resolving it here too guarantees the guest deck
+    // list is visible immediately, regardless of event ordering.
+    await refreshWorkspace();
   };
 
   const authButton = (
@@ -89,13 +103,15 @@ export default function DecksHome() {
           if (mutating) return;
           setMutating(true);
           try {
+            const activeScope = await AuthService.getActiveScope();
+
             // Delete deck record
-            await deleteDeckById(deck.id);
+            await deleteDeckById(activeScope, deck.id);
 
             // Delete cards stored for that deck (cascade delete)
-            await deleteCardsForDeck(deck.id);
+            await deleteCardsForDeck(activeScope, deck.id);
 
-            await loadDecks();
+            await loadDecks(activeScope);
           } finally {
             setMutating(false);
           }
@@ -115,7 +131,8 @@ export default function DecksHome() {
           if (!title) return;
           setMutating(true);
           try {
-            const allDecks = await getDecksAll();
+            const activeScope = await AuthService.getActiveScope();
+            const allDecks = await getDecksAll(activeScope);
             const now = new Date().toISOString();
             const updated = allDecks.map((item) => {
               if (item.id !== deck.id) return item;
@@ -127,9 +144,9 @@ export default function DecksHome() {
                 dirty: true,
               };
             });
-            await setDecks(updated);
+            await setDecks(activeScope, updated);
             await SyncService.syncOnce();
-            await loadDecks();
+            await loadDecks(activeScope);
           } finally {
             setMutating(false);
           }

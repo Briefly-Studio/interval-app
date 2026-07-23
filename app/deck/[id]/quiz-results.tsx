@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AuthService } from "../../../src/auth/AuthService";
 import { type SessionRecord, upgradeSession } from "../../../src/models/session";
 import { addSession } from "../../../src/storage/sessions";
 
@@ -90,7 +91,8 @@ export default function QuizResults() {
 
     (async () => {
       try {
-        await addSession(session);
+        const scope = await AuthService.getActiveScope();
+        await addSession(scope, session);
       } catch {
         // ignore recording errors
       }

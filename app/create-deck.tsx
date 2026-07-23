@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AuthService } from "../src/auth/AuthService";
 import { makeId, type DeckRecord, upgradeDeck } from "../src/models/deck";
 import { addDeck } from "../src/storage/decks";
 
@@ -31,7 +32,8 @@ export default function CreateDeck() {
       dirty: true,
     };
 
-    await addDeck(deck);
+    const scope = await AuthService.getActiveScope();
+    await addDeck(scope, deck);
     router.back();
   }
   

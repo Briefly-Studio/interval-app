@@ -3,6 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
+import { onWorkspaceChanged } from "../src/auth/authSignal";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { handleIncomingFile } from "../src/domain/openFileHandler";
 
@@ -63,10 +64,20 @@ export default function Layout() {
     if (importing) return;
     if (didSyncRef.current) return;
     didSyncRef.current = true;
-    SyncService.syncOnce()
-      .then(() => console.log("SYNC OK"))
-      .catch((e) => console.error("SYNC FAILED", e));
+    SyncService.syncOnce().catch((e) => console.error("SYNC FAILED", e));
   }, [importing]);
+
+  // Sign-in and account switches must trigger a fresh sync of the newly active workspace,
+  // not just the one-shot sync above that only fires on cold launch. Guest transitions are
+  // safe to pass through unconditionally — SyncService itself no-ops without a cloud identity.
+  useEffect(() => {
+    const unsub = onWorkspaceChanged((scope) => {
+      if (scope.kind === "user") {
+        SyncService.syncOnce().catch((e) => console.error("SYNC FAILED", e));
+      }
+    });
+    return unsub;
+  }, []);
 
   return (
     <View style={styles.container}>

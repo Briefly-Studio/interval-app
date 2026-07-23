@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AuthService } from "../../../src/auth/AuthService";
 import { type CardRecord, type Difficulty, upgradeCard } from "../../../src/models/card";
 import { addCard } from "../../../src/storage/cards";
 
@@ -47,7 +48,8 @@ export default function AddCardScreen() {
       dirty: true,
     };
 
-    await addCard(deckId, card);
+    const scope = await AuthService.getActiveScope();
+    await addCard(scope, deckId, card);
     router.back();
   };
 

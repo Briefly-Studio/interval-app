@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AuthService } from "../../../src/auth/AuthService";
 import type { Card } from "../../../src/models/card";
 import { smartShuffle } from "../../../src/domain/smartShuffle";
 import { getCards } from "../../../src/storage/cards";
@@ -38,7 +39,8 @@ export default function ReviewScreen() {
     let alive = true;
     (async () => {
       if (!deckId) return;
-      const data = await getCards(deckId);
+      const scope = await AuthService.getActiveScope();
+      const data = await getCards(scope, deckId);
       const ordered = smartShuffle(data);
 
       if (alive) {

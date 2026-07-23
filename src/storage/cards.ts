@@ -2,17 +2,21 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { CardRecord } from "../models/card";
 import { upgradeCard } from "../models/card";
 import { cardsKeyForDeck } from "./keys";
+import type { WorkspaceScope } from "./workspaceScope";
 
-export async function getCardsAll(deckId: string): Promise<CardRecord[]> {
+export async function getCardsAll(
+  scope: WorkspaceScope,
+  deckId: string
+): Promise<CardRecord[]> {
   if (!deckId) return [];
   try {
-    const raw = await AsyncStorage.getItem(cardsKeyForDeck(deckId));
+    const raw = await AsyncStorage.getItem(cardsKeyForDeck(scope, deckId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     const upgraded = parsed.map((card) => upgradeCard(card));
     try {
-      await setCards(deckId, upgraded);
+      await setCards(scope, deckId, upgraded);
     } catch {
       // ignore
     }
@@ -22,29 +26,44 @@ export async function getCardsAll(deckId: string): Promise<CardRecord[]> {
   }
 }
 
-export async function getCards(deckId: string): Promise<CardRecord[]> {
-  const cards = await getCardsAll(deckId);
+export async function getCards(
+  scope: WorkspaceScope,
+  deckId: string
+): Promise<CardRecord[]> {
+  const cards = await getCardsAll(scope, deckId);
   return cards.filter((card) => !card.deletedAt);
 }
 
-export async function setCards(deckId: string, cards: CardRecord[]): Promise<void> {
+export async function setCards(
+  scope: WorkspaceScope,
+  deckId: string,
+  cards: CardRecord[]
+): Promise<void> {
   if (!deckId) return;
-  await AsyncStorage.setItem(cardsKeyForDeck(deckId), JSON.stringify(cards));
+  await AsyncStorage.setItem(cardsKeyForDeck(scope, deckId), JSON.stringify(cards));
 }
 
-export async function addCard(deckId: string, card: CardRecord): Promise<CardRecord[]> {
-  const existing = await getCardsAll(deckId);
+export async function addCard(
+  scope: WorkspaceScope,
+  deckId: string,
+  card: CardRecord
+): Promise<CardRecord[]> {
+  const existing = await getCardsAll(scope, deckId);
   const now = new Date().toISOString();
   const updated = [
     { ...upgradeCard(card), updatedAt: now, dirty: true, deletedAt: undefined },
     ...existing,
   ];
-  await setCards(deckId, updated);
+  await setCards(scope, deckId, updated);
   return updated;
 }
 
-export async function deleteCard(deckId: string, cardId: string): Promise<CardRecord[]> {
-  const existing = await getCardsAll(deckId);
+export async function deleteCard(
+  scope: WorkspaceScope,
+  deckId: string,
+  cardId: string
+): Promise<CardRecord[]> {
+  const existing = await getCardsAll(scope, deckId);
   const now = new Date().toISOString();
   const updated = existing.map((card) => {
     if (card.id !== cardId) return card;
@@ -57,30 +76,32 @@ export async function deleteCard(deckId: string, cardId: string): Promise<CardRe
       dirty: true,
     };
   });
-  await setCards(deckId, updated);
+  await setCards(scope, deckId, updated);
   return updated;
 }
 
 export async function updateCard(
+  scope: WorkspaceScope,
   deckId: string,
   updatedCard: CardRecord
 ): Promise<CardRecord[]> {
-  const cards = await getCardsAll(deckId);
+  const cards = await getCardsAll(scope, deckId);
   const now = new Date().toISOString();
   const updated = cards.map((c) =>
     c.id === updatedCard.id
       ? { ...upgradeCard(updatedCard), updatedAt: now, dirty: true }
       : c
   );
-  await setCards(deckId, updated);
+  await setCards(scope, deckId, updated);
   return updated;
 }
 
 export async function updateAllCardsDifficulty(
+  scope: WorkspaceScope,
   deckId: string,
   difficulty: CardRecord["difficulty"]
 ): Promise<CardRecord[]> {
-  const cards = await getCardsAll(deckId);
+  const cards = await getCardsAll(scope, deckId);
   const now = new Date().toISOString();
   const updated = cards.map((card) =>
     card.deletedAt
@@ -93,15 +114,18 @@ export async function updateAllCardsDifficulty(
           deletedAt: undefined,
         }
   );
-  await setCards(deckId, updated);
+  await setCards(scope, deckId, updated);
   return updated;
 }
 
 /** Used when a deck is deleted (cascade delete its cards). */
-export async function deleteCardsForDeck(deckId: string): Promise<void> {
+export async function deleteCardsForDeck(
+  scope: WorkspaceScope,
+  deckId: string
+): Promise<void> {
   if (!deckId) return;
   try {
-    await AsyncStorage.removeItem(cardsKeyForDeck(deckId));
+    await AsyncStorage.removeItem(cardsKeyForDeck(scope, deckId));
   } catch {
     // ignore
   }

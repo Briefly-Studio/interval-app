@@ -1,5 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 
+import { AuthService } from "../auth/AuthService";
 import { type CardRecord, upgradeCard } from "../models/card";
 import { type DeckRecord, makeId, upgradeDeck } from "../models/deck";
 import { setCards } from "../storage/cards";
@@ -7,6 +8,10 @@ import { addDeck, getDecks } from "../storage/decks";
 import { validatePayload } from "./deckTransfer";
 
 export async function handleIncomingFile(uri: string): Promise<string> {
+  // Captured once at the start of this operation — the whole import is written into
+  // whichever workspace was active when the file was opened.
+  const scope = await AuthService.getActiveScope();
+
   let raw: string;
   try {
     raw = await FileSystem.readAsStringAsync(uri, {
@@ -28,7 +33,7 @@ export async function handleIncomingFile(uri: string): Promise<string> {
   }
 
   const payload = parsed;
-  const existing = await getDecks();
+  const existing = await getDecks(scope);
   const baseTitle = payload.deck.title;
   const titleTaken = existing.some((deck) => deck.title === baseTitle);
   const title = titleTaken ? `${baseTitle} (Imported)` : baseTitle;
@@ -48,7 +53,7 @@ export async function handleIncomingFile(uri: string): Promise<string> {
     dirty: true,
   };
 
-  await addDeck(newDeck);
+  await addDeck(scope, newDeck);
 
   const timestamp = Date.now();
   const newCards: CardRecord[] = payload.cards.map((card, index) => ({
@@ -65,7 +70,7 @@ export async function handleIncomingFile(uri: string): Promise<string> {
     dirty: true,
   }));
 
-  await setCards(newDeckId, newCards);
+  await setCards(scope, newDeckId, newCards);
 
   return newDeckId;
 }

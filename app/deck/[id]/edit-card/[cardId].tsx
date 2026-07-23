@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native"; //FIX this routing import
 import { SafeAreaView } from "react-native-safe-area-context"; //FIX this routing import
 
+import { AuthService } from "../../../../src/auth/AuthService";
 import { type CardRecord, type Difficulty, upgradeCard } from "../../../../src/models/card";
 import { deleteCard, getCards, updateCard } from "../../../../src/storage/cards";
 
@@ -42,7 +43,8 @@ export default function EditCardScreen() {
     (async () => {
       if (!deckId || !cardId) return;
 
-      const cards = await getCards(deckId);
+      const scope = await AuthService.getActiveScope();
+      const cards = await getCards(scope, deckId);
       const found = cards.find((c) => c.id === cardId) ?? null;
 
       if (!alive) return;
@@ -80,13 +82,15 @@ export default function EditCardScreen() {
       dirty: true,
     };
 
-    await updateCard(deckId, updated);
+    const scope = await AuthService.getActiveScope();
+    await updateCard(scope, deckId, updated);
     router.back();
   };
 
   const onDelete = async () => {
     if (!card || !deckId) return;
-    await deleteCard(deckId, card.id);
+    const scope = await AuthService.getActiveScope();
+    await deleteCard(scope, deckId, card.id);
     router.back();
   };
 

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AuthService } from "../../../src/auth/AuthService";
 import { buildExportPayload } from "../../../src/domain/deckTransfer";
 import { getCards } from "../../../src/storage/cards";
 import { getDeckById } from "../../../src/storage/decks";
@@ -33,13 +34,14 @@ export default function ExportDeckScreen() {
     setError(null);
 
     try {
-      const deck = await getDeckById(deckId);
+      const scope = await AuthService.getActiveScope();
+      const deck = await getDeckById(scope, deckId);
       if (!deck) {
         setError("Deck not found.");
         return;
       }
 
-      const cards = await getCards(deckId);
+      const cards = await getCards(scope, deckId);
       const payload = buildExportPayload(deck, cards);
 
       const safeTitle = deck.title
