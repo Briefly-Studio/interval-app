@@ -1,16 +1,7 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  FlatList,
-  Pressable,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Alert, FlatList, Platform, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
@@ -22,8 +13,22 @@ import type { DeckRecord } from "../src/models/deck";
 import { deleteCardsForDeck } from "../src/storage/cards";
 import { deleteDeckById, getDecksAll, setDecks } from "../src/storage/decks";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
+import { AccountButton } from "../src/ui/AccountButton";
+import { Button } from "../src/ui/Button";
+import { DeckCard } from "../src/ui/DeckCard";
+import { EmptyState } from "../src/ui/EmptyState";
+import { HomeHeader } from "../src/ui/HomeHeader";
+import { IconButton } from "../src/ui/IconButton";
+import { Screen } from "../src/ui/Screen";
+import { SecondaryAction } from "../src/ui/SecondaryAction";
+import { colors, spacing, typography } from "../src/ui/theme";
 
-const APP_BG = "#2FA4A3"; // teal background like original
+// Falls back to a neutral bullet rather than ever rendering "undefined" — identity can briefly
+// lag one tick behind scope while refreshWorkspace resolves them separately (see below).
+function accountInitial(identity: UserIdentity | null): string {
+  const source = identity?.givenName || identity?.displayName;
+  return source ? source[0].toUpperCase() : "•";
+}
 
 export default function DecksHome() {
   const router = useRouter();
@@ -32,16 +37,24 @@ export default function DecksHome() {
   const [mutating, setMutating] = useState(false);
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
   const [identity, setIdentity] = useState<UserIdentity | null>(null);
+  // Purely a UI affordance — flips true only once the existing onSyncComplete event (already
+  // emitted by SyncService on a real, successful sync) fires this session. No new sync/network
+  // logic, no polling, no fabricated "Syncing…" or "Needs attention" states, since nothing in
+  // SyncService currently exposes an in-progress or failure signal to key those off of.
+  const [hasSyncedThisSession, setHasSyncedThisSession] = useState(false);
   const signedIn = scope.kind === "user";
 
   // Small presentational identity area — derives only display text, never anything used for
-  // storage/sync/authorization, which stays sub-scoped exactly as before. Temporary until the
-  // full Home redesign (Batch 1C); deliberately does not reuse the rotating welcome-message
-  // pool or the transition screen's copy, so Home never repeats what was just shown.
+  // storage/sync/authorization, which stays sub-scoped exactly as before.
   const greeting = useMemo(() => {
     if (scope.kind === "user") return getHomeGreeting(identity?.givenName);
     return { headline: "Ready to learn?", supporting: "Your offline workspace" };
   }, [scope, identity]);
+
+  // Guest's supporting line above already says "Your offline workspace" — a second "Offline
+  // workspace" sync caption directly under it would just repeat the same fact, so the sync
+  // caption is authenticated-only.
+  const syncLabel = signedIn && hasSyncedThisSession ? "Synced" : null;
 
   const loadDecks = useCallback(async (activeScope: WorkspaceScope) => {
     const allDecks = await getDecksAll(activeScope);
@@ -74,6 +87,7 @@ export default function DecksHome() {
 
   useEffect(() => {
     const unsub = onSyncComplete(() => {
+      setHasSyncedThisSession(true);
       refreshWorkspace();
     });
     return unsub;
@@ -101,14 +115,18 @@ export default function DecksHome() {
     await refreshWorkspace();
   };
 
-  const authButton = (
-    <Pressable
-      onPress={signedIn ? onSignOut : () => router.push("/sign-in")}
-      style={styles.newDeckBtn}
-    >
-      <Text style={styles.newDeckBtnText}>{signedIn ? "Sign out" : "Sign in"}</Text>
-    </Pressable>
-  );
+  // Sign out is intentionally no longer a prominent primary Home action — it now lives behind
+  // the compact account button, alongside the signed-in identity, matching Home V2's IA.
+  const onAccountPress = () => {
+    if (!signedIn) {
+      router.push("/sign-in");
+      return;
+    }
+    Alert.alert(identity?.displayName ?? "Account", identity?.email, [
+      { text: "Sign out", style: "destructive", onPress: onSignOut },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   const confirmDelete = (deck: DeckRecord) => {
     if (mutating) return;
@@ -178,206 +196,113 @@ export default function DecksHome() {
     Alert.alert("Rename not available", "Rename is currently supported on iOS only.");
   };
 
+  const onDeckLongPress = (deck: DeckRecord) => {
+    Alert.alert("Deck actions", undefined, [
+      { text: "Rename", onPress: () => renameDeck(deck) },
+      { text: "Delete", style: "destructive", onPress: () => confirmDelete(deck) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   const isEmpty = loaded && decks.length === 0;
 
-  if (isEmpty) {
-    return (
-      <SafeAreaView style={styles.emptyScreen}>
-        <Text style={styles.emptyTitle}>Interval</Text>
-        <Text style={styles.greetingHeadline}>{greeting.headline}</Text>
-        {greeting.supporting ? (
-          <Text style={styles.greetingSupporting}>{greeting.supporting}</Text>
-        ) : null}
-        {signedIn && identity?.email ? (
-          <Text style={styles.accountEmail}>{identity.email}</Text>
-        ) : null}
-        <Text style={styles.emptySubtitle}>You do not have any decks yet.</Text>
-
-        {authButton}
-
-        <Pressable
-          onPress={() => router.push({ pathname: "/recently-deleted" as any })}
-          style={styles.newDeckBtn}
-        >
-          <Text style={styles.newDeckBtnText}>Recently Deleted</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => router.push("/create-deck")}
-          style={styles.emptyPrimaryBtn}
-        >
-          <Text style={styles.emptyPrimaryBtnText}>+ Create your first deck</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => router.push("/import")}
-          style={styles.newDeckBtn}
-        >
-          <Text style={styles.newDeckBtnText}>Import deck</Text>
-        </Pressable>
-
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView style={styles.listScreen}>
-      <View style={styles.listHeader}>
-        <Pressable
-          onLongPress={() => router.push({ pathname: "/dev-tools" as any })}
-          delayLongPress={600}
-          style={styles.titlePressable}
-        >
-          <Text style={styles.listTitle}>Interval</Text>
-        </Pressable>
-
-        <View style={styles.headerButtons}>
-          {authButton}
-          {__DEV__ && (
-            <Pressable
-              onPress={() => router.push({ pathname: "/dev-tools" as any })}
-              style={styles.gearBtn}
-            >
-              <Text style={styles.gearBtnText}>⚙︎</Text>
-            </Pressable>
-          )}
-          <Pressable onPress={() => router.push("/import")} style={styles.newDeckBtn}>
-            <Text style={styles.newDeckBtnText}>Import deck</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push({ pathname: "/recently-deleted" as any })}
-            style={styles.newDeckBtn}
-          >
-            <Text style={styles.newDeckBtnText}>Recently Deleted</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push("/create-deck")}
-            style={styles.newDeckBtn}
-          >
-            <Text style={styles.newDeckBtnText}>+ Deck</Text>
-          </Pressable>
-        </View>
-      </View>
+    <Screen>
+      <HomeHeader onTitleLongPress={() => router.push({ pathname: "/dev-tools" as any })}>
+        {__DEV__ && (
+          <IconButton
+            name="construct-outline"
+            accessibilityLabel="Dev tools"
+            variant="surface"
+            onPress={() => router.push({ pathname: "/dev-tools" as any })}
+          />
+        )}
+        <AccountButton
+          variant={signedIn ? "initial" : "signIn"}
+          label={signedIn ? accountInitial(identity) : "Sign in"}
+          accessibilityLabel={signedIn ? "Account menu" : "Sign in"}
+          onPress={onAccountPress}
+        />
+      </HomeHeader>
 
       <View style={styles.greetingBlock}>
-        <Text style={styles.greetingHeadline}>{greeting.headline}</Text>
-        {greeting.supporting ? (
-          <Text style={styles.greetingSupporting}>{greeting.supporting}</Text>
-        ) : null}
-        {signedIn && identity?.email ? (
-          <Text style={styles.accountEmail}>{identity.email}</Text>
-        ) : null}
+        <Text style={typography.heading}>{greeting.headline}</Text>
+        {greeting.supporting ? <Text style={typography.secondary}>{greeting.supporting}</Text> : null}
+        {syncLabel ? <Text style={styles.syncLabel}>{syncLabel}</Text> : null}
       </View>
 
-      <FlatList
-        data={decks}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => router.push(`/deck/${item.id}`)}
-            onLongPress={() =>
-              Alert.alert("Deck actions", undefined, [
-                { text: "Rename", onPress: () => renameDeck(item) },
-                { text: "Delete", style: "destructive", onPress: () => confirmDelete(item) },
-                { text: "Cancel", style: "cancel" },
-              ])
+      <View style={styles.secondaryRow}>
+        <SecondaryAction icon="download-outline" label="Import deck" onPress={() => router.push("/import")} />
+        <SecondaryAction
+          icon="trash-outline"
+          label="Recently Deleted"
+          onPress={() => router.push({ pathname: "/recently-deleted" as any })}
+        />
+      </View>
+
+      {isEmpty ? (
+        <View style={styles.emptyFill}>
+          <EmptyState
+            icon={signedIn ? "albums-outline" : "cloud-offline-outline"}
+            title={signedIn ? "No decks yet" : "Your offline workspace is ready"}
+            description={
+              signedIn
+                ? "Create your first deck or import one to start studying."
+                : "Create a deck now. You can sign in later to sync across devices."
             }
-            delayLongPress={350}
-            style={styles.card}
           >
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardMeta}>
-              Created {new Date(item.createdAt).toLocaleDateString()}
-            </Text>
-          </Pressable>
-        )}
-      />
-    </SafeAreaView>
+            <Button label="Create a deck" variant="primary" fullWidth onPress={() => router.push("/create-deck")} />
+            {signedIn ? (
+              <Button label="Import deck" variant="secondary" fullWidth onPress={() => router.push("/import")} />
+            ) : (
+              <Button label="Sign in" variant="secondary" fullWidth onPress={() => router.push("/sign-in")} />
+            )}
+          </EmptyState>
+        </View>
+      ) : (
+        <View style={styles.deckSection}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={typography.subheading}>My decks</Text>
+            <Button
+              label="+ New deck"
+              variant="primary"
+              size="sm"
+              onPress={() => router.push("/create-deck")}
+            />
+          </View>
+          <FlatList
+            data={decks}
+            keyExtractor={(item) => item.id}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => (
+              <DeckCard
+                deck={item}
+                onPress={() => router.push(`/deck/${item.id}`)}
+                onLongPress={() => onDeckLongPress(item)}
+              />
+            )}
+          />
+        </View>
+      )}
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  emptyScreen: {
-    flex: 1,
-    backgroundColor: APP_BG,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  emptyTitle: { fontSize: 34, fontWeight: "800", color: "black" },
-  emptySubtitle: {
-    fontSize: 16,
-    opacity: 0.85,
-    textAlign: "center",
-    color: "white",
-  },
-  emptyPrimaryBtn: {
-    marginTop: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    backgroundColor: "#2247a3ff",
-  },
-  emptyPrimaryBtnText: { color: "white", fontWeight: "700", fontSize: 16 },
+  greetingBlock: { gap: spacing.xs },
+  syncLabel: { ...typography.caption, color: colors.textSecondary },
 
-  greetingBlock: { paddingBottom: 12 },
-  greetingHeadline: { fontSize: 20, fontWeight: "800", color: "white" },
-  greetingSupporting: { marginTop: 4, fontSize: 14, opacity: 0.85, color: "white" },
-  accountEmail: { marginTop: 6, fontSize: 12, opacity: 0.65, color: "white" },
+  secondaryRow: { flexDirection: "row", gap: spacing.sm },
 
-  listScreen: {
-    flex: 1,
-    backgroundColor: APP_BG,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  listHeader: {
+  emptyFill: { flex: 1, justifyContent: "center" },
+
+  deckSection: { flex: 1, gap: spacing.md },
+  sectionHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingBottom: 12,
   },
-  listTitle: { fontSize: 30, fontWeight: "800", color: "black" },
-  headerButtons: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-    alignSelf: "flex-end",
-    maxWidth: "70%",
-  },
-  titlePressable: { alignSelf: "flex-start" },
-  gearBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  gearBtnText: { fontSize: 16, fontWeight: "700", color: "white" },
-
-  newDeckBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  newDeckBtnText: { fontSize: 16, fontWeight: "700", color: "white" },
-
-  list: { paddingBottom: 24, gap: 12 },
-
-  card: {
-    padding: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  cardTitle: { fontSize: 20, fontWeight: "800", color: "white" },
-  cardMeta: { marginTop: 6, opacity: 0.85, color: "white" },
+  list: { flex: 1 },
+  listContent: { gap: spacing.sm, paddingBottom: spacing.xl },
 });
