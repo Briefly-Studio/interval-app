@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import { getAuthConfig, type AuthConfig } from "./AuthConfig";
 import { emitWorkspaceChanged } from "./authSignal";
 import { deriveIdentityFromClaims, type UserIdentity } from "./identity";
+import { buildNameAttributes } from "./nameValidation";
 import type { WorkspaceScope } from "../storage/workspaceScope";
 
 const ACCESS_TOKEN_KEY = "auth.accessToken";
@@ -225,13 +226,13 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 export const AuthService = {
-  async signUp(email: string, password: string): Promise<void> {
+  async signUp(email: string, password: string, givenName: string, familyName: string): Promise<void> {
     const { cognitoAppClientId } = assertAuthConfigured();
     await cognitoRequest("SignUp", {
       ClientId: cognitoAppClientId,
       Username: email,
       Password: password,
-      UserAttributes: [{ Name: "email", Value: email }],
+      UserAttributes: [{ Name: "email", Value: email }, ...buildNameAttributes(givenName, familyName)],
     });
   },
 

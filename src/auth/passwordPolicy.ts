@@ -1,21 +1,16 @@
-// ============================================================================================
-// ⚠ UNVERIFIED — NOT YET CONFIRMED against the real Cognito user pool (us-east-2_UwGRm5dye).
-//
-// The values below are AWS Cognito's documented *default* password policy for a newly created
-// user pool. This project's actual pool may have been customized and could disagree with
-// these values (e.g. a longer minimum length, or a symbol requirement).
-//
-// To confirm: run
-//   aws cognito-idp describe-user-pool --user-pool-id us-east-2_UwGRm5dye --region us-east-2
-// and read `UserPool.Policies.PasswordPolicy`. Update PASSWORD_POLICY below to match exactly,
-// then remove this warning banner.
-// ============================================================================================
+// Verified against the real Cognito user pool (us-east-2_UwGRm5dye) via
+// `aws cognito-idp describe-user-pool` run from CloudShell in the correct AWS account.
+// This is the single source of truth for password validation on the client — both the live
+// signup checklist and submit-button gating read from this same object, so they can never
+// drift out of sync with each other. Cognito's TemporaryPasswordValidityDays (7) is also part
+// of the verified policy but is intentionally not modeled here or shown in normal signup UI —
+// it governs admin-created temporary passwords, not the self-service signup flow.
 export const PASSWORD_POLICY = {
   minLength: 8,
   requireLowercase: true,
   requireUppercase: true,
   requireNumbers: true,
-  requireSymbols: false,
+  requireSymbols: true,
 };
 
 export type PasswordRequirement = {

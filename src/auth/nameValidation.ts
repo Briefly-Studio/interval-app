@@ -1,9 +1,7 @@
-// Validation and Cognito-attribute helpers for the given/family name fields planned for
-// sign-up (Batch 1B.1 section 2). NOT YET WIRED into app/sign-up.tsx — Cognito schema and
-// app-client write-attribute support for given_name/family_name have not been confirmed in
-// this environment. Built and tested in isolation now so enabling it later is a small,
-// low-risk change (call isValidName + buildNameAttributes from the sign-up screen) rather than
-// designing validation under time pressure once verification lands.
+// Validation and Cognito-attribute helpers for the given/family name fields on sign-up.
+// Wired into app/sign-up.tsx — the given_name/family_name schema attributes and app-client
+// write-attribute support were confirmed against the real Cognito user pool
+// (us-east-2_UwGRm5dye) via CloudShell before this was enabled.
 
 export const MAX_NAME_LENGTH = 50;
 
