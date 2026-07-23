@@ -1,133 +1,100 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useMemo, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
+import { getAuthDiagnosticCode, mapAuthError } from "../src/auth/authErrors";
+import { Button } from "../src/ui/Button";
+import { Card } from "../src/ui/Card";
+import { Screen } from "../src/ui/Screen";
+import { TextField } from "../src/ui/TextField";
+import { colors, spacing, typography } from "../src/ui/theme";
 
-const APP_BG = "#2FA4A3";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_CODE_LENGTH = 6;
 
 export default function ConfirmSignUpScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
-  const [email, setEmail] = useState(params.email ?? "");
+  const initialEmail = params.email?.trim();
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
+
+  const isValid = useMemo(
+    () => EMAIL_PATTERN.test(email.trim()) && code.trim().length >= MIN_CODE_LENGTH,
+    [email, code]
+  );
 
   async function onConfirm() {
-    const trimmedEmail = email.trim();
-    const trimmedCode = code.trim();
-    if (!trimmedEmail || !trimmedCode) {
-      Alert.alert("Missing details", "Enter your email and confirmation code.");
-      return;
-    }
-
+    if (!isValid || loading) return;
+    setErrorText(null);
     setLoading(true);
     try {
-      await AuthService.confirmSignUp(trimmedEmail, trimmedCode);
-      router.replace({
-        pathname: "/sign-in",
-        params: { email: trimmedEmail },
-      });
+      await AuthService.confirmSignUp(email.trim(), code.trim());
+      router.replace({ pathname: "/sign-in", params: { email: email.trim() } });
     } catch (error) {
-      Alert.alert(
-        "Confirmation failed",
-        error instanceof Error ? error.message : "Unable to confirm sign up."
-      );
+      console.log("[auth] confirm sign-up failed:", getAuthDiagnosticCode(error));
+      setErrorText(mapAuthError(error));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: APP_BG }}>
-      <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, gap: 16 }}>
-        <Text style={{ fontSize: 24, fontWeight: "700", color: "white" }}>
-          Confirm sign up
-        </Text>
+    <Screen scroll>
+      <Text style={typography.title}>Confirm your email</Text>
+      <Text style={typography.secondary}>
+        {initialEmail
+          ? `We sent a code to ${initialEmail}.`
+          : "Enter the code we sent to your email to finish creating your account."}
+      </Text>
 
-        <TextInput
+      <Card style={{ gap: spacing.md }}>
+        <TextField
+          label="Email"
           value={email}
           onChangeText={setEmail}
-          placeholder="Email"
+          placeholder="you@example.com"
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
           editable={!loading}
-          placeholderTextColor="rgba(255,255,255,0.7)"
-          style={inputStyle}
         />
-
-        <TextInput
+        <TextField
+          label="Confirmation code"
           value={code}
           onChangeText={setCode}
-          placeholder="Confirmation code"
+          placeholder="123456"
           autoCapitalize="none"
           keyboardType="number-pad"
           editable={!loading}
-          placeholderTextColor="rgba(255,255,255,0.7)"
-          style={inputStyle}
         />
+        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+      </Card>
 
-        <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
-          <Pressable
-            onPress={() => router.replace("/sign-in")}
-            disabled={loading}
-            style={secondaryButtonStyle}
-          >
-            <Text style={{ color: "white", fontWeight: "600" }}>Sign in</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={onConfirm}
-            disabled={loading}
-            style={primaryButtonStyle}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={{ color: "white", fontWeight: "700" }}>Confirm</Text>
-            )}
-          </Pressable>
-        </View>
+      <View style={{ flexDirection: "row", gap: spacing.sm }}>
+        <Button
+          label="Back to sign in"
+          variant="ghost"
+          onPress={() => router.replace("/sign-in")}
+          disabled={loading}
+          style={{ flex: 1 }}
+        />
+        <Button
+          label="Confirm"
+          variant="primary"
+          onPress={onConfirm}
+          loading={loading}
+          disabled={!isValid}
+          style={{ flex: 1 }}
+        />
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.35)",
-  backgroundColor: "rgba(255,255,255,0.16)",
-  padding: 14,
-  borderRadius: 12,
-  fontSize: 16,
-  color: "white",
-};
-
-const primaryButtonStyle = {
-  paddingVertical: 12,
-  paddingHorizontal: 14,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.35)",
-  backgroundColor: "rgba(255,255,255,0.2)",
-  minWidth: 96,
-  alignItems: "center" as const,
-};
-
-const secondaryButtonStyle = {
-  paddingVertical: 12,
-  paddingHorizontal: 14,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.35)",
-  backgroundColor: "rgba(255,255,255,0.12)",
-};
+const styles = StyleSheet.create({
+  errorText: { ...typography.caption, color: colors.danger },
+});

@@ -1,6 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -14,8 +14,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
+import type { UserIdentity } from "../src/auth/identity";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { onSyncComplete } from "../src/cloud/sync/syncSignal";
+import { getHomeGreeting } from "../src/content/timeGreeting";
 import type { DeckRecord } from "../src/models/deck";
 import { deleteCardsForDeck } from "../src/storage/cards";
 import { deleteDeckById, getDecksAll, setDecks } from "../src/storage/decks";
@@ -29,7 +31,17 @@ export default function DecksHome() {
   const [loaded, setLoaded] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
+  const [identity, setIdentity] = useState<UserIdentity | null>(null);
   const signedIn = scope.kind === "user";
+
+  // Small presentational identity area — derives only display text, never anything used for
+  // storage/sync/authorization, which stays sub-scoped exactly as before. Temporary until the
+  // full Home redesign (Batch 1C); deliberately does not reuse the rotating welcome-message
+  // pool or the transition screen's copy, so Home never repeats what was just shown.
+  const greeting = useMemo(() => {
+    if (scope.kind === "user") return getHomeGreeting(identity?.givenName);
+    return { headline: "Ready to learn?", supporting: "Your offline workspace" };
+  }, [scope, identity]);
 
   const loadDecks = useCallback(async (activeScope: WorkspaceScope) => {
     const allDecks = await getDecksAll(activeScope);
@@ -43,6 +55,7 @@ export default function DecksHome() {
   const refreshWorkspace = useCallback(async () => {
     const activeScope = await AuthService.getActiveScope();
     setScope(activeScope);
+    setIdentity(activeScope.kind === "user" ? await AuthService.getActiveIdentity() : null);
     await loadDecks(activeScope);
   }, [loadDecks]);
 
@@ -70,6 +83,11 @@ export default function DecksHome() {
     () =>
       onWorkspaceChanged((newScope) => {
         setScope(newScope);
+        if (newScope.kind === "user") {
+          AuthService.getActiveIdentity().then(setIdentity);
+        } else {
+          setIdentity(null);
+        }
         loadDecks(newScope);
       }),
     [loadDecks]
@@ -166,6 +184,13 @@ export default function DecksHome() {
     return (
       <SafeAreaView style={styles.emptyScreen}>
         <Text style={styles.emptyTitle}>Interval</Text>
+        <Text style={styles.greetingHeadline}>{greeting.headline}</Text>
+        {greeting.supporting ? (
+          <Text style={styles.greetingSupporting}>{greeting.supporting}</Text>
+        ) : null}
+        {signedIn && identity?.email ? (
+          <Text style={styles.accountEmail}>{identity.email}</Text>
+        ) : null}
         <Text style={styles.emptySubtitle}>You do not have any decks yet.</Text>
 
         {authButton}
@@ -234,6 +259,16 @@ export default function DecksHome() {
         </View>
       </View>
 
+      <View style={styles.greetingBlock}>
+        <Text style={styles.greetingHeadline}>{greeting.headline}</Text>
+        {greeting.supporting ? (
+          <Text style={styles.greetingSupporting}>{greeting.supporting}</Text>
+        ) : null}
+        {signedIn && identity?.email ? (
+          <Text style={styles.accountEmail}>{identity.email}</Text>
+        ) : null}
+      </View>
+
       <FlatList
         data={decks}
         keyExtractor={(item) => item.id}
@@ -286,6 +321,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#2247a3ff",
   },
   emptyPrimaryBtnText: { color: "white", fontWeight: "700", fontSize: 16 },
+
+  greetingBlock: { paddingBottom: 12 },
+  greetingHeadline: { fontSize: 20, fontWeight: "800", color: "white" },
+  greetingSupporting: { marginTop: 4, fontSize: 14, opacity: 0.85, color: "white" },
+  accountEmail: { marginTop: 6, fontSize: 12, opacity: 0.65, color: "white" },
 
   listScreen: {
     flex: 1,

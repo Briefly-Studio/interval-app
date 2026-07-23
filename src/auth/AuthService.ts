@@ -2,6 +2,7 @@ import * as SecureStore from "expo-secure-store";
 
 import { getAuthConfig, type AuthConfig } from "./AuthConfig";
 import { emitWorkspaceChanged } from "./authSignal";
+import { deriveIdentityFromClaims, type UserIdentity } from "./identity";
 import type { WorkspaceScope } from "../storage/workspaceScope";
 
 const ACCESS_TOKEN_KEY = "auth.accessToken";
@@ -19,12 +20,16 @@ class CognitoNetworkError extends Error {}
 
 // Thrown when Cognito responded with a non-2xx status. Carries the status so callers can
 // distinguish a definitive client-side rejection (4xx — e.g. an expired/revoked refresh token)
-// from a transient server-side failure (5xx), which should not sign the user out.
+// from a transient server-side failure (5xx), which should not sign the user out. Also carries
+// Cognito's exception code (e.g. "NotAuthorizedException") so UI-facing error mapping can key
+// off a stable identifier instead of matching on Cognito's human-readable message text.
 class CognitoHttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -95,7 +100,10 @@ async function cognitoRequest<TPayload extends Record<string, unknown>>(
 
   const json = (await res.json().catch(() => ({}))) as CognitoResponse;
   if (!res.ok) {
-    throw new CognitoHttpError(res.status, json.message ?? `${action} failed: ${res.status}`);
+    // __type is sometimes namespaced (e.g. "com.amazonaws...#NotAuthorizedException"); keep
+    // only the exception name itself.
+    const code = json.__type?.split("#").pop();
+    throw new CognitoHttpError(res.status, json.message ?? `${action} failed: ${res.status}`, code);
   }
   return json;
 }
@@ -304,4 +312,29 @@ export const AuthService = {
     const sub = await AuthService.getActiveSub();
     return sub ? { kind: "user", sub } : { kind: "guest" };
   },
+
+  // Display-only identity (email, name, greeting text) for UI personalization. Returns null
+  // for guest scope. Re-decodes the current ID token fresh on every call — same pattern as
+  // getActiveSub — so a refreshed token's claims are reflected immediately with no caching bugs.
+  async getActiveIdentity(): Promise<UserIdentity | null> {
+    const sub = await AuthService.getActiveSub();
+    if (!sub) return null;
+
+    const idToken = await SecureStore.getItemAsync(ID_TOKEN_KEY);
+    const claims = idToken ? decodeJwtPayload(idToken) : null;
+    return deriveIdentityFromClaims(claims, sub);
+  },
 };
+
+// Exposed so UI-layer error mapping (src/auth/authErrors.ts) can build user-facing messages
+// without ever needing to import or match on Cognito's internal error classes/message text.
+
+/** Cognito's exception code (e.g. "NotAuthorizedException") for an error thrown by AuthService, if any. */
+export function getAuthErrorCode(error: unknown): string | undefined {
+  return error instanceof CognitoHttpError ? error.code : undefined;
+}
+
+/** True when the error represents a network/connectivity failure rather than a Cognito rejection. */
+export function isAuthNetworkError(error: unknown): boolean {
+  return error instanceof CognitoNetworkError;
+}

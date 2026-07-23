@@ -1,132 +1,128 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useMemo, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
+import { getAuthDiagnosticCode, mapAuthError } from "../src/auth/authErrors";
+import { getPasswordRequirements, isPasswordValid } from "../src/auth/passwordPolicy";
+import { Button } from "../src/ui/Button";
+import { Card } from "../src/ui/Card";
+import { Screen } from "../src/ui/Screen";
+import { TextField } from "../src/ui/TextField";
+import { colors, spacing, typography } from "../src/ui/theme";
 
-const APP_BG = "#2FA4A3";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function PasswordChecklist({ password }: { password: string }) {
+  const requirements = useMemo(() => getPasswordRequirements(), []);
+
+  return (
+    <View style={styles.checklist}>
+      {requirements.map((requirement) => {
+        const met = requirement.met(password);
+        return (
+          <View key={requirement.key} style={styles.checklistRow}>
+            <Ionicons
+              name={met ? "checkmark-circle" : "ellipse-outline"}
+              size={16}
+              color={met ? colors.success : colors.textSecondary}
+            />
+            <Text style={[styles.checklistLabel, met && styles.checklistLabelMet]}>
+              {requirement.label}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 export default function SignUpScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
+
+  const emailValid = useMemo(() => EMAIL_PATTERN.test(email.trim()), [email]);
+  const passwordValid = useMemo(() => isPasswordValid(password), [password]);
+  const canSubmit = emailValid && passwordValid;
 
   async function onSignUp() {
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail || !password) {
-      Alert.alert("Missing details", "Enter your email and password.");
-      return;
-    }
-
+    if (!canSubmit || loading) return;
+    setErrorText(null);
     setLoading(true);
     try {
-      await AuthService.signUp(trimmedEmail, password);
-      router.replace({
-        pathname: "/confirm-sign-up",
-        params: { email: trimmedEmail },
-      });
+      await AuthService.signUp(email.trim(), password);
+      router.replace({ pathname: "/confirm-sign-up", params: { email: email.trim() } });
     } catch (error) {
-      Alert.alert(
-        "Sign up failed",
-        error instanceof Error ? error.message : "Unable to sign up."
-      );
+      console.log("[auth] sign-up failed:", getAuthDiagnosticCode(error));
+      setErrorText(mapAuthError(error));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: APP_BG }}>
-      <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, gap: 16 }}>
-        <Text style={{ fontSize: 24, fontWeight: "700", color: "white" }}>
-          Sign up
-        </Text>
+    <Screen scroll>
+      <Text style={typography.title}>Create your account</Text>
+      <Text style={typography.secondary}>Sync your decks across devices with a free account.</Text>
 
-        <TextInput
+      <Card style={{ gap: spacing.md }}>
+        <TextField
+          label="Email"
           value={email}
           onChangeText={setEmail}
-          placeholder="Email"
+          placeholder="you@example.com"
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
           editable={!loading}
-          placeholderTextColor="rgba(255,255,255,0.7)"
-          style={inputStyle}
         />
-
-        <TextInput
+        <TextField
+          label="Password"
           value={password}
-          onChangeText={setPassword}
-          placeholder="Password"
+          onChangeText={(text) => {
+            setPassword(text);
+            if (!passwordTouched) setPasswordTouched(true);
+          }}
+          placeholder="Create a password"
           autoCapitalize="none"
           autoComplete="new-password"
-          secureTextEntry
+          isPassword
           editable={!loading}
-          placeholderTextColor="rgba(255,255,255,0.7)"
-          style={inputStyle}
         />
+        {passwordTouched ? <PasswordChecklist password={password} /> : null}
+        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+      </Card>
 
-        <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
-          <Pressable
-            onPress={() => router.replace("/sign-in")}
-            disabled={loading}
-            style={secondaryButtonStyle}
-          >
-            <Text style={{ color: "white", fontWeight: "600" }}>Sign in</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={onSignUp}
-            disabled={loading}
-            style={primaryButtonStyle}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={{ color: "white", fontWeight: "700" }}>Create</Text>
-            )}
-          </Pressable>
-        </View>
+      <View style={{ flexDirection: "row", gap: spacing.sm }}>
+        <Button
+          label="Sign in instead"
+          variant="ghost"
+          onPress={() => router.replace("/sign-in")}
+          disabled={loading}
+          style={{ flex: 1 }}
+        />
+        <Button
+          label="Create account"
+          variant="primary"
+          onPress={onSignUp}
+          loading={loading}
+          disabled={!canSubmit}
+          style={{ flex: 1 }}
+        />
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.35)",
-  backgroundColor: "rgba(255,255,255,0.16)",
-  padding: 14,
-  borderRadius: 12,
-  fontSize: 16,
-  color: "white",
-};
-
-const primaryButtonStyle = {
-  paddingVertical: 12,
-  paddingHorizontal: 14,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.35)",
-  backgroundColor: "rgba(255,255,255,0.2)",
-  minWidth: 96,
-  alignItems: "center" as const,
-};
-
-const secondaryButtonStyle = {
-  paddingVertical: 12,
-  paddingHorizontal: 14,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.35)",
-  backgroundColor: "rgba(255,255,255,0.12)",
-};
+const styles = StyleSheet.create({
+  errorText: { ...typography.caption, color: colors.danger },
+  checklist: { gap: spacing.xs },
+  checklistRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  checklistLabel: { ...typography.caption },
+  checklistLabelMet: { color: colors.success },
+});

@@ -88,7 +88,13 @@ export default function Layout() {
             backgroundColor: APP_BG,
           },
         }}
-      />
+      >
+        {/* The transition is a brief, auto-advancing screen with no manual escape hatch by
+            design (it never traps — see runSignInTransition's bounded timeout) — disabling the
+            swipe gesture here specifically avoids an accidental early interrupt mid-transition.
+            No other screen has its gesture behavior touched. */}
+        <Stack.Screen name="sign-in-transition" options={{ gestureEnabled: false }} />
+      </Stack>
       {importing && (
         <View style={styles.importOverlay}>
           <Text style={styles.importText}>Importing deck…</Text>
