@@ -10,7 +10,6 @@ import { SyncService } from "../src/cloud/sync/SyncService";
 import { onSyncComplete } from "../src/cloud/sync/syncSignal";
 import { getHomeGreeting } from "../src/content/timeGreeting";
 import type { DeckRecord } from "../src/models/deck";
-import { deleteCardsForDeck } from "../src/storage/cards";
 import { deleteDeckById, getDecksAll, setDecks } from "../src/storage/decks";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { AccountButton } from "../src/ui/AccountButton";
@@ -141,11 +140,11 @@ export default function DecksHome() {
           try {
             const activeScope = await AuthService.getActiveScope();
 
-            // Delete deck record
+            // deleteDeckById already soft-delete-cascades this deck's cards (and sessions) —
+            // tombstoning them so they can be restored later. Do not also hard-delete the cards
+            // storage key here: that would erase the tombstones this call just wrote, leaving
+            // Recently Deleted -> Restore with nothing to bring back.
             await deleteDeckById(activeScope, deck.id);
-
-            // Delete cards stored for that deck (cascade delete)
-            await deleteCardsForDeck(activeScope, deck.id);
 
             await loadDecks(activeScope);
           } finally {

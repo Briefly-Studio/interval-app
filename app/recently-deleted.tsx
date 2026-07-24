@@ -1,15 +1,7 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import {
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { AuthService } from "../src/auth/AuthService";
@@ -18,8 +10,15 @@ import type { DeckRecord } from "../src/models/deck";
 import { getCardsAll, setCards } from "../src/storage/cards";
 import { cardsKeyForDeck } from "../src/storage/keys";
 import { getDecksAll, setDecks } from "../src/storage/decks";
+import { getSessions, setSessions } from "../src/storage/sessions";
+import { Button } from "../src/ui/Button";
+import { Card } from "../src/ui/Card";
+import { EmptyState } from "../src/ui/EmptyState";
+import { IconButton } from "../src/ui/IconButton";
+import { Screen } from "../src/ui/Screen";
+import { SecondaryAction } from "../src/ui/SecondaryAction";
+import { spacing, typography } from "../src/ui/theme";
 
-const APP_BG = "#2FA4A3";
 const TRASH_DAYS = 30;
 
 export default function RecentlyDeletedScreen() {
@@ -27,6 +26,9 @@ export default function RecentlyDeletedScreen() {
   const [decks, setDecksState] = useState<DeckRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [showExpired, setShowExpired] = useState(false);
+  // Per-item, not a single screen-wide flag — restoring one deck must not disable every other
+  // row's Restore button while its own network/sync round trip is in flight.
+  const [restoringIds, setRestoringIds] = useState<Set<string>>(new Set());
 
   const loadDeleted = useCallback(async () => {
     const scope = await AuthService.getActiveScope();
@@ -63,38 +65,78 @@ export default function RecentlyDeletedScreen() {
   );
 
   const restoreDeck = async (deck: DeckRecord) => {
-    const scope = await AuthService.getActiveScope();
-    const allDecks = await getDecksAll(scope);
-    const now = new Date().toISOString();
-    let newRev = 0;
-    const updated = allDecks.map((item) => {
-      if (item.id !== deck.id) return item;
-      newRev = (item.rev ?? 0) + 1;
-      return {
-        ...item,
-        deletedAt: undefined,
-        updatedAt: now,
-        rev: newRev,
-        dirty: true,
-        lastSyncedAt: undefined,
-      };
-    });
-    await setDecks(scope, updated);
-    const allCards = await getCardsAll(scope, deck.id);
-    const updatedCards = allCards.map((card) => {
-      if (!card.deletedAt) return card;
-      return {
-        ...card,
-        deletedAt: undefined,
-        updatedAt: now,
-        rev: (card.rev ?? 0) + 1,
-        dirty: true,
-      };
-    });
-    await setCards(scope, deck.id, updatedCards);
-    await SyncService.syncOnce();
-    await loadDeleted();
-    Alert.alert("Restored");
+    // Ignore duplicate taps while this exact item is already restoring — one in-flight restore
+    // per item, not a full-screen lock.
+    if (restoringIds.has(deck.id)) return;
+    setRestoringIds((prev) => new Set(prev).add(deck.id));
+    try {
+      const scope = await AuthService.getActiveScope();
+      const allDecks = await getDecksAll(scope);
+      const now = new Date().toISOString();
+      let newRev = 0;
+      const updated = allDecks.map((item) => {
+        if (item.id !== deck.id) return item;
+        newRev = (item.rev ?? 0) + 1;
+        return {
+          ...item,
+          deletedAt: undefined,
+          updatedAt: now,
+          rev: newRev,
+          dirty: true,
+          lastSyncedAt: undefined,
+        };
+      });
+      await setDecks(scope, updated);
+
+      const allCards = await getCardsAll(scope, deck.id);
+      const updatedCards = allCards.map((card) => {
+        // Only cards tombstoned as a side effect of this exact deck deletion come back — a card
+        // the user deleted individually beforehand has no deletedByDeckCascade flag and stays
+        // deleted. See CardRecord.deletedByDeckCascade for why this can't be inferred from
+        // deletedAt alone (two deletes can land in the same millisecond).
+        if (!card.deletedAt || !card.deletedByDeckCascade) return card;
+        return {
+          ...card,
+          deletedAt: undefined,
+          deletedByDeckCascade: undefined,
+          updatedAt: now,
+          rev: (card.rev ?? 0) + 1,
+          dirty: true,
+        };
+      });
+      await setCards(scope, deck.id, updatedCards);
+
+      // Sessions have no individual-delete path of their own — deleteSessionsForDeck (the deck
+      // cascade) is the only code that ever sets a session's deletedAt, so every tombstoned
+      // session for this deckId was deleted by this deck's deletion and is safe to restore.
+      const allSessions = await getSessions(scope);
+      const updatedSessions = allSessions.map((session) => {
+        if (session.deckId !== deck.id || !session.deletedAt) return session;
+        return {
+          ...session,
+          deletedAt: undefined,
+          updatedAt: now,
+          rev: (session.rev ?? 0) + 1,
+          dirty: true,
+        };
+      });
+      await setSessions(scope, updatedSessions);
+
+      await SyncService.syncOnce();
+      await loadDeleted();
+      Alert.alert("Restored");
+    } catch (error) {
+      Alert.alert(
+        "Restore failed",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setRestoringIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deck.id);
+        return next;
+      });
+    }
   };
 
   const purgeDeleted = async () => {
@@ -113,149 +155,108 @@ export default function RecentlyDeletedScreen() {
     await loadDeleted();
   };
 
+  const onEmptyTrashPress = () => {
+    Alert.alert(
+      "Empty trash?",
+      "This permanently deletes all items in Recently Deleted and cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Empty trash", style: "destructive", onPress: purgeDeleted },
+      ]
+    );
+  };
+
+  const isEmpty = loaded && decks.length === 0;
+
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} style={styles.pill}>
-          <Text style={styles.pillText}>← Back</Text>
-        </Pressable>
+    <Screen>
+      <View style={styles.header}>
+        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
+        <Text style={typography.title}>Recently Deleted</Text>
+      </View>
+      <Text style={typography.secondary}>
+        {showExpired
+          ? "Showing everything, including items older than 30 days."
+          : "Items older than 30 days are hidden here unless you choose to show them."}
+      </Text>
+
+      <View style={styles.actionsRow}>
         {__DEV__ && (
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => setShowExpired((prev) => !prev)}
-              style={styles.newDeckBtn}
-            >
-              <Text style={styles.newDeckBtnText}>
-                {showExpired ? "Hide Expired" : "Show Expired"}
-              </Text>
-            </Pressable>
-            <Pressable onPress={purgeDeleted} style={styles.newDeckBtn}>
-              <Text style={styles.newDeckBtnText}>Empty Trash</Text>
-            </Pressable>
-          </View>
+          <SecondaryAction
+            icon={showExpired ? "eye-off-outline" : "eye-outline"}
+            label={showExpired ? "Hide Expired" : "Show Expired"}
+            onPress={() => setShowExpired((prev) => !prev)}
+          />
         )}
+        <Button label="Empty Trash" variant="danger" size="sm" onPress={onEmptyTrashPress} />
       </View>
 
-      <Text style={styles.title}>Recently Deleted</Text>
-      {!showExpired && (
-        <Text style={styles.note}>
-          Expired items are hidden (older than {TRASH_DAYS} days).
-        </Text>
-      )}
-
-      {loaded && decks.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>No deleted decks.</Text>
+      {isEmpty ? (
+        <View style={styles.emptyFill}>
+          <EmptyState
+            icon="trash-outline"
+            title="No deleted decks"
+            description="Decks you delete will appear here."
+          />
         </View>
       ) : (
         <FlatList
           data={decks}
           keyExtractor={(item) => item.id}
+          style={styles.flex1}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <View style={styles.deletedCard}>
-              <View style={styles.deletedCardInfo}>
-                <Text style={styles.deletedCardTitle}>{item.title}</Text>
-                <Text style={styles.deletedCardMeta}>
-                  {item.deletedAt
-                    ? (() => {
-                        const deletedAt = Date.parse(item.deletedAt);
-                        const daysSince = Math.max(
-                          0,
-                          Math.floor((Date.now() - deletedAt) / (24 * 60 * 60 * 1000))
-                        );
-                        const dateLabel = new Date(deletedAt).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        });
-                        return `Deleted ${dateLabel} • ${daysSince} day${
-                          daysSince === 1 ? "" : "s"
-                        } ago`;
-                      })()
-                    : "Deleted —"}
-                </Text>
-              </View>
-              {__DEV__ && (
-                <Pressable
+          renderItem={({ item }) => {
+            const isRestoring = restoringIds.has(item.id);
+            const meta = (() => {
+              if (!item.deletedAt) return "Deleted —";
+              const deletedAt = Date.parse(item.deletedAt);
+              const daysSince = Math.max(
+                0,
+                Math.floor((Date.now() - deletedAt) / (24 * 60 * 60 * 1000))
+              );
+              const dateLabel = new Date(deletedAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              });
+              return `Deleted ${dateLabel} • ${daysSince} day${daysSince === 1 ? "" : "s"} ago`;
+            })();
+
+            return (
+              <Card style={styles.deletedRow}>
+                <View style={styles.flex1}>
+                  <Text style={typography.bodyMedium} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  <Text style={typography.caption}>{meta}</Text>
+                </View>
+                <Button
+                  label={isRestoring ? "Restoring…" : "Restore"}
+                  variant="secondary"
+                  size="sm"
+                  loading={isRestoring}
+                  disabled={isRestoring}
                   onPress={() => restoreDeck(item)}
-                  style={styles.restoreBtn}
-                >
-                  <Text style={styles.restoreBtnText}>Restore</Text>
-                </Pressable>
-              )}
-            </View>
-          )}
+                />
+              </Card>
+            );
+          }}
         />
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: APP_BG,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  headerRow: {
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  actionsRow: { flexDirection: "row", gap: spacing.sm },
+  flex1: { flex: 1 },
+  emptyFill: { flex: 1, justifyContent: "center" },
+  list: { gap: spacing.sm, paddingBottom: spacing.xl },
+  deletedRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: spacing.sm,
   },
-  headerActions: { flexDirection: "row", gap: 8 },
-  pill: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  pillText: { color: "white", fontWeight: "700" },
-  newDeckBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  newDeckBtnText: { fontSize: 16, fontWeight: "700", color: "white" },
-  title: { marginTop: 16, fontSize: 30, fontWeight: "800", color: "white" },
-  note: { marginTop: 6, color: "white", opacity: 0.75 },
-  list: { paddingTop: 14, paddingBottom: 24, gap: 12 },
-  emptyCard: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  emptyText: { color: "white", opacity: 0.85 },
-  deletedCard: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  deletedCardInfo: { flex: 1 },
-  deletedCardTitle: { color: "white", fontWeight: "800" },
-  deletedCardMeta: { color: "white", opacity: 0.75, marginTop: 4 },
-  restoreBtn: {
-    marginLeft: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  restoreBtnText: { color: "white", fontWeight: "800", fontSize: 12 },
 });

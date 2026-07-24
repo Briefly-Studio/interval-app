@@ -1,13 +1,17 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import { type CardRecord, type Difficulty, upgradeCard } from "../../../src/models/card";
 import { addCard } from "../../../src/storage/cards";
-
-const APP_BG = "#2FA4A3";
+import { Button } from "../../../src/ui/Button";
+import { Card } from "../../../src/ui/Card";
+import { DifficultySelector } from "../../../src/ui/DifficultySelector";
+import { IconButton } from "../../../src/ui/IconButton";
+import { Screen } from "../../../src/ui/Screen";
+import { TextField } from "../../../src/ui/TextField";
+import { spacing, typography } from "../../../src/ui/theme";
 
 export default function AddCardScreen() {
   const router = useRouter();
@@ -24,155 +28,96 @@ export default function AddCardScreen() {
 
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
+  const [frontTouched, setFrontTouched] = useState(false);
+  const [backTouched, setBackTouched] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+  const [submitting, setSubmitting] = useState(false);
 
   const canSave = front.trim().length > 0 && back.trim().length > 0;
 
   const onSave = async () => {
-    if (!deckId || !canSave) return;
+    if (!deckId || !canSave || submitting) return;
+    setSubmitting(true);
+    try {
+      const now = Date.now();
+      const updatedAt = new Date(now).toISOString();
 
-    const now = Date.now();
-    const updatedAt = new Date(now).toISOString();
+      const card: CardRecord = {
+        ...upgradeCard({
+          id: String(now),
+          deckId,
+          front: front.trim(),
+          back: back.trim(),
+          createdAt: now,
+          difficulty,
+        }),
+        rev: 1,
+        updatedAt,
+        dirty: true,
+      };
 
-    const card: CardRecord = {
-      ...upgradeCard({
-        id: String(now),
-        deckId,
-        front: front.trim(),
-        back: back.trim(),
-        createdAt: now,
-        difficulty,
-      }),
-      rev: 1,
-      updatedAt,
-      dirty: true,
-    };
-
-    const scope = await AuthService.getActiveScope();
-    await addCard(scope, deckId, card);
-    router.back();
+      const scope = await AuthService.getActiveScope();
+      await addCard(scope, deckId, card);
+      router.back();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} style={styles.pill}>
-          <Text style={styles.pillText}>Cancel</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={onSave}
-          disabled={!canSave}
-          style={[styles.primary, !canSave && { opacity: 0.5 }]}
-        >
-          <Text style={styles.primaryText}>Save</Text>
-        </Pressable>
+    <Screen scroll>
+      <View style={styles.header}>
+        <IconButton
+          name="chevron-back"
+          accessibilityLabel="Cancel"
+          onPress={() => router.back()}
+          disabled={submitting}
+        />
+        <Text style={typography.title}>New card</Text>
       </View>
 
-      <Text style={styles.title}>New Card</Text>
+      <Card style={styles.formCard}>
+        <TextField
+          label="Front"
+          value={front}
+          onChangeText={setFront}
+          onBlur={() => setFrontTouched(true)}
+          error={frontTouched && !front.trim() ? "Enter the front of the card." : undefined}
+          placeholder="Question or term"
+          multiline
+          editable={!submitting}
+        />
+        <TextField
+          label="Back"
+          value={back}
+          onChangeText={setBack}
+          onBlur={() => setBackTouched(true)}
+          error={backTouched && !back.trim() ? "Enter the back of the card." : undefined}
+          placeholder="Answer or explanation"
+          multiline
+          editable={!submitting}
+        />
+      </Card>
 
-      <Text style={styles.label}>Front</Text>
-      <TextInput
-        value={front}
-        onChangeText={setFront}
-        placeholder="Question / term"
-        placeholderTextColor="rgba(255,255,255,0.65)"
-        style={styles.input}
-        multiline
-      />
-
-      <Text style={styles.label}>Back</Text>
-      <TextInput
-        value={back}
-        onChangeText={setBack}
-        placeholder="Answer / explanation"
-        placeholderTextColor="rgba(255,255,255,0.65)"
-        style={styles.input}
-        multiline
-      />
-
-      <Text style={styles.label}>Difficulty</Text>
-      <View style={styles.segmentRow}>
-        {(["easy", "medium", "hard"] as Difficulty[]).map((level) => {
-          const isActive = difficulty === level;
-          return (
-            <Pressable
-              key={level}
-              onPress={() => setDifficulty(level)}
-              style={[styles.segment, isActive && styles.segmentActive]}
-            >
-              <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
-                {level[0].toUpperCase() + level.slice(1)}
-              </Text>
-            </Pressable>
-          );
-        })}
+      <View style={styles.difficultySection}>
+        <Text style={typography.label}>Difficulty</Text>
+        <DifficultySelector value={difficulty} onChange={setDifficulty} />
       </View>
-    </SafeAreaView>
+
+      <Button
+        label="Save card"
+        variant="primary"
+        fullWidth
+        loading={submitting}
+        disabled={!canSave}
+        onPress={onSave}
+      />
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: APP_BG,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    gap: 12,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  pill: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  pillText: { color: "white", fontWeight: "700" },
-
-  primary: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: "#2247a3ff",
-  },
-  primaryText: { color: "white", fontWeight: "800" },
-
-  title: { fontSize: 30, fontWeight: "900", color: "white", marginTop: 4 },
-  label: { color: "white", fontWeight: "800", opacity: 0.9, marginTop: 6 },
-
-  input: {
-    minHeight: 90,
-    borderRadius: 16,
-    padding: 14,
-    color: "white",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-
-  segmentRow: {
-    flexDirection: "row",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    overflow: "hidden",
-  },
-  segment: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  segmentActive: {
-    backgroundColor: "rgba(255,255,255,0.25)",
-  },
-  segmentText: { color: "white", opacity: 0.85, fontWeight: "800" },
-  segmentTextActive: { opacity: 1 },
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  formCard: { gap: spacing.md },
+  difficultySection: { gap: spacing.xs },
 });

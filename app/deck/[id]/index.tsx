@@ -1,14 +1,8 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import {
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+
 import { AuthService } from "../../../src/auth/AuthService";
 import { computeDeckStats } from "../../../src/domain/deckStats";
 import { formatDuration, formatTimestamp } from "../../../src/domain/sessionFormat";
@@ -17,11 +11,15 @@ import type { Deck } from "../../../src/models/deck";
 import type { StudySession } from "../../../src/models/session";
 import { deleteCard, getCards, updateAllCardsDifficulty } from "../../../src/storage/cards";
 import { getDeckById } from "../../../src/storage/decks";
-import {
-  getSessionsForDeck
-} from "../../../src/storage/sessions";
+import { getSessionsForDeck } from "../../../src/storage/sessions";
+import { Button } from "../../../src/ui/Button";
+import { Card as Surface } from "../../../src/ui/Card";
+import { EmptyState } from "../../../src/ui/EmptyState";
+import { IconButton } from "../../../src/ui/IconButton";
+import { Screen } from "../../../src/ui/Screen";
+import { colors, iconSizes, spacing, touchTarget, typography } from "../../../src/ui/theme";
 
-const APP_BG = "#2FA4A3";
+const DIFFICULTY_FILTERS = ["all", "hard", "medium", "easy"] as const;
 
 export default function DeckDetails() {
   const router = useRouter();
@@ -42,9 +40,9 @@ export default function DeckDetails() {
   const [difficultyFilter, setDifficultyFilter] = useState<
     "all" | "hard" | "medium" | "easy"
   >("all");
-  const [showTools, setShowTools] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
+  // Per-card guard against duplicate delete taps — mirrors the same pattern used for Restore.
+  const [deletingCardIds, setDeletingCardIds] = useState<Set<string>>(new Set());
 
   const goBackHome = () => {
     if (router.canGoBack()) {
@@ -85,15 +83,32 @@ export default function DeckDetails() {
   const goHistory = () => router.push(`/deck/${id}/history`);
 
   const confirmDeleteCard = (card: Card) => {
+    if (deletingCardIds.has(card.id)) return;
     Alert.alert("Delete card?", "This card will be removed from this deck.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          const scope = await AuthService.getActiveScope();
-          const updated = await deleteCard(scope, id, card.id);
-          setCards(updated);
+          if (deletingCardIds.has(card.id)) return;
+          setDeletingCardIds((prev) => new Set(prev).add(card.id));
+          try {
+            const scope = await AuthService.getActiveScope();
+            // deleteCard awaits the storage write before returning, so by the time we reach
+            // here the tombstone is durable — but it returns the raw (unfiltered) card array,
+            // the same as getCardsAll. The screen's `cards` state is meant to hold only active
+            // cards (matching the filtered getCards() used on load), so it must be filtered
+            // here too — otherwise the just-deleted card keeps rendering until the next focus
+            // reload silently re-fetches the filtered list.
+            const updated = await deleteCard(scope, id, card.id);
+            setCards(updated.filter((c) => !c.deletedAt));
+          } finally {
+            setDeletingCardIds((prev) => {
+              const next = new Set(prev);
+              next.delete(card.id);
+              return next;
+            });
+          }
         },
       },
     ]);
@@ -137,6 +152,18 @@ export default function DeckDetails() {
     router.push(`/deck/${id}/export`);
   };
 
+  // Consolidates the old "Show tools" section (Set difficulty / Share deck / Study history)
+  // into a single header overflow control — same handlers, same routes, no new behavior, just
+  // one less layer of nested toggles competing with the deck's own content.
+  const onOverflowPress = () => {
+    Alert.alert(deck?.title ?? "Deck options", undefined, [
+      { text: "Set difficulty", onPress: onSetDifficulty },
+      { text: "Share deck", onPress: onExportDeck },
+      { text: `Study history (${sessions.length})`, onPress: goHistory },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   const isEmptyCards = loaded && deck && cards.length === 0;
 
   const recentSessions = useMemo(() => {
@@ -151,395 +178,255 @@ export default function DeckDetails() {
     return cards.filter((card) => (card.difficulty ?? "medium") === difficultyFilter);
   }, [cards, difficultyFilter]);
 
-  // Stats summary
   const stats = useMemo(() => computeDeckStats(sessions), [sessions]);
 
   if (!loaded) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <Text style={styles.subtle}>Loading…</Text>
-      </SafeAreaView>
+      <Screen>
+        <Text style={typography.secondary}>Loading…</Text>
+      </Screen>
     );
   }
 
   if (!deck) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <Pressable onPress={goBackHome} style={styles.pill}>
-          <Text style={styles.pillText}>← Back</Text>
-        </Pressable>
-        <Text style={styles.subtle}>Deck not found.</Text>
-      </SafeAreaView>
+      <Screen>
+        <View style={styles.header}>
+          <IconButton name="chevron-back" accessibilityLabel="Back" onPress={goBackHome} />
+        </View>
+        <Text style={typography.secondary}>Deck not found.</Text>
+      </Screen>
     );
   }
 
   if (isEmptyCards) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <Pressable onPress={goBackHome} style={styles.pill}>
-          <Text style={styles.pillText}>← Back</Text>
-        </Pressable>
-
-        <View style={styles.center}>
-          <Text style={styles.deckTitle}>{deck.title}</Text>
-          <Text style={styles.subtle}>
-            Created {new Date(deck.createdAt).toLocaleString()}
+      <Screen>
+        <View style={styles.header}>
+          <IconButton name="chevron-back" accessibilityLabel="Back" onPress={goBackHome} />
+          <Text style={[typography.title, styles.headerTitle]} numberOfLines={1}>
+            {deck.title}
           </Text>
-
-          <Pressable onPress={goAddCard} style={styles.primaryBtn}>
-            <Text style={styles.primaryBtnText}>+ Add your first card</Text>
-          </Pressable>
         </View>
-      </SafeAreaView>
+        <Text style={typography.secondary}>
+          Created {new Date(deck.createdAt).toLocaleString()}
+        </Text>
+        <View style={styles.emptyFill}>
+          <EmptyState
+            icon="albums-outline"
+            title="No cards yet"
+            description="Cards need a front and a back to start studying."
+          >
+            <Button label="Add your first card" variant="primary" fullWidth onPress={goAddCard} />
+          </EmptyState>
+        </View>
+      </Screen>
     );
   }
 
-  // show “Study history button row” (compact)
   const lastSession = recentSessions[0];
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.topRow}>
-        <Pressable onPress={goBackHome} style={styles.pill}>
-          <Text style={styles.pillText}>← Back</Text>
-        </Pressable>
+    <Screen>
+      <View style={styles.header}>
+        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={goBackHome} />
+        <Text style={[typography.title, styles.headerTitle]} numberOfLines={1}>
+          {deck.title}
+        </Text>
+        <IconButton
+          name="ellipsis-horizontal"
+          accessibilityLabel="More deck options"
+          onPress={onOverflowPress}
+        />
       </View>
-
-      <Text style={styles.deckTitle}>{deck.title}</Text>
-      <Text style={styles.subtle}>
+      <Text style={typography.secondary}>
         Created {new Date(deck.createdAt).toLocaleString()}
       </Text>
 
+      <View style={styles.studyRow}>
+        <Button label="Start review" variant="primary" onPress={goReview} style={styles.flex1} />
+        <Button label="Start quiz" variant="secondary" onPress={goQuiz} style={styles.flex1} />
+      </View>
+
       <Pressable
-        onPress={() => setShowTools((prev) => !prev)}
-        style={styles.toolsToggle}
+        onPress={() => setShowStats((prev) => !prev)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: showStats }}
+        style={styles.statsToggle}
       >
-        <Text style={styles.toolsToggleText}>
-          {showTools ? "Hide tools" : "Show tools"} {showTools ? "▾" : "▸"}
-        </Text>
+        <Text style={typography.subheading}>Stats</Text>
+        <Ionicons
+          name={showStats ? "chevron-up" : "chevron-down"}
+          size={iconSizes.sm}
+          color={colors.textSecondary}
+        />
       </Pressable>
 
-      <Pressable onPress={goReview} style={styles.secondaryBtn}>
-        <Text style={styles.secondaryBtnText}>▶ Start review</Text>
-      </Pressable>
+      {showStats && (
+        <Surface style={styles.statsCard}>
+          <Text style={typography.secondary}>
+            Today: {stats.todaySessions} sessions • {stats.todayMinutes} min
+          </Text>
+          <Text style={typography.secondary}>
+            Last 7 days: {stats.weekSessions} sessions
+            {stats.avgQuizPercent7d !== null ? ` • avg quiz ${stats.avgQuizPercent7d}%` : ""}
+          </Text>
+          <Text style={typography.secondary}>
+            Best quiz: {stats.bestQuizPercent !== null ? `${stats.bestQuizPercent}%` : "—"}
+          </Text>
+          <Text style={typography.secondary}>
+            Streak: {stats.streakDays} day{stats.streakDays === 1 ? "" : "s"}
+          </Text>
+          <Text style={typography.caption}>Total sessions: {stats.totalSessions}</Text>
 
-      <Pressable onPress={goQuiz} style={styles.secondaryBtn}>
-        <Text style={styles.secondaryBtnText}>🧠 Start quiz</Text>
-      </Pressable>
-
-      {showTools && (
-        <View style={styles.toolsArea}>
-          <Pressable onPress={onSetDifficulty} style={styles.secondaryBtn}>
-            <Text style={styles.secondaryBtnText}>Set difficulty</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setShowStats((prev) => !prev)}
-            style={styles.sectionToggle}
-          >
-            <Text style={styles.sectionTitle}>Stats</Text>
-            <Text style={styles.sectionChevron}>{showStats ? "˄" : "˅"}</Text>
-          </Pressable>
-
-          {showStats && (
-            <View style={[styles.card, { marginTop: 10, gap: 8 }]}>
-              <Text style={{ color: "white", opacity: 0.9 }}>
-                Today: {stats.todaySessions} sessions • {stats.todayMinutes} min
-              </Text>
-
-              <Text style={{ color: "white", opacity: 0.9 }}>
-                Last 7 days: {stats.weekSessions} sessions
-                {stats.avgQuizPercent7d !== null
-                  ? ` • avg quiz ${stats.avgQuizPercent7d}%`
-                  : ""}
-              </Text>
-
-              <Text style={{ color: "white", opacity: 0.9 }}>
-                Best quiz:{" "}
-                {stats.bestQuizPercent !== null ? `${stats.bestQuizPercent}%` : "—"}
-              </Text>
-
-              <Text style={{ color: "white", opacity: 0.9 }}>
-                Streak: {stats.streakDays} day{stats.streakDays === 1 ? "" : "s"}
-              </Text>
-
-              <Text style={{ color: "white", opacity: 0.75, fontSize: 12 }}>
-                Total sessions: {stats.totalSessions}
-              </Text>
-            </View>
+          {lastSession ? (
+            <Pressable onPress={goHistory} style={styles.historyRow} accessibilityRole="button">
+              <View style={styles.flex1}>
+                <Text style={typography.bodyMedium}>Study history ({sessions.length})</Text>
+                <Text style={typography.caption}>
+                  {formatTimestamp(lastSession.finishedAt)} •{" "}
+                  {lastSession.mode === "quiz"
+                    ? `Quiz • ${
+                        typeof lastSession.percent === "number" ? `${lastSession.percent}% • ` : ""
+                      }`
+                    : "Review • "}
+                  {lastSession.total} cards • {formatDuration(lastSession.startedAt, lastSession.finishedAt)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={iconSizes.sm} color={colors.textSecondary} />
+            </Pressable>
+          ) : (
+            <Pressable onPress={goHistory} style={styles.historyRow} accessibilityRole="button">
+              <Text style={typography.caption}>No study history yet. Start a review or quiz.</Text>
+              <Ionicons name="chevron-forward" size={iconSizes.sm} color={colors.textSecondary} />
+            </Pressable>
           )}
-
-          <Pressable
-            onPress={() => setShowDetails((prev) => !prev)}
-            style={styles.sectionToggle}
-          >
-            <Text style={styles.sectionTitle}>Details</Text>
-            <Text style={styles.sectionChevron}>{showDetails ? "˄" : "˅"}</Text>
-          </Pressable>
-
-          {showDetails && (
-            <View style={styles.sectionBody}>
-              <Pressable onPress={onExportDeck} style={styles.secondaryBtn}>
-                <Text style={styles.secondaryBtnText}>Share deck</Text>
-              </Pressable>
-
-              {/* Study history button */}
-              <Pressable onPress={goHistory} style={styles.historyButton}>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={styles.historyButtonTitle}>
-                    Study history ({sessions.length})
-                  </Text>
-
-                  {lastSession ? (
-                    <Text style={styles.historyButtonSubtitle}>
-                      {formatTimestamp(lastSession.finishedAt)} •{" "}
-                      {lastSession.mode === "quiz"
-                        ? `Quiz • ${
-                            typeof lastSession.percent === "number"
-                              ? `${lastSession.percent}% • `
-                              : ""
-                          }`
-                        : "Review • "}
-                      {lastSession.total} cards •{" "}
-                      {formatDuration(lastSession.startedAt, lastSession.finishedAt)}
-                    </Text>
-                  ) : (
-                    <Text style={styles.historyButtonSubtitle}>
-                      No study history yet. Start a review or quiz.
-                    </Text>
-                  )}
-                </View>
-
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
+        </Surface>
       )}
 
-      <View style={styles.filterHeader}>
-        <Text style={styles.filterCount}>
-          Showing {filteredCards.length} / {cards.length} cards
-        </Text>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={typography.subheading}>Cards</Text>
+        <Button label="+ Add card" variant="primary" size="sm" onPress={goAddCard} />
       </View>
 
       <View style={styles.filterRow}>
-        {(["all", "hard", "medium", "easy"] as const).map((value) => {
+        {DIFFICULTY_FILTERS.map((value) => {
           const isActive = difficultyFilter === value;
           const label = value[0].toUpperCase() + value.slice(1);
           return (
             <Pressable
               key={value}
               onPress={() => setDifficultyFilter(value)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={`Filter: ${label}`}
               style={[styles.filterChip, isActive && styles.filterChipActive]}
             >
-              <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
+              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
                 {label}
               </Text>
             </Pressable>
           );
         })}
       </View>
+      <Text style={typography.caption}>
+        Showing {filteredCards.length} / {cards.length} cards
+      </Text>
 
       {filteredCards.length === 0 && (
-        <View style={[styles.card, { marginTop: 14 }]}>
-          <Text style={styles.emptyFilterText}>No cards with this difficulty.</Text>
-        </View>
+        <Surface>
+          <Text style={typography.secondary}>No cards with this difficulty.</Text>
+        </Surface>
       )}
 
       <FlatList
         data={filteredCards}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingTop: 14, paddingBottom: 110, gap: 12 }}
+        style={styles.flex1}
+        contentContainerStyle={styles.list}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push(`/deck/${id}/edit-card/${item.id}`)}
             onLongPress={() => confirmDeleteCard(item)}
             delayLongPress={350}
-            style={styles.card}
+            accessibilityRole="button"
+            accessibilityLabel={`Card: ${item.front}. Double tap to edit. Long press to delete.`}
+            style={({ pressed }) => [pressed && styles.pressed]}
           >
-            <Text style={styles.cardFront}>{item.front}</Text>
-            <Text style={styles.cardMeta}>
-              {(item.difficulty ?? "medium")[0].toUpperCase() +
-                (item.difficulty ?? "medium").slice(1)}
-            </Text>
-            <Text style={styles.cardBack}>{item.back}</Text>
-            <Text style={styles.hint}>Tap to edit • Long-press to delete</Text>
+            <Surface style={styles.cardRow}>
+              <View style={styles.cardRowHeader}>
+                <Text style={typography.bodyMedium} numberOfLines={2}>
+                  {item.front}
+                </Text>
+                <Text style={typography.caption}>
+                  {(item.difficulty ?? "medium")[0].toUpperCase() +
+                    (item.difficulty ?? "medium").slice(1)}
+                </Text>
+              </View>
+              <Text style={typography.secondary} numberOfLines={2}>
+                {item.back}
+              </Text>
+            </Surface>
           </Pressable>
         )}
       />
-
-      <View style={styles.bottomBar}>
-        <Pressable onPress={goAddCard} style={styles.primaryBtnWide}>
-          <Text style={styles.primaryBtnText}>+ Card</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: APP_BG,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  topRow: {
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  headerTitle: { flex: 1 },
+  flex1: { flex: 1 },
+
+  emptyFill: { flex: 1, justifyContent: "center" },
+
+  studyRow: { flexDirection: "row", gap: spacing.sm },
+
+  statsToggle: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: touchTarget.min,
   },
-  pill: {
-    alignSelf: "flex-start",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+  statsCard: { gap: spacing.xs },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  filterRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
+  filterChip: {
+    minHeight: touchTarget.min,
+    paddingHorizontal: spacing.md,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  pillText: { fontWeight: "700", color: "white" },
-
-  deckTitle: {
-    marginTop: 16,
-    fontSize: 40,
-    fontWeight: "900",
-    color: "white",
-  },
-  subtle: { marginTop: 8, color: "white", opacity: 0.85 },
-
-  center: {
-    flex: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
-  },
-
-  primaryBtn: {
-    marginTop: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    backgroundColor: "#2247a3ff",
-  },
-  primaryBtnWide: {
-    width: "100%",
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: "#2247a3ff",
-    alignItems: "center",
-  },
-  primaryBtnText: { color: "white", fontWeight: "800", fontSize: 16 },
-
-  secondaryBtn: {
-    marginTop: 14,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    alignItems: "center",
-  },
-  secondaryBtnText: { color: "white", fontWeight: "900", fontSize: 16 },
-
-  toolsToggle: {
-    alignSelf: "flex-start",
-    marginTop: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  toolsToggleText: { color: "white", fontWeight: "800", fontSize: 12 },
-  toolsArea: { marginTop: 4 },
-
-  card: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  cardFront: { color: "white", fontWeight: "900", fontSize: 18 },
-  cardMeta: { marginTop: 4, color: "white", opacity: 0.7, fontSize: 12 },
-  cardBack: { marginTop: 8, color: "white", opacity: 0.9 },
-  hint: { marginTop: 10, color: "white", opacity: 0.65, fontSize: 12 },
-
-  historyButton: {
-    marginTop: 14,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "rgba(255,255,255,0.14)",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  historyButtonTitle: {
-    color: "white",
-    fontWeight: "900",
-    fontSize: 16,
-  },
-  historyButtonSubtitle: {
-    color: "white",
-    opacity: 0.85,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  chevron: {
-    color: "white",
-    fontSize: 28,
-    fontWeight: "900",
-    opacity: 0.85,
-  },
-
-  sectionToggle: {
-    marginTop: 14,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "rgba(255,255,255,0.14)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionTitle: { color: "white", fontWeight: "900", fontSize: 16 },
-  sectionChevron: { color: "white", fontSize: 16, fontWeight: "900", opacity: 0.85 },
-  sectionBody: { marginTop: 10, gap: 10 },
-
-  filterRow: {
-    marginTop: 8,
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  filterHeader: { marginTop: 14 },
-  filterCount: { color: "white", opacity: 0.75, fontSize: 12, fontWeight: "800" },
-  filterChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "rgba(255,255,255,0.12)",
   },
   filterChipActive: {
-    backgroundColor: "rgba(255,255,255,0.28)",
-    borderColor: "rgba(255,255,255,0.35)",
+    backgroundColor: colors.accentMuted,
+    borderColor: colors.accentStrong,
   },
-  filterText: { color: "white", opacity: 0.7, fontWeight: "800", fontSize: 12 },
-  filterTextActive: { opacity: 1 },
-  emptyFilterText: { color: "white", opacity: 0.85, fontWeight: "800" },
+  filterChipText: { ...typography.caption, fontWeight: "600" },
+  filterChipTextActive: { color: colors.accentStrong, fontWeight: "700" },
 
-  bottomBar: {
-    position: "absolute",
-    left: 20,
-    right: 20,
-    bottom: 16,
-  },
+  list: { gap: spacing.sm, paddingBottom: spacing.xl },
+  cardRow: { gap: spacing.xs },
+  cardRowHeader: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm },
+  pressed: { opacity: 0.85 },
 });

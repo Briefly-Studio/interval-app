@@ -13,6 +13,7 @@ type TextFieldProps = Omit<TextInputProps, "style"> & {
 
 export function TextField({ label, error, isPassword, ...inputProps }: TextFieldProps) {
   const [revealed, setRevealed] = useState(false);
+  const isMultiline = !!inputProps.multiline;
 
   return (
     <View style={styles.container}>
@@ -21,6 +22,7 @@ export function TextField({ label, error, isPassword, ...inputProps }: TextField
         style={[
           styles.inputRow,
           !isPassword && styles.inputRowNoAccessory,
+          isMultiline && styles.inputRowMultiline,
           error && styles.inputRowError,
         ]}
       >
@@ -28,7 +30,8 @@ export function TextField({ label, error, isPassword, ...inputProps }: TextField
           {...inputProps}
           secureTextEntry={isPassword ? !revealed : inputProps.secureTextEntry}
           placeholderTextColor={colors.textPlaceholder}
-          style={styles.input}
+          textAlignVertical={isMultiline ? "top" : inputProps.textAlignVertical}
+          style={[styles.input, isMultiline && styles.inputMultiline]}
         />
         {isPassword && (
           <IconButton
@@ -60,6 +63,7 @@ const styles = StyleSheet.create({
     minHeight: touchTarget.min,
   },
   inputRowNoAccessory: { paddingRight: spacing.md },
+  inputRowMultiline: { alignItems: "flex-start", minHeight: 96, paddingVertical: spacing.sm },
   inputRowError: { borderColor: colors.danger },
   input: {
     flex: 1,
@@ -67,5 +71,13 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     paddingVertical: spacing.sm,
   },
+  // Multiline rows use alignItems: "flex-start" (not the default "center"/stretch) so the
+  // input starts at the top rather than vertically centering as it grows. Without an explicit
+  // height on the TextInput itself, RN sizes it to its own intrinsic (near single-line) content
+  // height and leaves the rest of the 96pt row as dead space that LOOKS like part of the field
+  // but isn't part of the TextInput's touchable area at all — taps there land on the row's
+  // background View, which has no text input to focus, so the keyboard never opens. Giving the
+  // TextInput its own minHeight makes its actual (touchable) box span the full visual field.
+  inputMultiline: { paddingVertical: 0, minHeight: 80 },
   error: { ...typography.caption, color: colors.danger },
 });

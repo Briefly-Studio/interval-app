@@ -85,6 +85,10 @@ export async function deleteDeckById(
       updatedAt: now,
       rev: card.rev + 1,
       dirty: true,
+      // Marks this tombstone as a side effect of the deck deletion, not an individual
+      // deleteCard() call — see CardRecord.deletedByDeckCascade for why this can't just be
+      // inferred from deletedAt matching the deck's own timestamp.
+      deletedByDeckCascade: true,
     };
   });
   // TEMP DEBUG

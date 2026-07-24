@@ -15,6 +15,12 @@ export type CardRecord = Card & {
   deletedAt?: string;
   dirty?: boolean;
   lastSyncedAt?: string;
+  // Set only by deleteDeckById's cascade (never by deleteCard, the individual-delete path) —
+  // distinguishes "tombstoned because the parent deck was deleted" from "the user deleted this
+  // one card on its own", so restoring a deck can bring back the former without resurrecting
+  // the latter. Deliberately not timestamp-based: two deletes can land in the same millisecond,
+  // which would make an exact deletedAt match an unreliable signal.
+  deletedByDeckCascade?: boolean;
 };
 
 export function upgradeCard(c: any): CardRecord {
