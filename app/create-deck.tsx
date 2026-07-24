@@ -1,96 +1,88 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useMemo, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { makeId, type DeckRecord, upgradeDeck } from "../src/models/deck";
 import { addDeck } from "../src/storage/decks";
-
-const APP_BG = "#2FA4A3";
+import { Button } from "../src/ui/Button";
+import { Card } from "../src/ui/Card";
+import { IconButton } from "../src/ui/IconButton";
+import { Screen } from "../src/ui/Screen";
+import { TextField } from "../src/ui/TextField";
+import { spacing, typography } from "../src/ui/theme";
 
 export default function CreateDeck() {
   const router = useRouter();
   const [title, setTitle] = useState("");
+  const [touched, setTouched] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const trimmedTitle = useMemo(() => title.trim(), [title]);
+  const isValid = trimmedTitle.length > 0;
 
   async function onCreate() {
-    const trimmed = title.trim();
-    if (!trimmed) {
-      Alert.alert("Deck title required", "Please enter a name for your deck.");
-      return;
+    if (!isValid || submitting) return;
+    setSubmitting(true);
+    try {
+      const now = new Date().toISOString();
+      const deck: DeckRecord = {
+        ...upgradeDeck({
+          id: makeId(),
+          title: trimmedTitle,
+          createdAt: now,
+        }),
+        rev: 1,
+        updatedAt: now,
+        dirty: true,
+      };
+
+      const scope = await AuthService.getActiveScope();
+      await addDeck(scope, deck);
+      router.back();
+    } finally {
+      setSubmitting(false);
     }
-
-    const now = new Date().toISOString();
-    const deck: DeckRecord = {
-      ...upgradeDeck({
-        id: makeId(),
-        title: trimmed,
-        createdAt: now,
-      }),
-      rev: 1,
-      updatedAt: now,
-      dirty: true,
-    };
-
-    const scope = await AuthService.getActiveScope();
-    await addDeck(scope, deck);
-    router.back();
   }
-  
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: APP_BG }}>
-      <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 12, gap: 16 }}>
-        <Text style={{ fontSize: 24, fontWeight: "700", color: "white" }}>
-          Create deck
-        </Text>
 
-        <TextInput
+  return (
+    <Screen>
+      <View style={styles.header}>
+        <IconButton
+          name="chevron-back"
+          accessibilityLabel="Back"
+          onPress={() => router.back()}
+          disabled={submitting}
+        />
+        <Text style={typography.title}>Create deck</Text>
+      </View>
+      <Text style={typography.secondary}>Give your deck a clear name.</Text>
+
+      <Card>
+        <TextField
+          label="Deck name"
           value={title}
           onChangeText={setTitle}
-          placeholder="Deck title"
-          placeholderTextColor="rgba(255,255,255,0.7)"
+          onBlur={() => setTouched(true)}
+          error={touched && !isValid ? "Enter a name for your deck." : undefined}
+          placeholder="e.g. AWS SysOps"
           autoFocus
-          style={{
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.35)",
-            backgroundColor: "rgba(255,255,255,0.16)",
-            padding: 14,
-            borderRadius: 12,
-            fontSize: 16,
-            color: "white",
-          }}
+          editable={!submitting}
         />
+      </Card>
 
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <Pressable
-            onPress={() => router.back()}
-            style={{
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.35)",
-              backgroundColor: "rgba(255,255,255,0.12)",
-            }}
-          >
-            <Text style={{ color: "white", fontWeight: "600" }}>Cancel</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={onCreate}
-            style={{
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.35)",
-              backgroundColor: "rgba(255,255,255,0.2)",
-            }}
-          >
-            <Text style={{ color: "white", fontWeight: "700" }}>Create</Text>
-          </Pressable>
-        </View>
-      </View>
-    </SafeAreaView>
+      <Button
+        label="Create deck"
+        variant="primary"
+        fullWidth
+        loading={submitting}
+        disabled={!isValid}
+        onPress={onCreate}
+      />
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+});
