@@ -1,13 +1,15 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import { type SessionRecord, upgradeSession } from "../../../src/models/session";
 import { addSession } from "../../../src/storage/sessions";
-
-const APP_BG = "#2FA4A3";
+import { Button } from "../../../src/ui/Button";
+import { Card } from "../../../src/ui/Card";
+import { ResultMetric } from "../../../src/ui/ResultMetric";
+import { Screen } from "../../../src/ui/Screen";
+import { colors, spacing, typography } from "../../../src/ui/theme";
 
 const formatDuration = (startedAt: number, finishedAt: number) => {
   const diff = Math.max(0, finishedAt - startedAt);
@@ -100,116 +102,45 @@ export default function QuizResults() {
   }, [deckId, total, percent, startedAt, finishedAt]);
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <Pressable onPress={() => navigateOnce(goBackToDeck)} disabled={navBusy} style={styles.pill}>
-        <Text style={styles.pillText}>← Back</Text>
-      </Pressable>
-
+    <Screen>
       <View style={styles.center}>
-        <Text style={styles.title}>Quiz Complete</Text>
-
-        {/* Main score */}
-        <Text style={styles.big}>
+        <Text style={typography.title}>Quiz complete</Text>
+        <Text style={styles.bigScore}>
           {correct} / {total}
         </Text>
         <Text style={styles.percent}>{percent}%</Text>
 
-        {/* NEW: explicit breakdown */}
-        <View style={styles.breakdownRow}>
-          <View style={styles.breakdownPill}>
-            <Text style={styles.breakdownLabel}>Right</Text>
-            <Text style={styles.breakdownValue}>{correct}</Text>
+        <Card style={styles.summaryCard}>
+          <View style={styles.metricsRow}>
+            <ResultMetric label="Correct" value={String(correct)} />
+            <ResultMetric label="Incorrect" value={String(wrong)} />
+            <ResultMetric label="Time" value={durationText} />
           </View>
+        </Card>
 
-          <View style={styles.breakdownPill}>
-            <Text style={styles.breakdownLabel}>Wrong</Text>
-            <Text style={styles.breakdownValue}>{wrong}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.subtle}>Time: {durationText}</Text>
-
-        <Pressable
+        <Button
+          label="Retry"
+          variant="primary"
+          fullWidth
+          disabled={navBusy}
           onPress={() => navigateOnce(() => router.replace(`/deck/${deckId}/quiz`))}
+        />
+        <Button
+          label="Back to deck"
+          variant="secondary"
+          fullWidth
           disabled={navBusy}
-          style={styles.primary}
-        >
-          <Text style={styles.primaryText}>Retry</Text>
-        </Pressable>
-
-        <Pressable
           onPress={() => navigateOnce(goBackToDeck)}
-          disabled={navBusy}
-          style={styles.secondary}
-        >
-          <Text style={styles.secondaryText}>Back to deck</Text>
-        </Pressable>
+        />
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: APP_BG,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  pill: {
-    alignSelf: "flex-start",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  pillText: { color: "white", fontWeight: "700" },
-
-  center: { flex: 1, justifyContent: "center", alignItems: "center", gap: 10 },
-
-  title: { fontSize: 34, fontWeight: "900", color: "white" },
-  big: { marginTop: 8, fontSize: 64, fontWeight: "900", color: "white" },
-  percent: { marginTop: -4, fontSize: 22, fontWeight: "900", color: "white", opacity: 0.95 },
-
-  breakdownRow: {
-    marginTop: 8,
-    flexDirection: "row",
-    gap: 12,
-  },
-  breakdownPill: {
-    minWidth: 120,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "rgba(255,255,255,0.14)",
-    alignItems: "center",
-  },
-  breakdownLabel: { color: "white", opacity: 0.8, fontWeight: "900", fontSize: 12 },
-  breakdownValue: { marginTop: 4, color: "white", fontWeight: "900", fontSize: 22 },
-
-  subtle: { marginTop: 8, color: "white", opacity: 0.8, fontWeight: "700" },
-
-  primary: {
-    marginTop: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 22,
-    borderRadius: 14,
-    backgroundColor: "#2247a3ff",
-  },
-  primaryText: { color: "white", fontWeight: "900", fontSize: 16 },
-
-  secondary: {
-    marginTop: 6,
-    paddingVertical: 14,
-    paddingHorizontal: 22,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  secondaryText: { color: "white", fontWeight: "900", fontSize: 16 },
+  center: { flex: 1, justifyContent: "center", gap: spacing.md },
+  bigScore: { fontSize: 48, fontWeight: "700", color: colors.textPrimary },
+  percent: { fontSize: 18, fontWeight: "600", color: colors.textSecondary, marginBottom: spacing.sm },
+  summaryCard: { alignItems: "center" },
+  metricsRow: { flexDirection: "row", gap: spacing.xl },
 });

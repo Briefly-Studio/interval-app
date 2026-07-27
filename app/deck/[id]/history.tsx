@@ -1,13 +1,18 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
+import type { Deck } from "../../../src/models/deck";
 import type { StudySession } from "../../../src/models/session";
+import { getDeckById } from "../../../src/storage/decks";
 import { deleteSessionsForDeck, getSessionsForDeck } from "../../../src/storage/sessions";
-
-const APP_BG = "#2FA4A3";
+import { Button } from "../../../src/ui/Button";
+import { EmptyState } from "../../../src/ui/EmptyState";
+import { IconButton } from "../../../src/ui/IconButton";
+import { Screen } from "../../../src/ui/Screen";
+import { SessionCard } from "../../../src/ui/SessionCard";
+import { spacing, typography } from "../../../src/ui/theme";
 
 const formatTimestamp = (value: number) =>
   new Date(value).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
@@ -32,6 +37,7 @@ export default function DeckHistoryScreen() {
       ? idParam[0]
       : "";
 
+  const [deck, setDeck] = useState<Deck | null>(null);
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -42,8 +48,9 @@ export default function DeckHistoryScreen() {
       (async () => {
         if (!deckId) return;
         const scope = await AuthService.getActiveScope();
-        const s = await getSessionsForDeck(scope, deckId);
+        const [d, s] = await Promise.all([getDeckById(scope, deckId), getSessionsForDeck(scope, deckId)]);
         if (alive) {
+          setDeck(d);
           setSessions(s);
           setLoaded(true);
         }
@@ -77,7 +84,7 @@ export default function DeckHistoryScreen() {
               await deleteSessionsForDeck(scope, deckId);
               setSessions([]);
             } catch {
-              Alert.alert("Couldn’t clear history", "Please try again.");
+              Alert.alert("Couldn't clear history", "Please try again.");
             }
           },
         },
@@ -85,36 +92,47 @@ export default function DeckHistoryScreen() {
     );
   };
 
+  const isEmpty = loaded && sessions.length === 0;
+
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.topRow}>
-        <Pressable onPress={() => router.back()} style={styles.pill}>
-          <Text style={styles.pillText}>← Back</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={confirmClear}
+    <Screen>
+      <View style={styles.header}>
+        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
+        <Text style={typography.title}>Study history</Text>
+        <Button
+          label="Clear"
+          variant="danger"
+          size="sm"
           disabled={sessions.length === 0}
-          style={[styles.clearBtn, sessions.length === 0 && { opacity: 0.45 }]}
-        >
-          <Text style={styles.clearBtnText}>Clear</Text>
-        </Pressable>
+          onPress={confirmClear}
+        />
       </View>
-
-      <Text style={styles.title}>Study history</Text>
-      <Text style={styles.subtle}>
+      <Text style={typography.secondary}>
+        {deck?.title ? `${deck.title} • ` : ""}
         {loaded ? `${sessions.length} session${sessions.length === 1 ? "" : "s"}` : "Loading…"}
       </Text>
 
-      {loaded && sessions.length === 0 ? (
-        <View style={[styles.card, { marginTop: 14 }]}>
-          <Text style={styles.emptyText}>No history yet. Do a review or quiz.</Text>
+      {isEmpty ? (
+        <View style={styles.emptyFill}>
+          <EmptyState
+            icon="time-outline"
+            title="No history yet"
+            description="Do a review or quiz to start building your study history."
+          >
+            <Button
+              label="Start reviewing"
+              variant="primary"
+              fullWidth
+              onPress={() => router.push(`/deck/${deckId}/review`)}
+            />
+          </EmptyState>
         </View>
       ) : (
         <FlatList
           data={sorted}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingTop: 14, paddingBottom: 20, gap: 12 }}
+          style={styles.flex1}
+          contentContainerStyle={styles.list}
           renderItem={({ item }) => {
             const parts = [
               item.mode === "quiz" ? "Quiz" : "Review",
@@ -123,58 +141,21 @@ export default function DeckHistoryScreen() {
             ].filter(Boolean) as string[];
 
             return (
-              <View style={styles.card}>
-                <Text style={styles.rowPrimary}>{parts.join(" • ")}</Text>
-                <Text style={styles.rowSecondary}>
-                  {formatTimestamp(item.finishedAt)} • {formatDuration(item.startedAt, item.finishedAt)}
-                </Text>
-              </View>
+              <SessionCard
+                title={parts.join(" • ")}
+                subtitle={`${formatTimestamp(item.finishedAt)} • ${formatDuration(item.startedAt, item.finishedAt)}`}
+              />
             );
           }}
         />
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: APP_BG, paddingHorizontal: 20, paddingTop: 10 },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  pill: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  pillText: { color: "white", fontWeight: "700" },
-
-  clearBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  clearBtnText: { color: "white", fontWeight: "900" },
-
-  title: { marginTop: 16, fontSize: 34, fontWeight: "900", color: "white" },
-  subtle: { marginTop: 8, color: "white", opacity: 0.85 },
-
-  card: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  rowPrimary: { color: "white", fontWeight: "900" },
-  rowSecondary: { marginTop: 6, color: "white", opacity: 0.75, fontSize: 12 },
-  emptyText: { color: "white", opacity: 0.85 },
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  emptyFill: { flex: 1, justifyContent: "center" },
+  flex1: { flex: 1 },
+  list: { gap: spacing.sm, paddingBottom: spacing.xl },
 });

@@ -1,13 +1,15 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import { type SessionRecord, upgradeSession } from "../../../src/models/session";
 import { addSession } from "../../../src/storage/sessions";
-
-const APP_BG = "#2FA4A3";
+import { Button } from "../../../src/ui/Button";
+import { Card } from "../../../src/ui/Card";
+import { ResultMetric } from "../../../src/ui/ResultMetric";
+import { Screen } from "../../../src/ui/Screen";
+import { spacing, typography } from "../../../src/ui/theme";
 
 const formatDuration = (startedAt: number, finishedAt: number) => {
   const diff = Math.max(0, finishedAt - startedAt);
@@ -91,85 +93,38 @@ export default function ReviewResults() {
   }, [deckId, total, startedAt, finishedAt]);
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <Pressable
-        onPress={() => navigateOnce(goBackToDeck)}
-        disabled={navBusy}
-        style={[styles.pill, navBusy && { opacity: 0.5 }]}
-      >
-        <Text style={styles.pillText}>← Back</Text>
-      </Pressable>
-
+    <Screen>
       <View style={styles.center}>
-        <Text style={styles.title}>Review Complete</Text>
+        <Text style={typography.title}>Review complete</Text>
 
-        <Text style={styles.big}>{total}</Text>
-        <Text style={styles.subtitle}>cards reviewed</Text>
+        <Card style={styles.summaryCard}>
+          <View style={styles.metricsRow}>
+            <ResultMetric label="Cards reviewed" value={String(total)} />
+            <ResultMetric label="Time" value={durationText} />
+          </View>
+        </Card>
 
-        <Text style={styles.subtle}>Time: {durationText}</Text>
-
-        <Pressable
+        <Button
+          label="Review again"
+          variant="primary"
+          fullWidth
+          disabled={navBusy}
           onPress={() => navigateOnce(() => router.replace(`/deck/${deckId}/review`))}
+        />
+        <Button
+          label="Back to deck"
+          variant="secondary"
+          fullWidth
           disabled={navBusy}
-          style={[styles.primary, navBusy && { opacity: 0.5 }]}
-        >
-          <Text style={styles.primaryText}>Review again</Text>
-        </Pressable>
-
-        <Pressable
           onPress={() => navigateOnce(goBackToDeck)}
-          disabled={navBusy}
-          style={[styles.secondary, navBusy && { opacity: 0.5 }]}
-        >
-          <Text style={styles.secondaryText}>Back to deck</Text>
-        </Pressable>
+        />
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: APP_BG,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  pill: {
-    alignSelf: "flex-start",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  pillText: { color: "white", fontWeight: "700" },
-
-  center: { flex: 1, justifyContent: "center", alignItems: "center", gap: 10 },
-
-  title: { fontSize: 34, fontWeight: "900", color: "white" },
-  big: { marginTop: 8, fontSize: 64, fontWeight: "900", color: "white" },
-  subtitle: { color: "white", opacity: 0.9, fontWeight: "900" },
-  subtle: { marginTop: 8, color: "white", opacity: 0.8, fontWeight: "700" },
-
-  primary: {
-    marginTop: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 22,
-    borderRadius: 14,
-    backgroundColor: "#2247a3ff",
-  },
-  primaryText: { color: "white", fontWeight: "900", fontSize: 16 },
-
-  secondary: {
-    marginTop: 6,
-    paddingVertical: 14,
-    paddingHorizontal: 22,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  secondaryText: { color: "white", fontWeight: "900", fontSize: 16 },
+  center: { flex: 1, justifyContent: "center", gap: spacing.lg },
+  summaryCard: { alignItems: "center" },
+  metricsRow: { flexDirection: "row", gap: spacing.xxl },
 });
