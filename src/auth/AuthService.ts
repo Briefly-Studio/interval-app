@@ -79,7 +79,7 @@ function assertAuthConfigured(): AuthConfig {
 }
 
 async function cognitoRequest<TPayload extends Record<string, unknown>>(
-  action: "SignUp" | "ConfirmSignUp" | "InitiateAuth",
+  action: "SignUp" | "ConfirmSignUp" | "InitiateAuth" | "UpdateUserAttributes",
   payload: TPayload
 ): Promise<CognitoResponse> {
   const { cognitoRegion } = assertAuthConfigured();
@@ -225,6 +225,19 @@ async function refreshAccessToken(): Promise<string | null> {
   return json.AuthenticationResult.AccessToken;
 }
 
+// UpdateUserAttributes doesn't return new tokens — the ID token already on disk still carries
+// the OLD given_name/family_name claims. Forces a refresh (regardless of the current access
+// token's freshness, unlike getAccessToken's lazy check) so the next getActiveIdentity() call
+// reflects what was just saved immediately, rather than after the token's natural expiry.
+async function forceRefreshIdentity(): Promise<void> {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  await refreshPromise;
+}
+
 export const AuthService = {
   async signUp(email: string, password: string, givenName: string, familyName: string): Promise<void> {
     const { cognitoAppClientId } = assertAuthConfigured();
@@ -324,6 +337,52 @@ export const AuthService = {
     const idToken = await SecureStore.getItemAsync(ID_TOKEN_KEY);
     const claims = idToken ? decodeJwtPayload(idToken) : null;
     return deriveIdentityFromClaims(claims, sub);
+  },
+
+  // Updates only the attributes explicitly passed (undefined = "leave unchanged" — never
+  // resends an attribute the caller didn't touch). nickname's Cognito write-permission was
+  // verified read-only via CloudShell (schema: String, Mutable: true, MinLength: 0) before this
+  // was enabled. Never touches email or username, never changes the password. Returns the
+  // refreshed identity so callers can update UI without a restart.
+  //
+  // Clearing nickname: passing "" (not undefined) explicitly clears it. Cognito's schema allows
+  // MinLength: 0 for this attribute, so UpdateUserAttributes with Value: "" is accepted and
+  // removes the prior value — this is simpler than a separate DeleteUserAttributes call for the
+  // same effect, and deriveIdentityFromClaims's trimmedString() already treats an empty or
+  // missing nickname claim identically (falls through to given_name), so no special-casing is
+  // needed on the read side either.
+  async updateProfile(changes: {
+    givenName?: string;
+    familyName?: string;
+    nickname?: string;
+  }): Promise<UserIdentity | null> {
+    const attributes: { Name: string; Value: string }[] = [];
+    if (changes.givenName !== undefined) {
+      attributes.push({ Name: "given_name", Value: changes.givenName });
+    }
+    if (changes.familyName !== undefined) {
+      attributes.push({ Name: "family_name", Value: changes.familyName });
+    }
+    if (changes.nickname !== undefined) {
+      attributes.push({ Name: "nickname", Value: changes.nickname });
+    }
+
+    if (attributes.length === 0) {
+      return AuthService.getActiveIdentity();
+    }
+
+    const accessToken = await AuthService.getAccessToken();
+    if (!accessToken) {
+      throw new Error("You need to be signed in to update your profile.");
+    }
+
+    await cognitoRequest("UpdateUserAttributes", {
+      AccessToken: accessToken,
+      UserAttributes: attributes,
+    });
+
+    await forceRefreshIdentity();
+    return AuthService.getActiveIdentity();
   },
 };
 

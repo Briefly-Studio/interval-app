@@ -9,6 +9,12 @@ export type UserIdentity = {
   email?: string;
   givenName?: string;
   familyName?: string;
+  // Read-only today: nothing in this codebase writes a `nickname` attribute (Edit Profile V1
+  // deliberately doesn't expose it — see src/auth/nameValidation.ts and app/edit-profile.tsx for
+  // why). This just means that if a nickname claim ever legitimately appears on the ID token
+  // (e.g. a future batch wires writing it, once verified safe), display already prefers it
+  // without any further changes here.
+  nickname?: string;
   fullName?: string;
   displayName: string;
 };
@@ -34,13 +40,17 @@ function composeFullName(
   return givenName ?? familyName ?? name;
 }
 
-// Fallback order, per spec: given_name -> name -> email prefix -> "there".
+// Fallback order: nickname -> given_name -> name -> email prefix -> "there". Nickname leads
+// because it's the most deliberately-chosen preferred name when present, but today nothing
+// populates it (see UserIdentity.nickname) so this is equivalent to the old given_name-first
+// chain until a future batch verifies and wires nickname writes.
 function composeDisplayName(
+  nickname: string | undefined,
   givenName: string | undefined,
   name: string | undefined,
   email: string | undefined
 ): string {
-  return givenName ?? name ?? emailPrefix(email) ?? "there";
+  return nickname ?? givenName ?? name ?? emailPrefix(email) ?? "there";
 }
 
 /**
@@ -55,6 +65,7 @@ export function deriveIdentityFromClaims(
   const email = trimmedString(claims?.email);
   const givenName = trimmedString(claims?.given_name);
   const familyName = trimmedString(claims?.family_name);
+  const nickname = trimmedString(claims?.nickname);
   const name = trimmedString(claims?.name);
 
   return {
@@ -62,7 +73,8 @@ export function deriveIdentityFromClaims(
     email,
     givenName,
     familyName,
+    nickname,
     fullName: composeFullName(givenName, familyName, name),
-    displayName: composeDisplayName(givenName, name, email),
+    displayName: composeDisplayName(nickname, givenName, name, email),
   };
 }

@@ -24,8 +24,11 @@ import { colors, spacing, typography } from "../src/ui/theme";
 
 // Falls back to a neutral bullet rather than ever rendering "undefined" — identity can briefly
 // lag one tick behind scope while refreshWorkspace resolves them separately (see below).
+// displayName already embeds the full preferred-name fallback chain (nickname > given_name >
+// name > email prefix > "there" — see src/auth/identity.ts), so it's the single source of truth
+// here rather than re-deriving a second, possibly-divergent priority order.
 function accountInitial(identity: UserIdentity | null): string {
-  const source = identity?.givenName || identity?.displayName;
+  const source = identity?.displayName;
   return source ? source[0].toUpperCase() : "•";
 }
 
@@ -46,7 +49,9 @@ export default function DecksHome() {
   // Small presentational identity area — derives only display text, never anything used for
   // storage/sync/authorization, which stays sub-scoped exactly as before.
   const greeting = useMemo(() => {
-    if (scope.kind === "user") return getHomeGreeting(identity?.givenName);
+    // Prefers nickname over given_name (never falls further to email prefix/"there" here — the
+    // greeting should stay silent-on-name rather than show an email prefix in a warm sentence).
+    if (scope.kind === "user") return getHomeGreeting(identity?.nickname || identity?.givenName);
     return { headline: "Ready to learn?", supporting: "Your offline workspace" };
   }, [scope, identity]);
 
@@ -106,25 +111,16 @@ export default function DecksHome() {
     [loadDecks]
   );
 
-  const onSignOut = async () => {
-    await AuthService.signOut();
-    // Belt-and-suspenders: signOut() already emits a workspace-changed event that the
-    // subscription above reacts to, but resolving it here too guarantees the guest deck
-    // list is visible immediately, regardless of event ordering.
-    await refreshWorkspace();
-  };
-
-  // Sign out is intentionally no longer a prominent primary Home action — it now lives behind
-  // the compact account button, alongside the signed-in identity, matching Home V2's IA.
+  // Sign out now lives in Settings (see app/settings.tsx) — the account button here is purely
+  // a navigation entry point: guests go to sign-in, signed-in users go to Settings. Settings'
+  // own onWorkspaceChanged subscription (and this one, still mounted underneath) both react to
+  // sign-out immediately, so Home is already correct by the time the user navigates back to it.
   const onAccountPress = () => {
     if (!signedIn) {
       router.push("/sign-in");
       return;
     }
-    Alert.alert(identity?.displayName ?? "Account", identity?.email, [
-      { text: "Sign out", style: "destructive", onPress: onSignOut },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    router.push({ pathname: "/settings" as any });
   };
 
   const confirmDelete = (deck: DeckRecord) => {

@@ -20,6 +20,12 @@ export function isValidName(value: string): boolean {
   return NAME_PATTERN.test(trimmed);
 }
 
+/** Like isValidName, but an empty (or whitespace-only) value is also valid — for optional
+ * fields like nickname, where clearing the field is a legitimate choice, not an error. */
+export function isValidOptionalName(value: string): boolean {
+  return trimName(value).length === 0 || isValidName(value);
+}
+
 export type CognitoAttribute = { Name: string; Value: string };
 
 /** Builds the given_name/family_name entries to append to a Cognito SignUp UserAttributes array. */

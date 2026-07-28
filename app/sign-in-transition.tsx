@@ -43,7 +43,9 @@ export default function SignInTransitionScreen() {
       ...defaultSignInTransitionDeps,
       onPhaseChange: (nextPhase, identity: UserIdentity | null) => {
         if (cancelled) return;
-        setReadyMessage(getTransitionReadyMessage(identity?.givenName));
+        // Prefers nickname over given_name (never falls further to email prefix/"there" here —
+        // a warm welcome message should stay silent-on-name rather than show an email prefix).
+        setReadyMessage(getTransitionReadyMessage(identity?.nickname || identity?.givenName));
         setPhase(nextPhase);
       },
       navigate: () => {
