@@ -9,6 +9,7 @@ import type { UserIdentity } from "../src/auth/identity";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { onSyncComplete } from "../src/cloud/sync/syncSignal";
 import { getHomeGreeting } from "../src/content/timeGreeting";
+import { useTranslation } from "../src/i18n";
 import type { DeckRecord } from "../src/models/deck";
 import { deleteDeckById, getDecksAll, setDecks } from "../src/storage/decks";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
@@ -34,6 +35,7 @@ function accountInitial(identity: UserIdentity | null): string {
 
 export default function DecksHome() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [decks, setDecksState] = useState<DeckRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -51,14 +53,14 @@ export default function DecksHome() {
   const greeting = useMemo(() => {
     // Prefers nickname over given_name (never falls further to email prefix/"there" here — the
     // greeting should stay silent-on-name rather than show an email prefix in a warm sentence).
-    if (scope.kind === "user") return getHomeGreeting(identity?.nickname || identity?.givenName);
-    return { headline: "Ready to learn?", supporting: "Your offline workspace" };
-  }, [scope, identity]);
+    if (scope.kind === "user") return getHomeGreeting(t, identity?.nickname || identity?.givenName);
+    return { headline: t("home.guestHeadline"), supporting: t("home.guestSupporting") };
+  }, [scope, identity, t]);
 
   // Guest's supporting line above already says "Your offline workspace" — a second "Offline
   // workspace" sync caption directly under it would just repeat the same fact, so the sync
   // caption is authenticated-only.
-  const syncLabel = signedIn && hasSyncedThisSession ? "Synced" : null;
+  const syncLabel = signedIn && hasSyncedThisSession ? t("home.synced") : null;
 
   const loadDecks = useCallback(async (activeScope: WorkspaceScope) => {
     const allDecks = await getDecksAll(activeScope);

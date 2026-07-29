@@ -6,13 +6,15 @@ import type { UserIdentity } from "../src/auth/identity";
 import { defaultSignInTransitionDeps, runSignInTransition } from "../src/auth/signInTransition";
 import {
   getTransitionReadyMessage,
-  TRANSITION_RESTORING_MESSAGE,
+  getTransitionRestoringMessage,
 } from "../src/content/transitionMessages";
+import { useTranslation } from "../src/i18n";
 import { Screen } from "../src/ui/Screen";
 import { typography } from "../src/ui/theme";
 
 export default function SignInTransitionScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<"restoring" | "ready">("restoring");
   const [readyMessage, setReadyMessage] = useState<string | null>(null);
   const opacity = useRef(new Animated.Value(0)).current;
@@ -45,7 +47,7 @@ export default function SignInTransitionScreen() {
         if (cancelled) return;
         // Prefers nickname over given_name (never falls further to email prefix/"there" here —
         // a warm welcome message should stay silent-on-name rather than show an email prefix).
-        setReadyMessage(getTransitionReadyMessage(identity?.nickname || identity?.givenName));
+        setReadyMessage(getTransitionReadyMessage(t, identity?.nickname || identity?.givenName));
         setPhase(nextPhase);
       },
       navigate: () => {
@@ -60,14 +62,14 @@ export default function SignInTransitionScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, t]);
 
   return (
     <Screen>
       <View style={styles.center}>
         <Animated.View style={{ opacity }}>
           <Text style={typography.heading}>
-            {phase === "restoring" ? TRANSITION_RESTORING_MESSAGE : readyMessage ?? "Your workspace is ready."}
+            {phase === "restoring" ? getTransitionRestoringMessage(t) : readyMessage ?? t("auth.workspaceReady")}
           </Text>
         </Animated.View>
       </View>

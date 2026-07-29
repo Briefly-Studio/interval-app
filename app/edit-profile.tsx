@@ -5,6 +5,8 @@ import { StyleSheet, Text, View } from "react-native";
 import { AuthService } from "../src/auth/AuthService";
 import { getAuthDiagnosticCode, mapAuthError } from "../src/auth/authErrors";
 import { isValidName, isValidOptionalName, trimName } from "../src/auth/nameValidation";
+import type { TranslateFn } from "../src/i18n/translateFn";
+import { useTranslation } from "../src/i18n";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
@@ -12,22 +14,28 @@ import { Screen } from "../src/ui/Screen";
 import { TextField } from "../src/ui/TextField";
 import { colors, spacing, typography } from "../src/ui/theme";
 
-function nameFieldError(value: string, touched: boolean, fieldLabel: string): string | undefined {
+function nameFieldError(
+  t: TranslateFn,
+  value: string,
+  touched: boolean,
+  enterKey: "profile.enterFirstName" | "profile.enterLastName"
+): string | undefined {
   if (!touched) return undefined;
-  if (trimName(value).length === 0) return `Enter your ${fieldLabel}.`;
-  if (!isValidName(value)) return "Letters, spaces, apostrophes, and hyphens only (max 50 characters).";
+  if (trimName(value).length === 0) return t(enterKey);
+  if (!isValidName(value)) return t("profile.nameFormatError");
   return undefined;
 }
 
-function nicknameFieldError(value: string, touched: boolean): string | undefined {
+function nicknameFieldError(t: TranslateFn, value: string, touched: boolean): string | undefined {
   if (!touched) return undefined;
   if (trimName(value).length === 0) return undefined; // optional — empty is valid
-  if (!isValidName(value)) return "Letters, spaces, apostrophes, and hyphens only (max 50 characters).";
+  if (!isValidName(value)) return t("profile.nameFormatError");
   return undefined;
 }
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [loaded, setLoaded] = useState(false);
   const [originalFirstName, setOriginalFirstName] = useState("");
@@ -111,16 +119,16 @@ export default function EditProfileScreen() {
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={typography.title}>Edit profile</Text>
+        <Text style={typography.title}>{t("settings.editProfile")}</Text>
       </View>
 
       <Card style={styles.formCard}>
         <TextField
-          label="First name"
+          label={t("profile.firstName")}
           value={firstName}
           onChangeText={setFirstName}
           onBlur={() => setFirstNameTouched(true)}
-          error={nameFieldError(firstName, firstNameTouched, "first name")}
+          error={nameFieldError(t, firstName, firstNameTouched, "profile.enterFirstName")}
           placeholder="Ada"
           autoCapitalize="words"
           autoComplete="given-name"
@@ -128,11 +136,11 @@ export default function EditProfileScreen() {
           editable={!submitting}
         />
         <TextField
-          label="Last name"
+          label={t("profile.lastName")}
           value={lastName}
           onChangeText={setLastName}
           onBlur={() => setLastNameTouched(true)}
-          error={nameFieldError(lastName, lastNameTouched, "last name")}
+          error={nameFieldError(t, lastName, lastNameTouched, "profile.enterLastName")}
           placeholder="Lovelace"
           autoCapitalize="words"
           autoComplete="family-name"
@@ -144,22 +152,22 @@ export default function EditProfileScreen() {
 
       <Card style={styles.formCard}>
         <TextField
-          label="Nickname (optional)"
+          label={t("profile.nicknameOptional")}
           value={nickname}
           onChangeText={setNickname}
           onBlur={() => setNicknameTouched(true)}
-          error={nicknameFieldError(nickname, nicknameTouched)}
+          error={nicknameFieldError(t, nickname, nicknameTouched)}
           placeholder="What should we call you?"
           autoCapitalize="words"
           maxLength={50}
           editable={!submitting}
-          accessibilityHint="Interval will use this name in greetings, instead of your first name."
+          accessibilityHint={t("profile.nicknameHint")}
         />
-        <Text style={typography.caption}>Interval will use this name in greetings.</Text>
+        <Text style={typography.caption}>{t("profile.nicknameHelper")}</Text>
       </Card>
 
       <Button
-        label="Save"
+        label={t("profile.save")}
         variant="primary"
         fullWidth
         loading={submitting}

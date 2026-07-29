@@ -6,6 +6,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { handleIncomingFile } from "../src/domain/openFileHandler";
+import { initI18n } from "../src/i18n";
 
 
 const APP_BG = "#2FA4A3";
@@ -49,6 +50,13 @@ export default function Layout() {
     },
     [router]
   );
+
+  // Fire-and-forget: English (the only supported language so far) is already the correct
+  // in-memory default before this resolves, so there is nothing to gate startup on — this just
+  // reconciles the stored preference for the Settings/Language UI.
+  useEffect(() => {
+    initI18n();
+  }, []);
 
   useEffect(() => {
     Linking.getInitialURL().then((url) => {

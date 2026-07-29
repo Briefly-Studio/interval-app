@@ -7,6 +7,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import type { UserIdentity } from "../src/auth/identity";
+import { useTranslation } from "../src/i18n";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
@@ -25,6 +26,7 @@ function initialFor(identity: UserIdentity | null): string {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { t, preference } = useTranslation();
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
   const [identity, setIdentity] = useState<UserIdentity | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -78,7 +80,7 @@ export default function SettingsScreen() {
   const header = (
     <View style={styles.header}>
       <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
-      <Text style={typography.title}>Settings</Text>
+      <Text style={typography.title}>{t("settings.title")}</Text>
     </View>
   );
 
@@ -92,10 +94,10 @@ export default function SettingsScreen() {
         <View style={styles.emptyFill}>
           <EmptyState
             icon="person-circle-outline"
-            title="You're not signed in"
-            description="Sign in to view and manage your account."
+            title={t("settings.notSignedInTitle")}
+            description={t("settings.notSignedInDescription")}
           >
-            <Button label="Sign in" variant="primary" fullWidth onPress={() => router.push("/sign-in")} />
+            <Button label={t("settings.signIn")} variant="primary" fullWidth onPress={() => router.push("/sign-in")} />
           </EmptyState>
         </View>
       </Screen>
@@ -107,7 +109,7 @@ export default function SettingsScreen() {
       {header}
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Profile</Text>
+        <Text style={styles.sectionLabel}>{t("settings.sections.profile")}</Text>
         <Card style={styles.profileCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initialFor(identity)}</Text>
@@ -130,51 +132,56 @@ export default function SettingsScreen() {
         </Card>
         <Card>
           <SettingsRow
-            label="Edit profile"
+            label={t("settings.editProfile")}
             onPress={() => router.push({ pathname: "/edit-profile" as any })}
           />
         </Card>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Account</Text>
+        <Text style={styles.sectionLabel}>{t("settings.sections.account")}</Text>
         <Card style={styles.rowGroup}>
           <SettingsRow
-            label="Change password"
-            subtitle="Coming soon"
+            label={t("settings.changePassword")}
+            subtitle={t("settings.comingSoon")}
             disabled
           />
           <View style={styles.divider} />
-          <SettingsRow label="Sign out" destructive loading={signingOut} onPress={onSignOut} />
+          <SettingsRow label={t("settings.signOut")} destructive loading={signingOut} onPress={onSignOut} />
         </Card>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Data</Text>
+        <Text style={styles.sectionLabel}>{t("settings.sections.data")}</Text>
         <Card style={styles.rowGroup}>
           <SettingsRow
-            label="Sync"
-            subtitle="Your decks sync automatically while signed in."
+            label={t("settings.sync")}
+            subtitle={t("settings.syncExplanation")}
           />
           <View style={styles.divider} />
           <SettingsRow
-            label="Recently Deleted"
+            label={t("settings.recentlyDeleted")}
             onPress={() => router.push({ pathname: "/recently-deleted" as any })}
           />
           <View style={styles.divider} />
-          <SettingsRow label="Import deck" onPress={() => router.push("/import")} />
+          <SettingsRow label={t("settings.importDeck")} onPress={() => router.push("/import")} />
+          <View style={styles.divider} />
+          <SettingsRow
+            label={t("settings.language")}
+            subtitle={
+              preference === "system" ? t("settings.languageOptions.system") : t("settings.languageOptions.english")
+            }
+            onPress={() => router.push({ pathname: "/language" as any })}
+          />
         </Card>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>About</Text>
+        <Text style={styles.sectionLabel}>{t("settings.sections.about")}</Text>
         <Card style={styles.aboutCard}>
           <Text style={typography.bodyMedium}>Interval</Text>
-          <Text style={typography.caption}>Version {APP_VERSION}</Text>
-          <Text style={[typography.secondary, styles.aboutDescription]}>
-            An offline-first flashcard app for focused, spaced study — with optional cloud sync
-            when you&apos;re signed in.
-          </Text>
+          <Text style={typography.caption}>{t("settings.version", { version: APP_VERSION })}</Text>
+          <Text style={[typography.secondary, styles.aboutDescription]}>{t("settings.aboutDescription")}</Text>
         </Card>
       </View>
     </Screen>
