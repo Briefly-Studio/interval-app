@@ -14,6 +14,9 @@ type ButtonProps = {
   disabled?: boolean;
   fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Overrides the accessible name (defaults to `label`) — for rows where "Restore" alone would
+   * be ambiguous among several identical buttons (e.g. "Restore card {front text}"). */
+  accessibilityLabel?: string;
 };
 
 // Single reusable button covering every role used across the app today: solid primary CTA,
@@ -28,6 +31,7 @@ export function Button({
   disabled = false,
   fullWidth = false,
   style,
+  accessibilityLabel,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
 
@@ -36,6 +40,7 @@ export function Button({
       onPress={onPress}
       disabled={isDisabled}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.base,

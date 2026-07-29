@@ -118,6 +118,65 @@ export async function updateAllCardsDifficulty(
   return updated;
 }
 
+/**
+ * Restores an individually-deleted card, optionally moving it to a different deck.
+ *
+ * - If targetDeckId === card.deckId, this is a plain in-place restore (same pattern already
+ *   used by recently-deleted.tsx's restoreDeck for its cascade-restored cards): clear the
+ *   tombstone fields, bump rev, mark dirty.
+ * - If targetDeckId !== card.deckId, the card is moving to a different deck (e.g. a
+ *   "Recovered Cards" deck because its original deck is gone) — the entry is removed from the
+ *   old deck's card array and re-added to the new deck's card array under the SAME id, never
+ *   left duplicated in both places at once.
+ */
+export async function restoreCardToDeck(
+  scope: WorkspaceScope,
+  card: CardRecord,
+  targetDeckId: string
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  if (targetDeckId === card.deckId) {
+    const existing = await getCardsAll(scope, card.deckId);
+    const updated = existing.map((c) =>
+      c.id === card.id
+        ? {
+            ...c,
+            deletedAt: undefined,
+            deletedByDeckCascade: undefined,
+            updatedAt: now,
+            rev: (c.rev ?? 0) + 1,
+            dirty: true,
+            lastSyncedAt: undefined,
+          }
+        : c
+    );
+    await setCards(scope, card.deckId, updated);
+    return;
+  }
+
+  const oldDeckCards = await getCardsAll(scope, card.deckId);
+  const remaining = oldDeckCards.filter((c) => c.id !== card.id);
+  await setCards(scope, card.deckId, remaining);
+
+  const newDeckCards = await getCardsAll(scope, targetDeckId);
+  const moved: CardRecord = {
+    id: card.id,
+    deckId: targetDeckId,
+    front: card.front,
+    back: card.back,
+    difficulty: card.difficulty,
+    createdAt: card.createdAt,
+    deletedAt: undefined,
+    deletedByDeckCascade: undefined,
+    updatedAt: now,
+    rev: card.rev + 1,
+    dirty: true,
+    lastSyncedAt: undefined,
+  };
+  await setCards(scope, targetDeckId, [moved, ...newDeckCards]);
+}
+
 /** Used when a deck is deleted (cascade delete its cards). */
 export async function deleteCardsForDeck(
   scope: WorkspaceScope,

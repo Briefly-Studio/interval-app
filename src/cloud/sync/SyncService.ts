@@ -11,7 +11,16 @@ import { getSessions, setSessions } from "../../storage/sessions";
 import { getSyncCursor, setSyncCursor } from "../../storage/sync";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import { sameScope } from "../../storage/workspaceScope";
-import { pullChanges, pushChanges } from "./http";
+import { getSyncDiagnosticCode, isSyncNetworkError, pullChanges, pushChanges } from "./http";
+import {
+  getSyncState,
+  markSyncNeedsAttention,
+  markSyncOffline,
+  markSyncStarted,
+  markSyncSucceeded,
+  resetSyncState,
+  setPendingDirtyCount,
+} from "./syncState";
 import { emitSyncComplete } from "./syncSignal";
 
 const toTime = (value: string | undefined) => {
@@ -59,8 +68,6 @@ async function applyChanges(scope: WorkspaceScope, changes: Change[]): Promise<v
     }
 
     await setDecks(scope, Array.from(byId.values()));
-    // TEMP DEBUG
-    console.log("[sync] decks written:", Array.from(byId.values()).length);
   }
 
   if (cardChanges.length) {
@@ -227,27 +234,43 @@ async function runSync(): Promise<void> {
   const scope = await AuthService.getActiveScope();
 
   if (scope.kind === "guest") {
-    console.log("[sync] skipped: guest workspace has no cloud identity to sync with");
+    // No cloud identity to sync with — this is normal offline-first usage, not an error. Reset
+    // rather than leave a previous account's status/pending-count visible under the guest view.
+    resetSyncState();
     return;
   }
 
   const accessToken = await AuthService.getAccessToken();
   if (!accessToken) {
-    console.log("[sync] skipped: no access token available for", scope.sub.slice(0, 8) + "…");
+    // Signed in, but no usable access token right now. AuthService.getAccessToken() already
+    // swallows network hiccups and Cognito 5xx failures internally (returning null rather than
+    // throwing) — by the time we see null here it's most often one of those, so treat it the
+    // same way the product spec treats connectivity failures. If NetInfo already told us we're
+    // offline, say so plainly; otherwise this is unusual enough to flag as needing attention
+    // rather than silently doing nothing.
+    if (!getSyncState().isOnline) {
+      markSyncOffline();
+    } else {
+      markSyncNeedsAttention("NoAccessToken");
+    }
     return;
   }
 
-  console.log("[sync] start", scope.sub.slice(0, 8) + "…");
   const deviceId = await getDeviceId();
 
   // 1) PUSH
   const outgoing = await collectDirty(scope);
-  console.log("[sync] outgoing dirty:", outgoing.length);
+  setPendingDirtyCount(outgoing.length);
+  markSyncStarted();
 
+  let acceptedCount = 0;
+  let hasRejectedRecords = false;
   if (outgoing.length > 0) {
     const pushJson = await pushChanges(accessToken, { deviceId, changes: outgoing });
     const accepted = Array.isArray(pushJson.accepted) ? pushJson.accepted : [];
-    console.log("[sync] push accepted:", accepted.length);
+    const rejected = Array.isArray(pushJson.rejected) ? pushJson.rejected : [];
+    acceptedCount = accepted.length;
+    hasRejectedRecords = rejected.length > 0;
 
     if (accepted.length > 0) {
       const acceptedSet = new Set(accepted);
@@ -272,14 +295,14 @@ async function runSync(): Promise<void> {
 
   // 2) PULL
   const cursor = await getSyncCursor(scope);
-  console.log("[sync] cursor before pull:", cursor ?? "none");
-
   const pullJson = await pullChanges(accessToken, { deviceId, cursor });
-  console.log("[sync] pulled changes:", pullJson.changes?.length ?? 0);
-  console.log("[sync] new cursor:", pullJson.cursor);
 
   // 3) Abort safely if the active workspace changed while push/pull were in flight — never
-  // apply another account's (or guest's) pulled changes into this scope's local storage.
+  // apply another account's (or guest's) pulled changes into this scope's local storage. This
+  // run's outcome no longer belongs to the now-inactive scope, so it deliberately leaves
+  // sync state untouched rather than reporting success/failure for a workspace nothing is
+  // looking at anymore — the newly active scope triggers (and owns) its own sync attempt (see
+  // app/_layout.tsx's onWorkspaceChanged handler).
   const scopeAfterNetwork = await AuthService.getActiveScope();
   if (!sameScope(scopeAfterNetwork, scope)) {
     console.warn("[sync] aborting apply: active workspace changed mid-sync");
@@ -289,9 +312,24 @@ async function runSync(): Promise<void> {
   // 4) APPLY + persist cursor
   await applyChanges(scope, pullJson.changes ?? []);
   if (pullJson.cursor) await setSyncCursor(scope, pullJson.cursor);
-  emitSyncComplete();
 
-  console.log("SYNC OK");
+  // Rejected/not-yet-accepted outgoing changes are still dirty; anything pulled and applied is
+  // always written back with dirty:false (see applyChanges above), so this arithmetic reflects
+  // the true remaining count without a second full storage scan.
+  setPendingDirtyCount(Math.max(0, outgoing.length - acceptedCount));
+
+  // A non-empty PushResponse.rejected means the server explicitly refused some records — this
+  // must never read as "Synced". Rejected records were never added to markClean's id lists
+  // above, so they're already left dirty and will be retried on the next ordinary sync trigger
+  // (there is no automatic retry loop here — only real events: app launch, workspace change,
+  // reconnect, or a manual retry — so this cannot spiral into a retry storm). Only a fixed,
+  // sanitized diagnostic code is recorded — never which records, why, or any response content.
+  if (hasRejectedRecords) {
+    markSyncNeedsAttention("push-records-rejected");
+  } else {
+    markSyncSucceeded();
+  }
+  emitSyncComplete();
 }
 
 let inFlightSync: Promise<void> | null = null;
@@ -301,12 +339,37 @@ export const SyncService = {
     if (inFlightSync) return inFlightSync;
     inFlightSync = runSync()
       .catch((err) => {
-        console.error("SYNC FAILED", err);
+        // Classify once, centrally, regardless of which step (push, pull, or something
+        // unexpected) actually threw. isSyncNetworkError/isOnline both point at "couldn't reach
+        // the server" — expected/normal, ordinary offline usage, never a user-actionable
+        // failure. Anything else (server rejection, unexpected throw) is "needsAttention".
+        const isNetworkRelated = isSyncNetworkError(err) || !getSyncState().isOnline;
+        // A fixed diagnostic code, never the raw Error object — its message/stack could
+        // theoretically embed response or request detail we don't want in logs, and a code is
+        // already sufficient to debug from (see getSyncDiagnosticCode). Only genuinely
+        // actionable failures use console.error — that's what surfaces React Native's
+        // error-level LogBox notification, which must never appear for ordinary connectivity
+        // loss (see markSyncOffline below); a quiet console.log is enough there for debugging.
+        if (isNetworkRelated) {
+          markSyncOffline();
+          console.log("[sync] offline:", getSyncDiagnosticCode(err));
+        } else {
+          markSyncNeedsAttention(getSyncDiagnosticCode(err));
+          console.error("SYNC FAILED:", getSyncDiagnosticCode(err));
+        }
         throw err;
       })
       .finally(() => {
         inFlightSync = null;
       });
     return inFlightSync;
+  },
+
+  // Exposes the same dirty-scan collectDirty() already performs internally, so UI-facing sync
+  // state can report "pending changes" without a second, duplicate implementation of the
+  // dirty-scanning logic. Callers (see useSyncState.ts) are expected to call this only on
+  // demand (workspace switch, opening the Sync Status screen) — never from a render loop.
+  async getPendingDirtyCount(scope: WorkspaceScope): Promise<number> {
+    return (await collectDirty(scope)).length;
   },
 };

@@ -1,12 +1,15 @@
 import { useFocusEffect } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import type { UserIdentity } from "../src/auth/identity";
+import { formatSyncTime } from "../src/cloud/sync/formatSyncTime";
+import { SYNC_STATUS_KEYS } from "../src/cloud/sync/syncStatusCopy";
+import { useSyncState } from "../src/cloud/sync/useSyncState";
 import { useTranslation } from "../src/i18n";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { Button } from "../src/ui/Button";
@@ -26,12 +29,32 @@ function initialFor(identity: UserIdentity | null): string {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { t, preference } = useTranslation();
+  const { t, plural, preference } = useTranslation();
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
   const [identity, setIdentity] = useState<UserIdentity | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const syncState = useSyncState();
   const signedIn = scope.kind === "user";
+
+  // Plain, nontechnical subtitle: status text, optionally plus a last-synced time and a pending-
+  // changes count — never an endpoint, cursor, device id, or raw diagnostic code. The pending-
+  // count fragment intentionally shows regardless of status (including mid-"syncing") since it
+  // answers a different question ("is there unsaved work waiting?") than the status word does.
+  const syncSubtitle = useMemo(() => {
+    const parts = [t(SYNC_STATUS_KEYS[syncState.status])];
+    if (syncState.status === "synced" && syncState.lastSuccessfulSyncAt) {
+      parts.push(
+        t("sync.detail.lastSynced", {
+          time: formatSyncTime(syncState.lastSuccessfulSyncAt),
+        })
+      );
+    }
+    if (syncState.pendingDirtyCount > 0) {
+      parts.push(plural("sync.detail.pendingCount", syncState.pendingDirtyCount));
+    }
+    return parts.join(" · ");
+  }, [syncState, t, plural]);
 
   const refresh = useCallback(async () => {
     const activeScope = await AuthService.getActiveScope();
@@ -156,7 +179,8 @@ export default function SettingsScreen() {
         <Card style={styles.rowGroup}>
           <SettingsRow
             label={t("settings.sync")}
-            subtitle={t("settings.syncExplanation")}
+            subtitle={syncSubtitle}
+            onPress={() => router.push({ pathname: "/sync-status" as any })}
           />
           <View style={styles.divider} />
           <SettingsRow

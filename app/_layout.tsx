@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { onWorkspaceChanged } from "../src/auth/authSignal";
+import { getSyncDiagnosticCode } from "../src/cloud/sync/http";
 import { SyncService } from "../src/cloud/sync/SyncService";
+import { getSyncState } from "../src/cloud/sync/syncState";
+import { initSyncState } from "../src/cloud/sync/useSyncState";
 import { handleIncomingFile } from "../src/domain/openFileHandler";
 import { initI18n } from "../src/i18n";
 
@@ -58,6 +61,13 @@ export default function Layout() {
     initI18n();
   }, []);
 
+  // One-time startup wiring for the real sync-state model (NetInfo subscription + workspace-
+  // switch reset) — same fire-and-forget, call-once pattern as initI18n() above. See
+  // src/cloud/sync/useSyncState.ts for what this actually sets up.
+  useEffect(() => {
+    initSyncState();
+  }, []);
+
   useEffect(() => {
     Linking.getInitialURL().then((url) => {
       handleUrl(url);
@@ -72,7 +82,14 @@ export default function Layout() {
     if (importing) return;
     if (didSyncRef.current) return;
     didSyncRef.current = true;
-    SyncService.syncOnce().catch((e) => console.error("SYNC FAILED", e));
+    SyncService.syncOnce().catch((e) => {
+      // Ordinary offline failures are already reflected in the centralized sync state and
+      // must never surface a visible error notification here — only genuinely actionable
+      // (needsAttention) failures do.
+      if (getSyncState().status === "needsAttention") {
+        console.error("SYNC FAILED:", getSyncDiagnosticCode(e));
+      }
+    });
   }, [importing]);
 
   // Sign-in and account switches must trigger a fresh sync of the newly active workspace,
@@ -81,7 +98,14 @@ export default function Layout() {
   useEffect(() => {
     const unsub = onWorkspaceChanged((scope) => {
       if (scope.kind === "user") {
-        SyncService.syncOnce().catch((e) => console.error("SYNC FAILED", e));
+        SyncService.syncOnce().catch((e) => {
+          // Ordinary offline failures are already reflected in the centralized sync state and
+          // must never surface a visible error notification here — only genuinely actionable
+          // (needsAttention) failures do.
+          if (getSyncState().status === "needsAttention") {
+            console.error("SYNC FAILED:", getSyncDiagnosticCode(e));
+          }
+        });
       }
     });
     return unsub;

@@ -1,13 +1,17 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Platform, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { AccessibilityInfo, Alert, FlatList, Platform, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import type { UserIdentity } from "../src/auth/identity";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { onSyncComplete } from "../src/cloud/sync/syncSignal";
+import type { SyncStatus } from "../src/cloud/sync/syncState";
+import { SYNC_STATUS_KEYS } from "../src/cloud/sync/syncStatusCopy";
+import { useSyncState } from "../src/cloud/sync/useSyncState";
 import { getHomeGreeting } from "../src/content/timeGreeting";
 import { useTranslation } from "../src/i18n";
 import type { DeckRecord } from "../src/models/deck";
@@ -33,6 +37,20 @@ function accountInitial(identity: UserIdentity | null): string {
   return source ? source[0].toUpperCase() : "•";
 }
 
+// Status is never conveyed by color alone — every status renders an icon + text pairing.
+// "offline" is deliberately styled as neutral/muted (not danger) since it's expected, normal
+// behavior for an offline-first app, not an error.
+const SYNC_STATUS_META: Record<
+  SyncStatus,
+  { icon: ComponentProps<typeof Ionicons>["name"]; color: string }
+> = {
+  unknown: { icon: "time-outline", color: colors.textSecondary },
+  syncing: { icon: "sync-outline", color: colors.textSecondary },
+  synced: { icon: "checkmark-circle-outline", color: colors.success },
+  offline: { icon: "cloud-offline-outline", color: colors.textSecondary },
+  needsAttention: { icon: "alert-circle-outline", color: colors.danger },
+};
+
 export default function DecksHome() {
   const router = useRouter();
   const { t } = useTranslation();
@@ -41,11 +59,7 @@ export default function DecksHome() {
   const [mutating, setMutating] = useState(false);
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
   const [identity, setIdentity] = useState<UserIdentity | null>(null);
-  // Purely a UI affordance — flips true only once the existing onSyncComplete event (already
-  // emitted by SyncService on a real, successful sync) fires this session. No new sync/network
-  // logic, no polling, no fabricated "Syncing…" or "Needs attention" states, since nothing in
-  // SyncService currently exposes an in-progress or failure signal to key those off of.
-  const [hasSyncedThisSession, setHasSyncedThisSession] = useState(false);
+  const syncState = useSyncState();
   const signedIn = scope.kind === "user";
 
   // Small presentational identity area — derives only display text, never anything used for
@@ -57,10 +71,27 @@ export default function DecksHome() {
     return { headline: t("home.guestHeadline"), supporting: t("home.guestSupporting") };
   }, [scope, identity, t]);
 
-  // Guest's supporting line above already says "Your offline workspace" — a second "Offline
-  // workspace" sync caption directly under it would just repeat the same fact, so the sync
-  // caption is authenticated-only.
-  const syncLabel = signedIn && hasSyncedThisSession ? t("home.synced") : null;
+  // Guest's supporting line above already says "Your offline workspace" — a second sync caption
+  // directly under it would just repeat the same fact, and there is no cloud identity to report
+  // a sync status for anyway (see CLAUDE.md's Core Product Rule: the app is fully useful without
+  // an account) — so the sync caption is authenticated-only. Uses real state from useSyncState()
+  // rather than a fake "has a sync event fired this session" flag: it can render "syncing",
+  // "offline", and "needs attention" too, not just a hardcoded "Synced".
+  const syncStatusText = signedIn ? t(SYNC_STATUS_KEYS[syncState.status]) : null;
+  const syncStatusMeta = SYNC_STATUS_META[syncState.status];
+
+  // Announce only meaningful status transitions (not the initial mount, and not every internal
+  // isOnline/pending-count tick) — paired with the icon+color below so status is never
+  // color-only information.
+  const previousStatusRef = useRef<SyncStatus | null>(null);
+  useEffect(() => {
+    if (!signedIn) return;
+    const isFirstObservation = previousStatusRef.current === null;
+    const changed = previousStatusRef.current !== syncState.status;
+    previousStatusRef.current = syncState.status;
+    if (isFirstObservation || !changed) return;
+    if (syncStatusText) AccessibilityInfo.announceForAccessibility(syncStatusText);
+  }, [signedIn, syncState.status, syncStatusText]);
 
   const loadDecks = useCallback(async (activeScope: WorkspaceScope) => {
     const allDecks = await getDecksAll(activeScope);
@@ -91,9 +122,12 @@ export default function DecksHome() {
     }, [refreshWorkspace])
   );
 
+  // Reloading the deck list on sync completion (so changes from other devices appear without a
+  // manual refresh) is unrelated to the sync-status label itself — useSyncState() above already
+  // reacts independently to every status transition (syncing/synced/offline/needsAttention),
+  // this only needs the "a successful sync just happened" edge to know when to re-read decks.
   useEffect(() => {
     const unsub = onSyncComplete(() => {
-      setHasSyncedThisSession(true);
       refreshWorkspace();
     });
     return unsub;
@@ -225,7 +259,12 @@ export default function DecksHome() {
       <View style={styles.greetingBlock}>
         <Text style={typography.heading}>{greeting.headline}</Text>
         {greeting.supporting ? <Text style={typography.secondary}>{greeting.supporting}</Text> : null}
-        {syncLabel ? <Text style={styles.syncLabel}>{syncLabel}</Text> : null}
+        {syncStatusText ? (
+          <View style={styles.syncRow} accessibilityLiveRegion="polite">
+            <Ionicons name={syncStatusMeta.icon} size={14} color={syncStatusMeta.color} />
+            <Text style={[styles.syncLabel, { color: syncStatusMeta.color }]}>{syncStatusText}</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.secondaryRow}>
@@ -288,7 +327,8 @@ export default function DecksHome() {
 
 const styles = StyleSheet.create({
   greetingBlock: { gap: spacing.xs },
-  syncLabel: { ...typography.caption, color: colors.textSecondary },
+  syncRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  syncLabel: { ...typography.caption },
 
   secondaryRow: { flexDirection: "row", gap: spacing.sm },
 

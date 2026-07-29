@@ -55,6 +55,17 @@ export async function getDeckById(
   return decks.find((d) => d.id === id) ?? null;
 }
 
+// Unlike getDeckById (active-only, via getDecks), this resolves a deck id in ANY state —
+// active or soft-deleted. Needed by card-restore flows, which must be able to tell "this
+// card's parent deck still exists but is in the trash" apart from "this deck is gone entirely".
+export async function getDeckByIdAny(
+  scope: WorkspaceScope,
+  id: string
+): Promise<DeckRecord | null> {
+  const decks = await getDecksAll(scope);
+  return decks.find((d) => d.id === id) ?? null;
+}
+
 export async function deleteDeckById(
   scope: WorkspaceScope,
   id: string
@@ -75,8 +86,6 @@ export async function deleteDeckById(
   await setDecks(scope, updated);
 
   const cards = await getCardsAll(scope, id);
-  // TEMP DEBUG
-  console.log("[deleteDeck] cards before:", cards.length);
   const updatedCards = cards.map((card) => {
     if (card.deletedAt) return card;
     return {
@@ -91,11 +100,6 @@ export async function deleteDeckById(
       deletedByDeckCascade: true,
     };
   });
-  // TEMP DEBUG
-  console.log(
-    "[deleteDeck] cards tombstoned:",
-    updatedCards.filter((c) => c.deletedAt).length
-  );
   await setCards(scope, id, updatedCards);
 
   // 3) cascade delete sessions for this deck

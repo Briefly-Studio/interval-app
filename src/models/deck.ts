@@ -11,6 +11,12 @@ export type DeckRecord = Deck & {
   deletedAt?: string;
   dirty?: boolean;
   lastSyncedAt?: string;
+  // Marks the single auto-created "Recovered Cards" deck used as a landing spot when an
+  // individually-deleted card's original deck no longer exists. Deliberately a stable marker
+  // rather than matching on title: the user can rename this deck like any other, and a
+  // user-created deck that happens to share the same title must never be mistaken for it (or
+  // vice versa) — see getOrCreateRecoveryDeck in src/storage/recovery.ts.
+  isRecoveryDeck?: boolean;
 };
 
 export function upgradeDeck(d: any): DeckRecord {
