@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../../src/auth/AuthService";
+import { useTranslation } from "../../../../src/i18n";
 import { type CardRecord, type Difficulty, upgradeCard } from "../../../../src/models/card";
 import { deleteCard, getCards, updateCard } from "../../../../src/storage/cards";
 import { Button } from "../../../../src/ui/Button";
@@ -15,6 +16,7 @@ import { spacing, typography } from "../../../../src/ui/theme";
 
 export default function EditCardScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams();
 
   const deckIdParam = params.id;
@@ -108,7 +110,7 @@ export default function EditCardScreen() {
   if (!loaded) {
     return (
       <Screen>
-        <Text style={typography.secondary}>Loading…</Text>
+        <Text style={typography.secondary}>{t("editCard.loading")}</Text>
       </Screen>
     );
   }
@@ -117,9 +119,9 @@ export default function EditCardScreen() {
     return (
       <Screen>
         <View style={styles.header}>
-          <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
+          <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
         </View>
-        <Text style={typography.secondary}>Card not found.</Text>
+        <Text style={typography.secondary}>{t("editCard.cardNotFound")}</Text>
       </Screen>
     );
   }
@@ -129,43 +131,43 @@ export default function EditCardScreen() {
       <View style={styles.header}>
         <IconButton
           name="chevron-back"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t("common.cancel")}
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={typography.title}>Edit card</Text>
+        <Text style={typography.title}>{t("editCard.screenTitle")}</Text>
       </View>
 
       <Card style={styles.formCard}>
         <TextField
-          label="Front"
+          label={t("editCard.frontLabel")}
           value={front}
           onChangeText={setFront}
           onBlur={() => setFrontTouched(true)}
-          error={frontTouched && !front.trim() ? "Enter the front of the card." : undefined}
-          placeholder="Question or term"
+          error={frontTouched && !front.trim() ? t("editCard.frontRequiredError") : undefined}
+          placeholder={t("editCard.frontPlaceholder")}
           multiline
           editable={!submitting}
         />
         <TextField
-          label="Back"
+          label={t("editCard.backLabel")}
           value={back}
           onChangeText={setBack}
           onBlur={() => setBackTouched(true)}
-          error={backTouched && !back.trim() ? "Enter the back of the card." : undefined}
-          placeholder="Answer or explanation"
+          error={backTouched && !back.trim() ? t("editCard.backRequiredError") : undefined}
+          placeholder={t("editCard.backPlaceholder")}
           multiline
           editable={!submitting}
         />
       </Card>
 
       <View style={styles.difficultySection}>
-        <Text style={typography.label}>Difficulty</Text>
+        <Text style={typography.label}>{t("editCard.difficultyLabel")}</Text>
         <DifficultySelector value={difficulty} onChange={setDifficulty} />
       </View>
 
       <Button
-        label="Save card"
+        label={t("editCard.saveButton")}
         variant="primary"
         fullWidth
         loading={submitting}
@@ -173,7 +175,7 @@ export default function EditCardScreen() {
         onPress={onSave}
       />
 
-      <Button label="Delete card" variant="danger" fullWidth onPress={onDelete} disabled={submitting} />
+      <Button label={t("editCard.deleteButton")} variant="danger" fullWidth onPress={onDelete} disabled={submitting} />
     </Screen>
   );
 }

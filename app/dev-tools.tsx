@@ -6,6 +6,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import { SyncService } from "../src/cloud/sync/SyncService";
+import { useTranslation } from "../src/i18n";
 import { forceFullResyncPrep, resetLocalData } from "../src/storage/devReset";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { Button } from "../src/ui/Button";
@@ -16,6 +17,7 @@ import { spacing, typography } from "../src/ui/theme";
 
 export default function DevToolsScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
   const isGuest = scope.kind === "guest";
 
@@ -38,7 +40,7 @@ export default function DevToolsScreen() {
     return (
       <Screen>
         <View style={styles.header}>
-          <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
+          <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
           <Text style={typography.title}>Developer tools</Text>
         </View>
         <Text style={typography.secondary}>This screen is only available in development.</Text>
@@ -49,7 +51,7 @@ export default function DevToolsScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
+        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
         <Text style={typography.title}>Developer tools</Text>
       </View>
       <Text style={typography.secondary}>For debugging only.</Text>

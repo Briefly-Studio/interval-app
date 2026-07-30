@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
+import { useTranslation } from "../../../src/i18n";
 import { type SessionRecord, upgradeSession } from "../../../src/models/session";
 import { addSession } from "../../../src/storage/sessions";
 import { Button } from "../../../src/ui/Button";
@@ -21,6 +22,7 @@ const formatDuration = (startedAt: number, finishedAt: number) => {
 
 export default function ReviewResults() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams();
 
   const pickParam = (value: string | string[] | undefined) =>
@@ -95,24 +97,24 @@ export default function ReviewResults() {
   return (
     <Screen>
       <View style={styles.center}>
-        <Text style={typography.title}>Review complete</Text>
+        <Text style={typography.title}>{t("reviewResults.title")}</Text>
 
         <Card style={styles.summaryCard}>
           <View style={styles.metricsRow}>
-            <ResultMetric label="Cards reviewed" value={String(total)} />
-            <ResultMetric label="Time" value={durationText} />
+            <ResultMetric label={t("reviewResults.cardsReviewedLabel")} value={String(total)} />
+            <ResultMetric label={t("reviewResults.timeLabel")} value={durationText} />
           </View>
         </Card>
 
         <Button
-          label="Review again"
+          label={t("reviewResults.reviewAgainButton")}
           variant="primary"
           fullWidth
           disabled={navBusy}
           onPress={() => navigateOnce(() => router.replace(`/deck/${deckId}/review`))}
         />
         <Button
-          label="Back to deck"
+          label={t("reviewResults.backToDeckButton")}
           variant="secondary"
           fullWidth
           disabled={navBusy}

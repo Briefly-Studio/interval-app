@@ -4,6 +4,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import { smartShuffle } from "../../../src/domain/smartShuffle";
+import { useTranslation } from "../../../src/i18n";
 import type { Card } from "../../../src/models/card";
 import type { Deck } from "../../../src/models/deck";
 import { getCards } from "../../../src/storage/cards";
@@ -18,6 +19,7 @@ import { typography } from "../../../src/ui/theme";
 
 export default function ReviewScreen() {
   const router = useRouter();
+  const { t, plural } = useTranslation();
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -118,12 +120,12 @@ export default function ReviewScreen() {
     const attempted = Math.min(index + 1, cards.length);
 
     Alert.alert(
-      "Finish review early?",
-      `This will log a review session for ${attempted} card${attempted === 1 ? "" : "s"}.`,
+      t("review.finishEarlyTitle"),
+      plural("review.finishEarlyBody", attempted),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Finish",
+          text: t("review.finishButton"),
           style: "default",
           onPress: () => finishSession(attempted),
         },
@@ -134,7 +136,7 @@ export default function ReviewScreen() {
   if (!loaded) {
     return (
       <Screen>
-        <Text style={typography.secondary}>Loading…</Text>
+        <Text style={typography.secondary}>{t("review.loading")}</Text>
       </Screen>
     );
   }
@@ -142,15 +144,15 @@ export default function ReviewScreen() {
   if (cards.length === 0) {
     return (
       <Screen>
-        <StudyHeader title={deck?.title ?? "Review"} onClose={goBack} />
+        <StudyHeader title={deck?.title ?? t("review.fallbackTitle")} onClose={goBack} />
         <View style={styles.emptyFill}>
           <EmptyState
             icon="albums-outline"
-            title="No cards yet"
-            description="Add at least 1 card to start reviewing."
+            title={t("review.emptyTitle")}
+            description={t("review.emptyDescription")}
           >
             <Button
-              label="Add your first card"
+              label={t("review.addFirstCardButton")}
               variant="primary"
               fullWidth
               onPress={() => router.push(`/deck/${deckId}/add-card`)}
@@ -163,29 +165,29 @@ export default function ReviewScreen() {
 
   return (
     <Screen>
-      <StudyHeader title={deck?.title ?? "Review"} progressLabel={progressText} onClose={goBack} />
+      <StudyHeader title={deck?.title ?? t("review.fallbackTitle")} progressLabel={progressText} onClose={goBack} />
       <ProgressBar current={index} total={cards.length} />
 
       <FlashcardSurface
-        label={flipped ? "Back" : "Front"}
+        label={flipped ? t("review.cardBackLabel") : t("review.cardFrontLabel")}
         content={flipped ? current.back : current.front}
         onPress={() => setFlipped((v) => !v)}
-        hint="Tap to flip"
+        hint={t("review.flipHint")}
       />
 
       {!flipped && (
-        <Button label="Show answer" variant="secondary" fullWidth onPress={() => setFlipped(true)} />
+        <Button label={t("review.showAnswerButton")} variant="secondary" fullWidth onPress={() => setFlipped(true)} />
       )}
 
       <Button
-        label={isLast ? "Finish" : "Next"}
+        label={isLast ? t("review.finishButton") : t("review.nextButton")}
         variant="primary"
         fullWidth
         onPress={onNextOrFinish}
       />
 
       {showFinishEarly && (
-        <Button label="Finish early" variant="ghost" fullWidth onPress={confirmFinishEarly} />
+        <Button label={t("review.finishEarlyButton")} variant="ghost" fullWidth onPress={confirmFinishEarly} />
       )}
     </Screen>
   );

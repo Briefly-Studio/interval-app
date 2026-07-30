@@ -58,7 +58,7 @@ function withinCutoff(deletedAt: string | undefined, cutoff: number, showExpired
 
 export default function RecentlyDeletedScreen() {
   const router = useRouter();
-  const { t, plural } = useTranslation();
+  const { t, plural, language } = useTranslation();
   const [decks, setDecksState] = useState<DeckRecord[]>([]);
   const [cardEntries, setCardEntries] = useState<DeletedCardEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -74,7 +74,7 @@ export default function RecentlyDeletedScreen() {
     const deletedTime = Date.parse(deletedAt);
     if (!Number.isFinite(deletedTime)) return t("recentlyDeleted.deletedUnknown");
     const daysSince = Math.max(0, Math.floor((Date.now() - deletedTime) / (24 * 60 * 60 * 1000)));
-    const dateLabel = new Date(deletedTime).toLocaleDateString(undefined, {
+    const dateLabel = new Date(deletedTime).toLocaleDateString(language, {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -337,7 +337,7 @@ export default function RecentlyDeletedScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
+        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
         <Text style={typography.title}>{t("recentlyDeleted.title")}</Text>
       </View>
       <Text style={typography.secondary}>

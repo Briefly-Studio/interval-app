@@ -7,6 +7,8 @@ import { AuthService } from "../src/auth/AuthService";
 import { getAuthDiagnosticCode, mapAuthError } from "../src/auth/authErrors";
 import { isValidName, trimName } from "../src/auth/nameValidation";
 import { getPasswordRequirements, isPasswordValid } from "../src/auth/passwordPolicy";
+import { useTranslation } from "../src/i18n";
+import type { TranslateFn } from "../src/i18n/translateFn";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { Screen } from "../src/ui/Screen";
@@ -15,10 +17,10 @@ import { colors, spacing, typography } from "../src/ui/theme";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function nameFieldError(value: string, touched: boolean, fieldLabel: string): string | undefined {
+function nameFieldError(t: TranslateFn, value: string, touched: boolean, field: "first" | "last"): string | undefined {
   if (!touched) return undefined;
-  if (trimName(value).length === 0) return `Enter your ${fieldLabel}.`;
-  if (!isValidName(value)) return "Letters, spaces, apostrophes, and hyphens only (max 50 characters).";
+  if (trimName(value).length === 0) return t(field === "first" ? "profile.enterFirstName" : "profile.enterLastName");
+  if (!isValidName(value)) return t("profile.nameFormatError");
   return undefined;
 }
 
@@ -48,6 +50,7 @@ function PasswordChecklist({ password }: { password: string }) {
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [firstNameTouched, setFirstNameTouched] = useState(false);
@@ -81,19 +84,19 @@ export default function SignUpScreen() {
 
   return (
     <Screen scroll>
-      <Text style={typography.title}>Create your account</Text>
-      <Text style={typography.secondary}>Sync your decks across devices with a free account.</Text>
+      <Text style={typography.title}>{t("auth.signUp.title")}</Text>
+      <Text style={typography.secondary}>{t("auth.signUp.subtitle")}</Text>
 
       <Card style={{ gap: spacing.md }}>
         <View style={styles.nameRow}>
           <View style={styles.nameField}>
             <TextField
-              label="First name"
+              label={t("profile.firstName")}
               value={firstName}
               onChangeText={setFirstName}
               onBlur={() => setFirstNameTouched(true)}
-              error={nameFieldError(firstName, firstNameTouched, "first name")}
-              placeholder="Ada"
+              error={nameFieldError(t, firstName, firstNameTouched, "first")}
+              placeholder={t("auth.signUp.firstNamePlaceholder")}
               autoCapitalize="words"
               autoComplete="given-name"
               maxLength={50}
@@ -102,12 +105,12 @@ export default function SignUpScreen() {
           </View>
           <View style={styles.nameField}>
             <TextField
-              label="Last name"
+              label={t("profile.lastName")}
               value={lastName}
               onChangeText={setLastName}
               onBlur={() => setLastNameTouched(true)}
-              error={nameFieldError(lastName, lastNameTouched, "last name")}
-              placeholder="Lovelace"
+              error={nameFieldError(t, lastName, lastNameTouched, "last")}
+              placeholder={t("auth.signUp.lastNamePlaceholder")}
               autoCapitalize="words"
               autoComplete="family-name"
               maxLength={50}
@@ -116,23 +119,23 @@ export default function SignUpScreen() {
           </View>
         </View>
         <TextField
-          label="Email"
+          label={t("auth.emailLabel")}
           value={email}
           onChangeText={setEmail}
-          placeholder="you@example.com"
+          placeholder={t("auth.emailPlaceholder")}
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
           editable={!loading}
         />
         <TextField
-          label="Password"
+          label={t("auth.signIn.passwordLabel")}
           value={password}
           onChangeText={(text) => {
             setPassword(text);
             if (!passwordTouched) setPasswordTouched(true);
           }}
-          placeholder="Create a password"
+          placeholder={t("auth.signUp.passwordPlaceholder")}
           autoCapitalize="none"
           autoComplete="new-password"
           isPassword
@@ -144,14 +147,14 @@ export default function SignUpScreen() {
 
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         <Button
-          label="Sign in instead"
+          label={t("auth.signUp.signInInsteadButton")}
           variant="ghost"
           onPress={() => router.replace("/sign-in")}
           disabled={loading}
           style={{ flex: 1 }}
         />
         <Button
-          label="Create account"
+          label={t("auth.signUp.submitButton")}
           variant="primary"
           onPress={onSignUp}
           loading={loading}

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
+import { useTranslation } from "../../../src/i18n";
 import { type CardRecord, type Difficulty, upgradeCard } from "../../../src/models/card";
 import { addCard } from "../../../src/storage/cards";
 import { Button } from "../../../src/ui/Button";
@@ -15,6 +16,7 @@ import { spacing, typography } from "../../../src/ui/theme";
 
 export default function AddCardScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const params = useLocalSearchParams();
   const idParam = params.id;
@@ -69,43 +71,43 @@ export default function AddCardScreen() {
       <View style={styles.header}>
         <IconButton
           name="chevron-back"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t("common.cancel")}
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={typography.title}>New card</Text>
+        <Text style={typography.title}>{t("addCard.screenTitle")}</Text>
       </View>
 
       <Card style={styles.formCard}>
         <TextField
-          label="Front"
+          label={t("addCard.frontLabel")}
           value={front}
           onChangeText={setFront}
           onBlur={() => setFrontTouched(true)}
-          error={frontTouched && !front.trim() ? "Enter the front of the card." : undefined}
-          placeholder="Question or term"
+          error={frontTouched && !front.trim() ? t("addCard.frontRequiredError") : undefined}
+          placeholder={t("addCard.frontPlaceholder")}
           multiline
           editable={!submitting}
         />
         <TextField
-          label="Back"
+          label={t("addCard.backLabel")}
           value={back}
           onChangeText={setBack}
           onBlur={() => setBackTouched(true)}
-          error={backTouched && !back.trim() ? "Enter the back of the card." : undefined}
-          placeholder="Answer or explanation"
+          error={backTouched && !back.trim() ? t("addCard.backRequiredError") : undefined}
+          placeholder={t("addCard.backPlaceholder")}
           multiline
           editable={!submitting}
         />
       </Card>
 
       <View style={styles.difficultySection}>
-        <Text style={typography.label}>Difficulty</Text>
+        <Text style={typography.label}>{t("addCard.difficultyLabel")}</Text>
         <DifficultySelector value={difficulty} onChange={setDifficulty} />
       </View>
 
       <Button
-        label="Save card"
+        label={t("addCard.saveButton")}
         variant="primary"
         fullWidth
         loading={submitting}

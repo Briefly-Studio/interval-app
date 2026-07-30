@@ -147,15 +147,16 @@ export const handler = async (event) => {
 
         accepted.push(id);
       } catch (e) {
+        const code = e?.name || "UpdateItem_failed";
         rejected.push(id);
-        reasons[id] = e?.name || "UpdateItem_failed";
-        console.log("Update record failed", id, e);
+        reasons[id] = code;
+        console.log("[sync-push] record update rejected:", code);
       }
     }
 
     return resp(200, { accepted, rejected, reasons });
   } catch (e) {
-    console.log("FATAL", e);
+    console.log("[sync-push] unhandled error:", e?.name || "UnknownError");
     return resp(500, { ok: false, error: "Unhandled server error" });
   }
 };

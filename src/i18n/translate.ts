@@ -1,10 +1,11 @@
 import en from "./locales/en";
+import es from "./locales/es";
 import { isTranslationValue, type Locale, type PluralForms, type TranslationPath, type TranslationTree } from "./types";
 
 // Pure translation logic — deliberately has no React or expo-localization dependency, so it can
 // be unit-tested directly (and reused outside a component tree if needed later).
 
-const RESOURCES: Record<Locale, TranslationTree> = { en };
+const RESOURCES: Record<Locale, TranslationTree> = { en, es };
 const FALLBACK_LOCALE: Locale = "en";
 
 export type TranslationKey = TranslationPath<typeof en>;

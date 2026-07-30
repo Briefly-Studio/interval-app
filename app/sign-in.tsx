@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { getAuthDiagnosticCode, mapAuthError } from "../src/auth/authErrors";
+import { useTranslation } from "../src/i18n";
 import { BrandMark } from "../src/ui/BrandMark";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
@@ -15,6 +16,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignInScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = useState(params.email ?? "");
   const [password, setPassword] = useState("");
@@ -44,25 +46,25 @@ export default function SignInScreen() {
   return (
     <Screen scroll>
       <BrandMark />
-      <Text style={typography.title}>Welcome back.</Text>
-      <Text style={typography.secondary}>Continue studying where you left off.</Text>
+      <Text style={typography.title}>{t("auth.signIn.title")}</Text>
+      <Text style={typography.secondary}>{t("auth.signIn.subtitle")}</Text>
 
       <Card style={{ gap: spacing.md }}>
         <TextField
-          label="Email"
+          label={t("auth.emailLabel")}
           value={email}
           onChangeText={setEmail}
-          placeholder="you@example.com"
+          placeholder={t("auth.emailPlaceholder")}
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
           editable={!loading}
         />
         <TextField
-          label="Password"
+          label={t("auth.signIn.passwordLabel")}
           value={password}
           onChangeText={setPassword}
-          placeholder="Your password"
+          placeholder={t("auth.signIn.passwordPlaceholder")}
           autoCapitalize="none"
           autoComplete="password"
           isPassword
@@ -73,14 +75,14 @@ export default function SignInScreen() {
 
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         <Button
-          label="Cancel"
+          label={t("common.cancel")}
           variant="ghost"
           onPress={() => router.dismissAll()}
           disabled={loading}
           style={{ flex: 1 }}
         />
         <Button
-          label="Sign in"
+          label={t("auth.signIn.submitButton")}
           variant="primary"
           onPress={onSignIn}
           loading={loading}
@@ -90,7 +92,7 @@ export default function SignInScreen() {
       </View>
 
       <Button
-        label="Create an account"
+        label={t("auth.signIn.createAccountButton")}
         variant="ghost"
         onPress={() => router.replace("/sign-up")}
         disabled={loading}

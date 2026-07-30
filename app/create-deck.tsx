@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
+import { useTranslation } from "../src/i18n";
 import { makeId, type DeckRecord, upgradeDeck } from "../src/models/deck";
 import { addDeck } from "../src/storage/decks";
 import { Button } from "../src/ui/Button";
@@ -14,6 +15,7 @@ import { spacing, typography } from "../src/ui/theme";
 
 export default function CreateDeck() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -50,29 +52,29 @@ export default function CreateDeck() {
       <View style={styles.header}>
         <IconButton
           name="chevron-back"
-          accessibilityLabel="Back"
+          accessibilityLabel={t("common.back")}
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={typography.title}>Create deck</Text>
+        <Text style={typography.title}>{t("createDeck.screenTitle")}</Text>
       </View>
-      <Text style={typography.secondary}>Give your deck a clear name.</Text>
+      <Text style={typography.secondary}>{t("createDeck.subtitle")}</Text>
 
       <Card>
         <TextField
-          label="Deck name"
+          label={t("createDeck.nameLabel")}
           value={title}
           onChangeText={setTitle}
           onBlur={() => setTouched(true)}
-          error={touched && !isValid ? "Enter a name for your deck." : undefined}
-          placeholder="e.g. AWS SysOps"
+          error={touched && !isValid ? t("createDeck.nameRequiredError") : undefined}
+          placeholder={t("createDeck.namePlaceholder")}
           autoFocus
           editable={!submitting}
         />
       </Card>
 
       <Button
-        label="Create deck"
+        label={t("createDeck.submitButton")}
         variant="primary"
         fullWidth
         loading={submitting}

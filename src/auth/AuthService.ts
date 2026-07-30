@@ -34,6 +34,13 @@ class CognitoHttpError extends Error {
   }
 }
 
+// Thrown by changePassword() when there is no valid access token to change the password with
+// (guest, or a session that expired between this screen mounting and the user submitting). Kept
+// as a distinct, stably-identifiable class — rather than a plain Error with a message string —
+// so UI-facing error mapping (src/auth/authErrors.ts) can key off `instanceof` instead of
+// matching on message text, the same reasoning as CognitoHttpError's `code`.
+export class ChangePasswordUnauthenticatedError extends Error {}
+
 type CognitoAuthResult = {
   AccessToken?: string;
   IdToken?: string;
@@ -79,7 +86,7 @@ function assertAuthConfigured(): AuthConfig {
 }
 
 async function cognitoRequest<TPayload extends Record<string, unknown>>(
-  action: "SignUp" | "ConfirmSignUp" | "InitiateAuth" | "UpdateUserAttributes",
+  action: "SignUp" | "ConfirmSignUp" | "InitiateAuth" | "UpdateUserAttributes" | "ChangePassword",
   payload: TPayload
 ): Promise<CognitoResponse> {
   const { cognitoRegion } = assertAuthConfigured();
@@ -384,6 +391,25 @@ export const AuthService = {
     await forceRefreshIdentity();
     return AuthService.getActiveIdentity();
   },
+
+  // Cognito's ChangePassword responds 2xx with an empty/irrelevant body — no
+  // AuthenticationResult, unlike sign-in/refresh. The existing access/id/refresh tokens on disk
+  // remain valid and are intentionally left untouched; the current session is preserved as-is.
+  // Never assumes the caller already verified the scope is a signed-in user — getAccessToken()
+  // returning null (guest, or an unrecoverable expired session) is surfaced as a clear error
+  // rather than silently proceeding with an undefined AccessToken.
+  async changePassword(previousPassword: string, newPassword: string): Promise<void> {
+    const accessToken = await AuthService.getAccessToken();
+    if (!accessToken) {
+      throw new ChangePasswordUnauthenticatedError("No access token available for changePassword.");
+    }
+
+    await cognitoRequest("ChangePassword", {
+      AccessToken: accessToken,
+      PreviousPassword: previousPassword,
+      ProposedPassword: newPassword,
+    });
+  },
 };
 
 // Exposed so UI-layer error mapping (src/auth/authErrors.ts) can build user-facing messages
@@ -392,6 +418,15 @@ export const AuthService = {
 /** Cognito's exception code (e.g. "NotAuthorizedException") for an error thrown by AuthService, if any. */
 export function getAuthErrorCode(error: unknown): string | undefined {
   return error instanceof CognitoHttpError ? error.code : undefined;
+}
+
+/**
+ * HTTP status of a definitive Cognito response, if any — lets UI-facing error mapping tell a
+ * transient 5xx service failure apart from a 4xx rejection whose `code` isn't otherwise mapped,
+ * without needing to import or match on CognitoHttpError itself.
+ */
+export function getAuthErrorStatus(error: unknown): number | undefined {
+  return error instanceof CognitoHttpError ? error.status : undefined;
 }
 
 /** True when the error represents a network/connectivity failure rather than a Cognito rejection. */

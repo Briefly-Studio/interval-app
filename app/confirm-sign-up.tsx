@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { getAuthDiagnosticCode, mapAuthError } from "../src/auth/authErrors";
+import { useTranslation } from "../src/i18n";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { Screen } from "../src/ui/Screen";
@@ -15,6 +16,7 @@ const MIN_CODE_LENGTH = 6;
 
 export default function ConfirmSignUpScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ email?: string }>();
   const initialEmail = params.email?.trim();
   const [email, setEmail] = useState(initialEmail ?? "");
@@ -44,29 +46,29 @@ export default function ConfirmSignUpScreen() {
 
   return (
     <Screen scroll>
-      <Text style={typography.title}>Confirm your email</Text>
+      <Text style={typography.title}>{t("auth.confirmSignUp.title")}</Text>
       <Text style={typography.secondary}>
         {initialEmail
-          ? `We sent a code to ${initialEmail}.`
-          : "Enter the code we sent to your email to finish creating your account."}
+          ? t("auth.confirmSignUp.subtitleWithEmail", { email: initialEmail })
+          : t("auth.confirmSignUp.subtitleGeneric")}
       </Text>
 
       <Card style={{ gap: spacing.md }}>
         <TextField
-          label="Email"
+          label={t("auth.emailLabel")}
           value={email}
           onChangeText={setEmail}
-          placeholder="you@example.com"
+          placeholder={t("auth.emailPlaceholder")}
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
           editable={!loading}
         />
         <TextField
-          label="Confirmation code"
+          label={t("auth.confirmSignUp.codeLabel")}
           value={code}
           onChangeText={setCode}
-          placeholder="123456"
+          placeholder={t("auth.confirmSignUp.codePlaceholder")}
           autoCapitalize="none"
           keyboardType="number-pad"
           editable={!loading}
@@ -76,14 +78,14 @@ export default function ConfirmSignUpScreen() {
 
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         <Button
-          label="Back to sign in"
+          label={t("auth.confirmSignUp.backToSignInButton")}
           variant="ghost"
           onPress={() => router.replace("/sign-in")}
           disabled={loading}
           style={{ flex: 1 }}
         />
         <Button
-          label="Confirm"
+          label={t("auth.confirmSignUp.submitButton")}
           variant="primary"
           onPress={onConfirm}
           loading={loading}

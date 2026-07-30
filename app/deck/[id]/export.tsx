@@ -6,6 +6,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import { buildExportPayload } from "../../../src/domain/deckTransfer";
+import { useTranslation } from "../../../src/i18n";
 import type { Deck } from "../../../src/models/deck";
 import { getCards } from "../../../src/storage/cards";
 import { getDeckById } from "../../../src/storage/decks";
@@ -17,6 +18,7 @@ import { colors, spacing, typography } from "../../../src/ui/theme";
 
 export default function ExportDeckScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -57,7 +59,7 @@ export default function ExportDeckScreen() {
       const scope = await AuthService.getActiveScope();
       const deck = await getDeckById(scope, deckId);
       if (!deck) {
-        setError("Deck not found.");
+        setError(t("export.deckNotFoundError"));
         return;
       }
 
@@ -71,7 +73,7 @@ export default function ExportDeckScreen() {
       const fileName = `briefly-deck-${safeTitle || "deck"}-${Date.now()}.briefly`;
       const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
       if (!baseDir) {
-        setError("File export isn't available in this runtime.");
+        setError(t("export.unavailableError"));
         return;
       }
       const fileUri = `${baseDir}${fileName}`;
@@ -82,12 +84,12 @@ export default function ExportDeckScreen() {
       await Sharing.shareAsync(fileUri, {
         mimeType: "application/json",
         UTI: "public.json",
-        dialogTitle: "Share deck",
+        dialogTitle: t("export.shareDialogTitle"),
       });
 
-      Alert.alert("Shared", "Deck file is ready to share.");
+      Alert.alert(t("export.sharedTitle"), t("export.sharedBody"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Share failed.");
+      setError(err instanceof Error ? err.message : t("export.shareFailedError"));
     } finally {
       setBusy(false);
     }
@@ -96,18 +98,16 @@ export default function ExportDeckScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} disabled={busy} />
-        <Text style={typography.title}>Export deck</Text>
+        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} disabled={busy} />
+        <Text style={typography.title}>{t("export.screenTitle")}</Text>
       </View>
-      <Text style={typography.secondary}>
-        Creates a .briefly file with this deck&apos;s cards, ready to share or import on another device.
-      </Text>
+      <Text style={typography.secondary}>{t("export.description")}</Text>
 
       <Card style={styles.identityCard}>
         <Text style={typography.bodyMedium} numberOfLines={2}>
-          {deck?.title ?? "This deck"}
+          {deck?.title ?? t("export.fallbackDeckTitle")}
         </Text>
-        <Text style={typography.caption}>Exports as a .briefly file</Text>
+        <Text style={typography.caption}>{t("export.exportsAsFile")}</Text>
       </Card>
 
       {error ? (
@@ -117,7 +117,7 @@ export default function ExportDeckScreen() {
       ) : null}
 
       <Button
-        label={busy ? "Preparing…" : "Share deck"}
+        label={busy ? t("export.preparingButton") : t("export.shareButton")}
         variant="primary"
         fullWidth
         loading={busy}

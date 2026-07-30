@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
+import { useTranslation } from "../../../src/i18n";
 import { type SessionRecord, upgradeSession } from "../../../src/models/session";
 import { addSession } from "../../../src/storage/sessions";
 import { Button } from "../../../src/ui/Button";
@@ -21,6 +22,7 @@ const formatDuration = (startedAt: number, finishedAt: number) => {
 
 export default function QuizResults() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams();
 
   const pickParam = (value: string | string[] | undefined) =>
@@ -104,7 +106,7 @@ export default function QuizResults() {
   return (
     <Screen>
       <View style={styles.center}>
-        <Text style={typography.title}>Quiz complete</Text>
+        <Text style={typography.title}>{t("quizResults.title")}</Text>
         <Text style={styles.bigScore}>
           {correct} / {total}
         </Text>
@@ -112,21 +114,21 @@ export default function QuizResults() {
 
         <Card style={styles.summaryCard}>
           <View style={styles.metricsRow}>
-            <ResultMetric label="Correct" value={String(correct)} />
-            <ResultMetric label="Incorrect" value={String(wrong)} />
-            <ResultMetric label="Time" value={durationText} />
+            <ResultMetric label={t("quizResults.correctLabel")} value={String(correct)} />
+            <ResultMetric label={t("quizResults.incorrectLabel")} value={String(wrong)} />
+            <ResultMetric label={t("quizResults.timeLabel")} value={durationText} />
           </View>
         </Card>
 
         <Button
-          label="Retry"
+          label={t("quizResults.retryButton")}
           variant="primary"
           fullWidth
           disabled={navBusy}
           onPress={() => navigateOnce(() => router.replace(`/deck/${deckId}/quiz`))}
         />
         <Button
-          label="Back to deck"
+          label={t("quizResults.backToDeckButton")}
           variant="secondary"
           fullWidth
           disabled={navBusy}

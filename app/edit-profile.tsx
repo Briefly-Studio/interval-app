@@ -115,7 +115,7 @@ export default function EditProfileScreen() {
       <View style={styles.header}>
         <IconButton
           name="chevron-back"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={t("common.cancel")}
           onPress={() => router.back()}
           disabled={submitting}
         />

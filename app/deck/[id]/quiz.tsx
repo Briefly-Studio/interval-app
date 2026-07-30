@@ -4,6 +4,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import { smartShuffle } from "../../../src/domain/smartShuffle";
+import { useTranslation } from "../../../src/i18n";
 import type { Card } from "../../../src/models/card";
 import type { Deck } from "../../../src/models/deck";
 import { getCards } from "../../../src/storage/cards";
@@ -33,6 +34,7 @@ function shuffle<T>(arr: T[]): T[] {
 
 export default function QuizScreen() {
   const router = useRouter();
+  const { t, plural } = useTranslation();
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -172,14 +174,12 @@ export default function QuizScreen() {
     const percent = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
 
     Alert.alert(
-      "Finish quiz early?",
-      `This will log a quiz session for ${attempted} card${
-        attempted === 1 ? "" : "s"
-      }.`,
+      t("quiz.finishEarlyTitle"),
+      plural("quiz.finishEarlyBody", attempted),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Finish",
+          text: t("quiz.finishButton"),
           style: "default",
           onPress: () =>
             router.replace({
@@ -201,7 +201,7 @@ export default function QuizScreen() {
   if (!loaded) {
     return (
       <Screen>
-        <Text style={typography.secondary}>Loading…</Text>
+        <Text style={typography.secondary}>{t("quiz.loading")}</Text>
       </Screen>
     );
   }
@@ -209,11 +209,11 @@ export default function QuizScreen() {
   if (cards.length === 0) {
     return (
       <Screen>
-        <StudyHeader title={deck?.title ?? "Quiz"} onClose={goBack} />
+        <StudyHeader title={deck?.title ?? t("quiz.fallbackTitle")} onClose={goBack} />
         <View style={styles.emptyFill}>
-          <EmptyState icon="albums-outline" title="No cards yet" description="Add cards to start a quiz.">
+          <EmptyState icon="albums-outline" title={t("quiz.emptyTitle")} description={t("quiz.emptyDescription")}>
             <Button
-              label="Add your first card"
+              label={t("quiz.addFirstCardButton")}
               variant="primary"
               fullWidth
               onPress={() => router.push(`/deck/${deckId}/add-card`)}
@@ -227,15 +227,15 @@ export default function QuizScreen() {
   if (!canQuiz) {
     return (
       <Screen>
-        <StudyHeader title={deck?.title ?? "Quiz"} onClose={goBack} />
+        <StudyHeader title={deck?.title ?? t("quiz.fallbackTitle")} onClose={goBack} />
         <View style={styles.emptyFill}>
           <EmptyState
             icon="help-circle-outline"
-            title="Need 4 cards"
-            description="Quiz Mode needs at least 4 cards to generate options."
+            title={t("quiz.needMoreCardsTitle")}
+            description={t("quiz.needMoreCardsDescription")}
           >
             <Button
-              label="Add more cards"
+              label={t("quiz.addMoreCardsButton")}
               variant="primary"
               fullWidth
               onPress={() => router.push(`/deck/${deckId}/add-card`)}
@@ -248,11 +248,11 @@ export default function QuizScreen() {
 
   return (
     <Screen scroll>
-      <StudyHeader title={deck?.title ?? "Quiz"} progressLabel={progress} onClose={goBack} />
+      <StudyHeader title={deck?.title ?? t("quiz.fallbackTitle")} progressLabel={progress} onClose={goBack} />
       <ProgressBar current={index} total={cards.length} />
 
       <Surface style={styles.questionCard}>
-        <Text style={typography.label}>Question</Text>
+        <Text style={typography.label}>{t("quiz.questionLabel")}</Text>
         <Text style={styles.questionText}>{current.front}</Text>
       </Surface>
 
@@ -283,12 +283,12 @@ export default function QuizScreen() {
 
       {wasCorrect !== null && (
         <Text style={[styles.feedback, wasCorrect ? styles.feedbackCorrect : styles.feedbackIncorrect]}>
-          {wasCorrect ? "Correct" : "Not quite"}
+          {wasCorrect ? t("quiz.correctFeedback") : t("quiz.incorrectFeedback")}
         </Text>
       )}
 
       <Button
-        label={index >= cards.length - 1 ? "Finish" : "Next"}
+        label={index >= cards.length - 1 ? t("quiz.finishButton") : t("quiz.nextButton")}
         variant="primary"
         fullWidth
         disabled={!selectedId}
@@ -296,7 +296,7 @@ export default function QuizScreen() {
       />
 
       {showFinishEarly && (
-        <Button label="Finish early" variant="ghost" fullWidth onPress={confirmFinishEarly} />
+        <Button label={t("quiz.finishEarlyButton")} variant="ghost" fullWidth onPress={confirmFinishEarly} />
       )}
     </Screen>
   );

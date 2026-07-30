@@ -161,10 +161,10 @@ export default function DecksHome() {
 
   const confirmDelete = (deck: DeckRecord) => {
     if (mutating) return;
-    Alert.alert("Delete deck?", `“${deck.title}” will be removed from this device.`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("home.deleteDeckTitle"), t("home.deleteDeckBody", { title: deck.title }), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("deckDetail.deleteAction"),
         style: "destructive",
         onPress: async () => {
           if (mutating) return;
@@ -191,7 +191,7 @@ export default function DecksHome() {
     if (mutating) return;
     if (Platform.OS === "ios" && typeof Alert.prompt === "function") {
       Alert.prompt(
-        "Rename deck",
+        t("home.renameDeckTitle"),
         undefined,
         async (text) => {
           const title = text.trim();
@@ -224,14 +224,14 @@ export default function DecksHome() {
       return;
     }
 
-    Alert.alert("Rename not available", "Rename is currently supported on iOS only.");
+    Alert.alert(t("home.renameNotAvailableTitle"), t("home.renameNotAvailableBody"));
   };
 
   const onDeckLongPress = (deck: DeckRecord) => {
-    Alert.alert("Deck actions", undefined, [
-      { text: "Rename", onPress: () => renameDeck(deck) },
-      { text: "Delete", style: "destructive", onPress: () => confirmDelete(deck) },
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("home.deckActionsTitle"), undefined, [
+      { text: t("home.renameAction"), onPress: () => renameDeck(deck) },
+      { text: t("deckDetail.deleteAction"), style: "destructive", onPress: () => confirmDelete(deck) },
+      { text: t("common.cancel"), style: "cancel" },
     ]);
   };
 
@@ -243,15 +243,15 @@ export default function DecksHome() {
         {__DEV__ && (
           <IconButton
             name="construct-outline"
-            accessibilityLabel="Dev tools"
+            accessibilityLabel={t("home.devToolsLabel")}
             variant="surface"
             onPress={() => router.push({ pathname: "/dev-tools" as any })}
           />
         )}
         <AccountButton
           variant={signedIn ? "initial" : "signIn"}
-          label={signedIn ? accountInitial(identity) : "Sign in"}
-          accessibilityLabel={signedIn ? "Account menu" : "Sign in"}
+          label={signedIn ? accountInitial(identity) : t("settings.signIn")}
+          accessibilityLabel={signedIn ? t("home.accountMenuLabel") : t("settings.signIn")}
           onPress={onAccountPress}
         />
       </HomeHeader>
@@ -268,10 +268,10 @@ export default function DecksHome() {
       </View>
 
       <View style={styles.secondaryRow}>
-        <SecondaryAction icon="download-outline" label="Import deck" onPress={() => router.push("/import")} />
+        <SecondaryAction icon="download-outline" label={t("settings.importDeck")} onPress={() => router.push("/import")} />
         <SecondaryAction
           icon="trash-outline"
-          label="Recently Deleted"
+          label={t("settings.recentlyDeleted")}
           onPress={() => router.push({ pathname: "/recently-deleted" as any })}
         />
       </View>
@@ -280,27 +280,23 @@ export default function DecksHome() {
         <View style={styles.emptyFill}>
           <EmptyState
             icon={signedIn ? "albums-outline" : "cloud-offline-outline"}
-            title={signedIn ? "No decks yet" : "Your offline workspace is ready"}
-            description={
-              signedIn
-                ? "Create your first deck or import one to start studying."
-                : "Create a deck now. You can sign in later to sync across devices."
-            }
+            title={signedIn ? t("home.emptyTitleSignedIn") : t("home.emptyTitleGuest")}
+            description={signedIn ? t("home.emptyDescriptionSignedIn") : t("home.emptyDescriptionGuest")}
           >
-            <Button label="Create a deck" variant="primary" fullWidth onPress={() => router.push("/create-deck")} />
+            <Button label={t("home.createDeckButton")} variant="primary" fullWidth onPress={() => router.push("/create-deck")} />
             {signedIn ? (
-              <Button label="Import deck" variant="secondary" fullWidth onPress={() => router.push("/import")} />
+              <Button label={t("settings.importDeck")} variant="secondary" fullWidth onPress={() => router.push("/import")} />
             ) : (
-              <Button label="Sign in" variant="secondary" fullWidth onPress={() => router.push("/sign-in")} />
+              <Button label={t("settings.signIn")} variant="secondary" fullWidth onPress={() => router.push("/sign-in")} />
             )}
           </EmptyState>
         </View>
       ) : (
         <View style={styles.deckSection}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={typography.subheading}>My decks</Text>
+            <Text style={typography.subheading}>{t("home.myDecks")}</Text>
             <Button
-              label="+ New deck"
+              label={t("home.newDeckButton")}
               variant="primary"
               size="sm"
               onPress={() => router.push("/create-deck")}

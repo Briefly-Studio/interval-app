@@ -1,8 +1,8 @@
-// Only "en" has real resources so far — this batch establishes the system, not a translated
-// app. Adding a language later means adding both a Locale entry and a locales/<code>.ts file.
-export type Locale = "en";
+// "en" and "es" have real resources. Adding a language later means adding both a Locale entry
+// and a locales/<code>.ts file.
+export type Locale = "en" | "es";
 
-export const SUPPORTED_LOCALES: readonly Locale[] = ["en"];
+export const SUPPORTED_LOCALES: readonly Locale[] = ["en", "es"];
 
 export function isSupportedLocale(value: string): value is Locale {
   return (SUPPORTED_LOCALES as readonly string[]).includes(value);

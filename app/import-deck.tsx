@@ -5,11 +5,13 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { importDeckFromJson } from "../src/domain/deckPortability";
+import { useTranslation } from "../src/i18n";
 
 const APP_BG = "#2FA4A3";
 
 export default function ImportDeckScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [payload, setPayload] = useState("");
 
   const canImport = payload.trim().length > 0;
@@ -19,13 +21,13 @@ export default function ImportDeckScreen() {
       const text = await Clipboard.getStringAsync();
       setPayload(text);
     } catch {
-      Alert.alert("Clipboard unavailable", "Please paste the JSON manually.");
+      Alert.alert(t("importDeckLegacy.clipboardUnavailableTitle"), t("importDeckLegacy.clipboardUnavailableBody"));
     }
   };
 
   const onImport = async () => {
     if (!canImport) {
-      Alert.alert("Nothing to import", "Paste a deck export JSON to continue.");
+      Alert.alert(t("importDeckLegacy.nothingToImportTitle"), t("importDeckLegacy.nothingToImportBody"));
       return;
     }
 
@@ -34,8 +36,8 @@ export default function ImportDeckScreen() {
       router.replace(`/deck/${deckId}`);
     } catch (error) {
       Alert.alert(
-        "Import failed",
-        error instanceof Error ? error.message : "Please check the JSON and try again."
+        t("importDeckLegacy.failedTitle"),
+        error instanceof Error ? error.message : t("importDeckLegacy.failedGenericBody")
       );
     }
   };
@@ -44,7 +46,7 @@ export default function ImportDeckScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} style={styles.pill}>
-          <Text style={styles.pillText}>← Back</Text>
+          <Text style={styles.pillText}>{t("importDeckLegacy.backLabel")}</Text>
         </Pressable>
 
         <Pressable
@@ -52,22 +54,22 @@ export default function ImportDeckScreen() {
           disabled={!canImport}
           style={[styles.primary, !canImport && { opacity: 0.5 }]}
         >
-          <Text style={styles.primaryText}>Import</Text>
+          <Text style={styles.primaryText}>{t("importDeckLegacy.importButton")}</Text>
         </Pressable>
       </View>
 
-      <Text style={styles.title}>Import deck</Text>
+      <Text style={styles.title}>{t("importDeckLegacy.screenTitle")}</Text>
 
       <View style={styles.labelRow}>
-        <Text style={styles.label}>Deck JSON</Text>
+        <Text style={styles.label}>{t("importDeckLegacy.deckJsonLabel")}</Text>
         <Pressable onPress={onPaste} style={styles.pasteBtn}>
-          <Text style={styles.pasteBtnText}>Paste</Text>
+          <Text style={styles.pasteBtnText}>{t("importDeckLegacy.pasteButton")}</Text>
         </Pressable>
       </View>
       <TextInput
         value={payload}
         onChangeText={setPayload}
-        placeholder="Paste exported JSON here"
+        placeholder={t("importDeckLegacy.pastePlaceholder")}
         placeholderTextColor="rgba(255,255,255,0.65)"
         style={styles.input}
         multiline

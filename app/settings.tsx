@@ -22,6 +22,21 @@ import { colors, radii, spacing, typography } from "../src/ui/theme";
 
 const APP_VERSION = Constants.expoConfig?.version ?? "—";
 
+function resolveBuildNumber(): string | undefined {
+  const iosBuildNumber = Constants.expoConfig?.ios?.buildNumber;
+  if (iosBuildNumber) return iosBuildNumber;
+
+  const androidVersionCode = Constants.expoConfig?.android?.versionCode;
+  if (androidVersionCode !== undefined && androidVersionCode !== null) return String(androidVersionCode);
+
+  const nativeBuildVersion = Constants.nativeBuildVersion;
+  if (nativeBuildVersion) return nativeBuildVersion;
+
+  return undefined;
+}
+
+const APP_BUILD = resolveBuildNumber();
+
 function initialFor(identity: UserIdentity | null): string {
   const source = identity?.displayName;
   return source ? source[0].toUpperCase() : "•";
@@ -44,17 +59,25 @@ export default function SettingsScreen() {
   const syncSubtitle = useMemo(() => {
     const parts = [t(SYNC_STATUS_KEYS[syncState.status])];
     if (syncState.status === "synced" && syncState.lastSuccessfulSyncAt) {
-      parts.push(
-        t("sync.detail.lastSynced", {
-          time: formatSyncTime(syncState.lastSuccessfulSyncAt),
-        })
-      );
+      const ago = formatSyncTime(syncState.lastSuccessfulSyncAt);
+      const relativeTime =
+        ago.unit === "justNow" ? t("sync.relativeTime.justNow") : plural(`sync.relativeTime.${ago.unit}`, ago.count);
+      parts.push(t("sync.detail.lastSynced", { time: relativeTime }));
     }
     if (syncState.pendingDirtyCount > 0) {
       parts.push(plural("sync.detail.pendingCount", syncState.pendingDirtyCount));
     }
     return parts.join(" · ");
   }, [syncState, t, plural]);
+
+  // "system" shows the plain "System default" label rather than the resolved language, matching
+  // the product requirement that this row reflects the user's *preference*, not the language
+  // currently in effect.
+  const languageSubtitle = useMemo(() => {
+    if (preference === "system") return t("settings.languageOptions.system");
+    if (preference === "es") return t("settings.languageOptions.espanol");
+    return t("settings.languageOptions.english");
+  }, [preference, t]);
 
   const refresh = useCallback(async () => {
     const activeScope = await AuthService.getActiveScope();
@@ -102,7 +125,7 @@ export default function SettingsScreen() {
 
   const header = (
     <View style={styles.header}>
-      <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
+      <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
       <Text style={typography.title}>{t("settings.title")}</Text>
     </View>
   );
@@ -139,7 +162,7 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.profileText}>
             <Text style={typography.bodyMedium} numberOfLines={1}>
-              {identity?.displayName ?? "there"}
+              {identity?.displayName ?? t("settings.fallbackName")}
             </Text>
             {identity?.fullName && identity.fullName !== identity.displayName ? (
               <Text style={typography.secondary} numberOfLines={1}>
@@ -166,8 +189,13 @@ export default function SettingsScreen() {
         <Card style={styles.rowGroup}>
           <SettingsRow
             label={t("settings.changePassword")}
-            subtitle={t("settings.comingSoon")}
-            disabled
+            onPress={() => router.push({ pathname: "/change-password" as any })}
+          />
+          <View style={styles.divider} />
+          <SettingsRow
+            label={t("settings.requestAccountDeletion")}
+            destructive
+            onPress={() => router.push({ pathname: "/delete-account" as any })}
           />
           <View style={styles.divider} />
           <SettingsRow label={t("settings.signOut")} destructive loading={signingOut} onPress={onSignOut} />
@@ -192,10 +220,28 @@ export default function SettingsScreen() {
           <View style={styles.divider} />
           <SettingsRow
             label={t("settings.language")}
-            subtitle={
-              preference === "system" ? t("settings.languageOptions.system") : t("settings.languageOptions.english")
-            }
+            subtitle={languageSubtitle}
             onPress={() => router.push({ pathname: "/language" as any })}
+          />
+        </Card>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>{t("settings.sections.support")}</Text>
+        <Card style={styles.rowGroup}>
+          <SettingsRow
+            label={t("settings.helpFeedback")}
+            onPress={() => router.push({ pathname: "/help-feedback" as any })}
+          />
+          <View style={styles.divider} />
+          <SettingsRow
+            label={t("settings.betaNotice")}
+            onPress={() => router.push({ pathname: "/beta-notice" as any })}
+          />
+          <View style={styles.divider} />
+          <SettingsRow
+            label={t("settings.privacyNotice")}
+            onPress={() => router.push({ pathname: "/privacy-notice" as any })}
           />
         </Card>
       </View>
@@ -203,8 +249,16 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>{t("settings.sections.about")}</Text>
         <Card style={styles.aboutCard}>
-          <Text style={typography.bodyMedium}>Interval</Text>
+          <View style={styles.aboutTitleRow}>
+            <Text style={typography.bodyMedium}>Interval</Text>
+            <View style={styles.betaBadge}>
+              <Text style={styles.betaBadgeText}>{t("settings.betaLabel")}</Text>
+            </View>
+          </View>
           <Text style={typography.caption}>{t("settings.version", { version: APP_VERSION })}</Text>
+          {APP_BUILD ? (
+            <Text style={typography.caption}>{t("settings.buildLabel", { build: APP_BUILD })}</Text>
+          ) : null}
           <Text style={[typography.secondary, styles.aboutDescription]}>{t("settings.aboutDescription")}</Text>
         </Card>
       </View>
@@ -235,5 +289,13 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.border },
 
   aboutCard: { gap: spacing.xs },
+  aboutTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  betaBadge: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    backgroundColor: colors.accentMuted,
+  },
+  betaBadgeText: { fontSize: 11, fontWeight: "700", color: colors.accentStrong },
   aboutDescription: { marginTop: spacing.xs },
 });

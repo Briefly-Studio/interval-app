@@ -42,7 +42,7 @@ export default function SyncStatusScreen() {
   return (
     <Screen scroll>
       <View style={styles.header}>
-        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
+        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
         <Text style={typography.title}>{t("sync.screenTitle")}</Text>
       </View>
 
@@ -58,7 +58,12 @@ export default function SyncStatusScreen() {
           <Text style={typography.secondary}>
             {syncState.lastSuccessfulSyncAt
               ? t("sync.detail.lastSynced", {
-                  time: formatSyncTime(syncState.lastSuccessfulSyncAt),
+                  time: (() => {
+                    const ago = formatSyncTime(syncState.lastSuccessfulSyncAt);
+                    return ago.unit === "justNow"
+                      ? t("sync.relativeTime.justNow")
+                      : plural(`sync.relativeTime.${ago.unit}`, ago.count);
+                  })(),
                 })
               : t("sync.detail.neverSynced")}
           </Text>

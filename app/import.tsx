@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { importDeckFromJson } from "../src/domain/deckPortability";
+import { useTranslation } from "../src/i18n";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
@@ -14,6 +15,7 @@ import { colors, iconSizes, spacing, typography } from "../src/ui/theme";
 
 export default function ImportDeckScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [selectedFile, setSelectedFile] = useState<{ name: string; uri: string } | null>(
     null
   );
@@ -52,19 +54,19 @@ export default function ImportDeckScreen() {
         !("cards" in parsed) ||
         !Array.isArray((parsed as { cards?: unknown }).cards)
       ) {
-        throw new Error("Invalid export file");
+        throw new Error(t("importDeck.invalidFileError"));
       }
 
       const newDeckId = await importDeckFromJson(cleaned);
-      Alert.alert("Imported", "Deck imported successfully.");
+      Alert.alert(t("importDeck.importedTitle"), t("importDeck.importedBody"));
       router.replace(`/deck/${newDeckId}`);
     } catch (error) {
       // deckPortability's own errors are already friendly, user-facing strings — logging just
       // the message (not the full Error/stack) keeps this out of "diagnostic leakage" territory.
       console.log("[import] failed:", error instanceof Error ? error.message : "unknown error");
       Alert.alert(
-        "Import failed",
-        error instanceof Error ? error.message : "Unable to read or parse the file."
+        t("importDeck.failedTitle"),
+        error instanceof Error ? error.message : t("importDeck.failedGenericBody")
       );
     } finally {
       setBusy(false);
@@ -76,13 +78,13 @@ export default function ImportDeckScreen() {
       <View style={styles.header}>
         <IconButton
           name="chevron-back"
-          accessibilityLabel="Back"
+          accessibilityLabel={t("common.back")}
           onPress={() => router.back()}
           disabled={busy}
         />
-        <Text style={typography.title}>Import deck</Text>
+        <Text style={typography.title}>{t("importDeck.screenTitle")}</Text>
       </View>
-      <Text style={typography.secondary}>Choose a .briefly file to import.</Text>
+      <Text style={typography.secondary}>{t("importDeck.subtitle")}</Text>
 
       <Card style={styles.fileCard}>
         <View style={styles.fileRow}>
@@ -93,13 +95,13 @@ export default function ImportDeckScreen() {
           />
           <View style={styles.flex1}>
             <Text style={typography.bodyMedium} numberOfLines={1}>
-              {selectedFile ? selectedFile.name : "No file selected"}
+              {selectedFile ? selectedFile.name : t("importDeck.noFileSelected")}
             </Text>
-            {selectedFile ? <Text style={styles.readyText}>Ready to import</Text> : null}
+            {selectedFile ? <Text style={styles.readyText}>{t("importDeck.readyToImport")}</Text> : null}
           </View>
         </View>
         <Button
-          label={selectedFile ? "Choose a different file" : "Choose file"}
+          label={selectedFile ? t("importDeck.chooseDifferentFileButton") : t("importDeck.chooseFileButton")}
           variant="secondary"
           fullWidth
           onPress={onChooseFile}
@@ -108,7 +110,7 @@ export default function ImportDeckScreen() {
       </Card>
 
       <Button
-        label="Import deck"
+        label={t("importDeck.submitButton")}
         variant="primary"
         fullWidth
         loading={busy}

@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
+import { useTranslation } from "../../../src/i18n";
 import type { Deck } from "../../../src/models/deck";
 import type { StudySession } from "../../../src/models/session";
 import { getDeckById } from "../../../src/storage/decks";
@@ -14,8 +15,11 @@ import { Screen } from "../../../src/ui/Screen";
 import { SessionCard } from "../../../src/ui/SessionCard";
 import { spacing, typography } from "../../../src/ui/theme";
 
-const formatTimestamp = (value: number) =>
-  new Date(value).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+// `language` is the active, explicitly-resolved app language (see src/i18n/index.ts) — never
+// the device's raw locale — so date formatting stays consistent with whatever language the user
+// has actually selected, even when it differs from the device's own locale.
+const formatTimestamp = (value: number, language: string) =>
+  new Date(value).toLocaleString(language, { dateStyle: "short", timeStyle: "short" });
 
 const formatDuration = (startedAt: number, finishedAt: number) => {
   const diff = Math.max(0, finishedAt - startedAt);
@@ -27,6 +31,7 @@ const formatDuration = (startedAt: number, finishedAt: number) => {
 
 export default function DeckHistoryScreen() {
   const router = useRouter();
+  const { t, plural, language } = useTranslation();
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -71,12 +76,12 @@ export default function DeckHistoryScreen() {
     if (sessions.length === 0) return;
 
     Alert.alert(
-      "Clear study history?",
-      "This will delete all quiz and review sessions for this deck.",
+      t("history.clearConfirmTitle"),
+      t("history.clearConfirmBody"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Clear",
+          text: t("history.clearButton"),
           style: "destructive",
           onPress: async () => {
             try {
@@ -84,7 +89,7 @@ export default function DeckHistoryScreen() {
               await deleteSessionsForDeck(scope, deckId);
               setSessions([]);
             } catch {
-              Alert.alert("Couldn't clear history", "Please try again.");
+              Alert.alert(t("history.clearFailedTitle"), t("history.clearFailedBody"));
             }
           },
         },
@@ -97,10 +102,10 @@ export default function DeckHistoryScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
-        <Text style={typography.title}>Study history</Text>
+        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
+        <Text style={typography.title}>{t("history.screenTitle")}</Text>
         <Button
-          label="Clear"
+          label={t("history.clearButton")}
           variant="danger"
           size="sm"
           disabled={sessions.length === 0}
@@ -109,18 +114,18 @@ export default function DeckHistoryScreen() {
       </View>
       <Text style={typography.secondary}>
         {deck?.title ? `${deck.title} • ` : ""}
-        {loaded ? `${sessions.length} session${sessions.length === 1 ? "" : "s"}` : "Loading…"}
+        {loaded ? plural("history.sessionsCount", sessions.length) : "Loading…"}
       </Text>
 
       {isEmpty ? (
         <View style={styles.emptyFill}>
           <EmptyState
             icon="time-outline"
-            title="No history yet"
-            description="Do a review or quiz to start building your study history."
+            title={t("history.emptyTitle")}
+            description={t("history.emptyDescription")}
           >
             <Button
-              label="Start reviewing"
+              label={t("history.startReviewing")}
               variant="primary"
               fullWidth
               onPress={() => router.push(`/deck/${deckId}/review`)}
@@ -135,15 +140,15 @@ export default function DeckHistoryScreen() {
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
             const parts = [
-              item.mode === "quiz" ? "Quiz" : "Review",
+              item.mode === "quiz" ? t("history.sessionModeQuiz") : t("history.sessionModeReview"),
               item.mode === "quiz" && typeof item.percent === "number" ? `${item.percent}%` : null,
-              `${item.total} cards`,
+              plural("history.cardsCount", item.total),
             ].filter(Boolean) as string[];
 
             return (
               <SessionCard
                 title={parts.join(" • ")}
-                subtitle={`${formatTimestamp(item.finishedAt)} • ${formatDuration(item.startedAt, item.finishedAt)}`}
+                subtitle={`${formatTimestamp(item.finishedAt, language)} • ${formatDuration(item.startedAt, item.finishedAt)}`}
               />
             );
           }}

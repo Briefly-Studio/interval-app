@@ -102,33 +102,27 @@ Cognito:
 
 Do not hardcode deployment URLs, credentials, tokens, or secrets.
 
-## Current Unfinished Backend Task
+## Current Backend Task Status
 
-The historical DynamoDB owner partition was:
+Lambda source for the sync backend is stored in this repository at
+`backend/lambdas/sync-push/index.mjs` and `backend/lambdas/sync-pull/index.mjs`.
 
-- U#public
+Per-user partitioning (`U#<Cognito sub>`, replacing the historical `U#public`) is
+implemented in that source: both functions derive `sub` only from trusted authorizer
+claims (HTTP API JWT: `event.requestContext.authorizer.jwt.claims.sub`; REST API:
+`event.requestContext.authorizer.claims.sub`), never from the request body or query
+parameters, and no `U#public` references remain in the source.
 
-It must become:
+This confirms the source code, not the deployed behavior. Whether the Lambda code
+currently deployed to `IntervalSyncPush`/`IntervalSyncPull` matches this repository's
+source has not been verified here, since that would require inspecting live AWS
+resources. Do not assume the deployed functions match this source until that is
+checked separately.
 
-- U#<Cognito sub>
-
-The Cognito sub must be read from trusted authorizer claims.
-
-Possible event shapes:
-
-HTTP API JWT authorizer:
-
-event.requestContext.authorizer.jwt.claims.sub
-
-REST API Cognito authorizer:
-
-event.requestContext.authorizer.claims.sub
+The authenticated sync flow still needs to be validated end-to-end against the
+deployed backend.
 
 Never accept the user ID from the request body or query parameters.
-
-The authenticated sync flow still needs to be validated end-to-end.
-
-Do not assume per-user partitioning is complete.
 
 ## Current Known Technical Debt
 
@@ -138,8 +132,8 @@ Do not assume per-user partitioning is complete.
 - src/cloud/sync/meta.ts appears unused and duplicates device/cursor logic.
 - dev reset logic may leave orphaned per-deck card keys.
 - README and some Briefly naming are outdated.
-- Lambda source code is not yet stored in this repository.
 - AWS infrastructure is not yet managed through Infrastructure as Code.
+- Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.
 
 ## Engineering Rules
 

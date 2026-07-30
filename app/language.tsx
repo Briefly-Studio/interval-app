@@ -8,13 +8,16 @@ import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 import { colors, iconSizes, spacing, touchTarget, typography } from "../src/ui/theme";
 
-// English is the only real language today — this screen exists to establish the selection
-// model (System default vs. an explicit language) so adding a second language later is a
-// content change, not a UI change. No flags, no country ties: language and country are
-// deliberately decoupled per the localization spec.
-const OPTIONS: { value: LanguagePreference; labelKey: "settings.languageOptions.system" | "settings.languageOptions.english" }[] = [
+// English and Spanish are the supported languages today — System default, English, or an
+// explicit Español override. No flags, no country ties: language and country are deliberately
+// decoupled per the localization spec.
+const OPTIONS: {
+  value: LanguagePreference;
+  labelKey: "settings.languageOptions.system" | "settings.languageOptions.english" | "settings.languageOptions.espanol";
+}[] = [
   { value: "system", labelKey: "settings.languageOptions.system" },
   { value: "en", labelKey: "settings.languageOptions.english" },
+  { value: "es", labelKey: "settings.languageOptions.espanol" },
 ];
 
 export default function LanguageScreen() {
@@ -24,7 +27,7 @@ export default function LanguageScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
+        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
         <Text style={typography.title}>{t("settings.language")}</Text>
       </View>
 
