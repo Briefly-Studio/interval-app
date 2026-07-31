@@ -7,7 +7,7 @@ import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { useTranslation } from "../src/i18n";
-import { forceFullResyncPrep, resetLocalData } from "../src/storage/devReset";
+import { ForceResyncUnsyncedChangesError, forceFullResyncPrep, resetLocalData } from "../src/storage/devReset";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
@@ -72,7 +72,17 @@ export default function DevToolsScreen() {
               Alert.alert("Cloud resync is available only when signed in.");
               return;
             }
-            await forceFullResyncPrep(activeScope);
+            try {
+              await forceFullResyncPrep(activeScope);
+            } catch (error) {
+              if (error instanceof ForceResyncUnsyncedChangesError) {
+                // Local data was deliberately left untouched — never wiped without a confirmed
+                // sync first. See docs/sync-invariants.md invariant #14.
+                Alert.alert(t("devTools.forceResyncRefusedTitle"), t("devTools.forceResyncRefusedBody"));
+                return;
+              }
+              throw error;
+            }
             await SyncService.syncOnce();
             Alert.alert("Force Resync complete");
           }}

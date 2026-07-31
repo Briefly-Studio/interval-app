@@ -54,27 +54,39 @@ export const handler = async (event) => {
     ScanIndexForward: true,
   };
 
-  const out = await ddb.send(new QueryCommand(params));
-  const items = out.Items || [];
+  // Wrapped defensively (matching sync-push) so a transient DynamoDB failure returns a sanitized
+  // 500 rather than an unhandled Lambda error response that could leak internals through API
+  // Gateway's default error formatting.
+  try {
+    const out = await ddb.send(new QueryCommand(params));
+    const items = out.Items || [];
 
-  const changes = items.map((it) => ({
-    id: it.id,
-    entity: it.entity,
-    op: it.op,
-    record: it.record,
-    ts: it.ts,
-  }));
+    const changes = items.map((it) => ({
+      id: it.id,
+      entity: it.entity,
+      op: it.op,
+      record: it.record,
+      ts: it.ts,
+    }));
 
-  const nextCursor = items.length
-    ? items[items.length - 1].changeKey
-    : cursor ?? "";
+    const nextCursor = items.length
+      ? items[items.length - 1].changeKey
+      : cursor ?? "";
 
-  return {
-    statusCode: 200,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      cursor: nextCursor,
-      changes,
-    }),
-  };
+    return {
+      statusCode: 200,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cursor: nextCursor,
+        changes,
+      }),
+    };
+  } catch (e) {
+    console.log("[sync-pull] unhandled error:", e?.name || "UnknownError");
+    return {
+      statusCode: 500,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ok: false, error: "Unhandled server error" }),
+    };
+  }
 };

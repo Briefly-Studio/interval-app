@@ -564,6 +564,11 @@ const en = {
     reviewAgainButton: "Review again",
     backToDeckButton: "Back to deck",
   },
+  devTools: {
+    forceResyncRefusedTitle: "Can't reset yet",
+    forceResyncRefusedBody:
+      "Some local changes haven't been confirmed as synced. Nothing was reset, so your data is safe — try again once you're back online.",
+  },
 } as const;
 
 export default en;

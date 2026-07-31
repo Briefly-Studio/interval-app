@@ -559,6 +559,11 @@ const es = {
     reviewAgainButton: "Repasar de nuevo",
     backToDeckButton: "Volver al mazo",
   },
+  devTools: {
+    forceResyncRefusedTitle: "No se puede reiniciar todavía",
+    forceResyncRefusedBody:
+      "Algunos cambios locales no se han confirmado como sincronizados. No se reinició nada, así que tus datos están seguros — inténtalo de nuevo cuando vuelvas a tener conexión.",
+  },
 } as const;
 
 export default es;

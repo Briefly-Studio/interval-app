@@ -28,10 +28,29 @@ const toTime = (value: string | undefined) => {
   return Number.isFinite(t) ? t : 0;
 };
 
+const toRev = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+
+// The core conflict rule for every entity type: an incoming change is applied only if its
+// revision is strictly newer, or (equal revision) its updatedAt is not older. A strictly lower
+// incoming revision is never applied regardless of timestamp — this is what makes the model
+// revision-based rather than wall-clock-based, and is what protects against client clock skew.
+// See docs/sync-invariants.md for the full rationale. Deletes are not special-cased: a tombstone
+// is just another mutation that bumped rev, so it naturally wins or loses on the same terms as
+// any live edit.
+function incomingWins(existing: { rev?: number; updatedAt: string } | undefined, incomingRev: number, incomingTs: string): boolean {
+  if (!existing) return true;
+  const existingRev = toRev(existing.rev);
+  if (incomingRev !== existingRev) return incomingRev > existingRev;
+  return toTime(incomingTs) >= toTime(existing.updatedAt);
+}
+
 async function applyChanges(scope: WorkspaceScope, changes: Change[]): Promise<void> {
   if (changes.length === 0) return;
 
   const now = new Date().toISOString();
+  // Sorting by ts first is still useful so that, within one page, multiple changes to the SAME
+  // id are considered in a stable, deterministic order before incomingWins' rev comparison makes
+  // the final call — it does not by itself decide which change wins.
   const ordered = [...changes].sort((a, b) => toTime(a.ts) - toTime(b.ts));
 
   const deckChanges = ordered.filter((c) => c.entity === "deck");
@@ -45,7 +64,7 @@ async function applyChanges(scope: WorkspaceScope, changes: Change[]): Promise<v
     for (const ch of deckChanges) {
       const incoming = ch.record as DeckRecord;
       const existing = byId.get(ch.id);
-      if (existing && toTime(existing.updatedAt) >= toTime(ch.ts)) continue;
+      if (!incomingWins(existing, toRev(incoming.rev), ch.ts)) continue;
 
       if (ch.op === "delete") {
         const deletedAt = incoming.deletedAt ?? ch.ts;
@@ -86,7 +105,7 @@ async function applyChanges(scope: WorkspaceScope, changes: Change[]): Promise<v
       for (const ch of deckCardChanges) {
         const incoming = ch.record as CardRecord;
         const existing = byId.get(ch.id);
-        if (existing && toTime(existing.updatedAt) >= toTime(ch.ts)) continue;
+        if (!incomingWins(existing, toRev(incoming.rev), ch.ts)) continue;
 
         if (ch.op === "delete") {
           const deletedAt = incoming.deletedAt ?? ch.ts;
@@ -119,7 +138,7 @@ async function applyChanges(scope: WorkspaceScope, changes: Change[]): Promise<v
     for (const ch of sessionChanges) {
       const incoming = ch.record as SessionRecord;
       const existing = byId.get(ch.id);
-      if (existing && toTime(existing.updatedAt) >= toTime(ch.ts)) continue;
+      if (!incomingWins(existing, toRev(incoming.rev), ch.ts)) continue;
 
       if (ch.op === "delete") {
         const deletedAt = incoming.deletedAt ?? ch.ts;
@@ -189,20 +208,28 @@ async function collectDirty(scope: WorkspaceScope): Promise<Change[]> {
   return changes;
 }
 
+// Keyed by id -> the exact rev that was included in the outgoing push payload for that record.
+// A record only becomes clean if its CURRENT stored rev still matches — if the user edited it
+// again (bumping rev) while this push was in flight, the stored rev has already moved past what
+// was acknowledged, so it must stay dirty and be retried on the next sync. See invariants #9/#10
+// in docs/sync-invariants.md.
+type AcknowledgedRevs = Map<string, number>;
+
 async function markClean(
   scope: WorkspaceScope,
   entity: EntityType,
-  ids: string[]
+  acknowledged: AcknowledgedRevs
 ): Promise<void> {
-  if (ids.length === 0) return;
+  if (acknowledged.size === 0) return;
   const now = new Date().toISOString();
-  const idSet = new Set(ids);
 
   if (entity === "deck") {
     const decks = await getDecksAll(scope);
-    const updated = decks.map((deck) =>
-      idSet.has(deck.id) ? { ...deck, dirty: false, lastSyncedAt: now } : deck
-    );
+    const updated = decks.map((deck) => {
+      const ackedRev = acknowledged.get(deck.id);
+      if (ackedRev === undefined || toRev(deck.rev) !== ackedRev) return deck;
+      return { ...deck, dirty: false, lastSyncedAt: now };
+    });
     await setDecks(scope, updated);
     return;
   }
@@ -211,9 +238,11 @@ async function markClean(
     const decks = await getDecksAll(scope);
     for (const deck of decks) {
       const cards = await getCardsAll(scope, deck.id);
-      const updated = cards.map((card) =>
-        idSet.has(card.id) ? { ...card, dirty: false, lastSyncedAt: now } : card
-      );
+      const updated = cards.map((card) => {
+        const ackedRev = acknowledged.get(card.id);
+        if (ackedRev === undefined || toRev(card.rev) !== ackedRev) return card;
+        return { ...card, dirty: false, lastSyncedAt: now };
+      });
       await setCards(scope, deck.id, updated);
     }
     return;
@@ -221,9 +250,11 @@ async function markClean(
 
   // entity === "session"
   const sessions = await getSessions(scope);
-  const updated = sessions.map((session) =>
-    idSet.has(session.id) ? { ...session, dirty: false, lastSyncedAt: now } : session
-  );
+  const updated = sessions.map((session) => {
+    const ackedRev = acknowledged.get(session.id);
+    if (ackedRev === undefined || toRev(session.rev) !== ackedRev) return session;
+    return { ...session, dirty: false, lastSyncedAt: now };
+  });
   await setSessions(scope, updated);
 }
 
@@ -263,33 +294,42 @@ async function runSync(): Promise<void> {
   setPendingDirtyCount(outgoing.length);
   markSyncStarted();
 
-  let acceptedCount = 0;
   let hasRejectedRecords = false;
   if (outgoing.length > 0) {
     const pushJson = await pushChanges(accessToken, { deviceId, changes: outgoing });
+
+    // Revalidate identity before applying any part of the response — if the workspace changed
+    // while the push request was in flight, this run's acknowledgment no longer belongs to the
+    // now-inactive scope. The captured `scope` variable still points at the original workspace's
+    // storage keys, so this is defense-in-depth (nothing would cross into the new workspace's
+    // keys either way) rather than the primary protection, but it keeps push and pull handled
+    // consistently and avoids doing pointless writes for a workspace nothing is looking at.
+    const scopeAfterPush = await AuthService.getActiveScope();
+    if (!sameScope(scopeAfterPush, scope)) {
+      console.warn("[sync] aborting markClean: active workspace changed mid-push");
+      return;
+    }
+
     const accepted = Array.isArray(pushJson.accepted) ? pushJson.accepted : [];
     const rejected = Array.isArray(pushJson.rejected) ? pushJson.rejected : [];
-    acceptedCount = accepted.length;
     hasRejectedRecords = rejected.length > 0;
 
     if (accepted.length > 0) {
       const acceptedSet = new Set(accepted);
 
-      const deckIds = outgoing
-        .filter((c) => c.entity === "deck" && acceptedSet.has(c.id))
-        .map((c) => c.id);
+      const acknowledgedFor = (entity: EntityType): AcknowledgedRevs => {
+        const revs: AcknowledgedRevs = new Map();
+        for (const c of outgoing) {
+          if (c.entity === entity && acceptedSet.has(c.id)) {
+            revs.set(c.id, toRev((c.record as { rev?: number }).rev));
+          }
+        }
+        return revs;
+      };
 
-      const cardIds = outgoing
-        .filter((c) => c.entity === "card" && acceptedSet.has(c.id))
-        .map((c) => c.id);
-
-      const sessionIds = outgoing
-        .filter((c) => c.entity === "session" && acceptedSet.has(c.id))
-        .map((c) => c.id);
-
-      await markClean(scope, "deck", deckIds);
-      await markClean(scope, "card", cardIds);
-      await markClean(scope, "session", sessionIds);
+      await markClean(scope, "deck", acknowledgedFor("deck"));
+      await markClean(scope, "card", acknowledgedFor("card"));
+      await markClean(scope, "session", acknowledgedFor("session"));
     }
   }
 
@@ -313,10 +353,12 @@ async function runSync(): Promise<void> {
   await applyChanges(scope, pullJson.changes ?? []);
   if (pullJson.cursor) await setSyncCursor(scope, pullJson.cursor);
 
-  // Rejected/not-yet-accepted outgoing changes are still dirty; anything pulled and applied is
-  // always written back with dirty:false (see applyChanges above), so this arithmetic reflects
-  // the true remaining count without a second full storage scan.
-  setPendingDirtyCount(Math.max(0, outgoing.length - acceptedCount));
+  // Recomputed by rescanning storage (same scan collectDirty always does) rather than derived
+  // from push-response arithmetic — a rejected record can later be superseded by a newer pulled
+  // change (applyChanges always writes dirty:false for anything it applies), which would make a
+  // fixed "outgoing.length - acceptedCount" subtraction drift from what's actually still dirty.
+  // See invariant #15 in docs/sync-invariants.md.
+  setPendingDirtyCount((await collectDirty(scope)).length);
 
   // A non-empty PushResponse.rejected means the server explicitly refused some records — this
   // must never read as "Synced". Rejected records were never added to markClean's id lists

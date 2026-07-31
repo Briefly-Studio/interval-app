@@ -109,7 +109,16 @@ export const handler = async (event) => {
         // duplicates are fine
       }
 
-      // 2) Upsert snapshot into Records
+      // 2) Upsert snapshot into Records — conditional on the incoming revision not being older
+      // than whatever is already stored. This is the server-side half of the sync system's
+      // conflict model (see docs/sync-invariants.md, invariant #5): without it, a stale device
+      // pushing an old revision could silently overwrite a newer one another device already
+      // committed. `record.rev` is a client-maintained integer that increments on every local
+      // edit/delete/restore; a missing/non-numeric rev is treated as 0 (oldest possible), never
+      // as "no rev" (which would bypass the check). Accepting incomingRev === storedRev keeps a
+      // retried identical push idempotent rather than spuriously rejecting it.
+      const incomingRev = typeof record?.rev === "number" && Number.isFinite(record.rev) ? record.rev : 0;
+
       try {
         await ddb.send(
           new UpdateCommand({
@@ -124,6 +133,8 @@ export const handler = async (event) => {
                   #lastDeviceId = :deviceId,
                   #lastChangeKey = :changeKey
             `,
+            ConditionExpression:
+              "attribute_not_exists(PK) OR attribute_not_exists(#record) OR :incomingRev >= #record.#rev",
             ExpressionAttributeNames: {
               "#entity": "entity",
               "#id": "id",
@@ -132,6 +143,7 @@ export const handler = async (event) => {
               "#record": "record",
               "#lastDeviceId": "lastDeviceId",
               "#lastChangeKey": "lastChangeKey",
+              "#rev": "rev",
             },
             ExpressionAttributeValues: {
               ":entity": entity,
@@ -141,12 +153,17 @@ export const handler = async (event) => {
               ":record": record,
               ":deviceId": deviceId,
               ":changeKey": changeKey,
+              ":incomingRev": incomingRev,
             },
           })
         );
 
         accepted.push(id);
       } catch (e) {
+        // A ConditionalCheckFailedException here specifically means "a newer revision is already
+        // stored" — the client's existing rejected-record handling (stays dirty, retried after
+        // the client has pulled and caught up) already covers this correctly; no special-casing
+        // needed beyond letting it fall into the same rejection path as any other write failure.
         const code = e?.name || "UpdateItem_failed";
         rejected.push(id);
         reasons[id] = code;
