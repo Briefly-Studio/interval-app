@@ -1,5 +1,6 @@
 import * as Linking from "expo-linking";
 import { Stack, useRouter } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
@@ -10,15 +11,38 @@ import { getSyncState } from "../src/cloud/sync/syncState";
 import { initSyncState } from "../src/cloud/sync/useSyncState";
 import { handleIncomingFile } from "../src/domain/openFileHandler";
 import { initI18n } from "../src/i18n";
+import { BRAND_STARTUP_TEAL, BrandStartup } from "../src/ui/BrandStartup";
 
+// Held here (module scope, not inside the component) so it runs as early as possible — before
+// the native splash would otherwise auto-hide on its own default timing. Failure is expected and
+// safe to ignore (e.g. Fast Refresh calling this again after the splash already hid).
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
-const APP_BG = "#2FA4A3";
+// How long the static BrandStartup bridge stays visible after the native splash hides, before
+// handing off to real app content. Deliberately brief — this is a handoff, not a branding delay;
+// see BrandStartup.tsx for why the value is *not* tied to sync/auth readiness.
+const BRAND_STARTUP_HOLD_MS = 350;
+
+const APP_BG = BRAND_STARTUP_TEAL;
 
 export default function Layout() {
 
   const router = useRouter();
   const [importing, setImporting] = useState(false);
+  const [showBrandStartup, setShowBrandStartup] = useState(true);
   const didSyncRef = useRef(false);
+
+  // Deterministic handoff, not a readiness check: by the time this effect fires, React has
+  // already committed the BrandStartup layer (same #0F7A75 background + centered mark as the
+  // native splash), so hiding the native splash here cannot expose a blank or mismatched frame.
+  // This intentionally does not wait on i18n, sync, or auth — see BrandStartup.tsx and this
+  // batch's handoff notes for why tying startup branding to network/auth readiness is out of
+  // scope here.
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
+    const timer = setTimeout(() => setShowBrandStartup(false), BRAND_STARTUP_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   const extractFileUri = (url: string): string | null => {
     const decoded = decodeURIComponent(url);
@@ -132,6 +156,7 @@ export default function Layout() {
           <Text style={styles.importText}>Importing deck…</Text>
         </View>
       )}
+      {showBrandStartup && <BrandStartup />}
     </View>
   );
 }
