@@ -1,3 +1,27 @@
+## v3.0-dev — Manual QA record: mark-to-wordmark startup animation (2026-08-03)
+
+**Manual iOS Simulator QA — performed 2026-08-03.** Not an automated test; no automated test
+suite exists in this repository. Verified via a real native build (`npx expo run:ios`), covering
+the animated startup handoff (`BrandStartup`) that replaces the static bridge from the previous
+batch: the native teal splash mark translating left into the branded "i" of the "Interval"
+wordmark, with the remaining "nterval" letters revealing alongside it.
+
+Founder live QA completed and approved. Confirmed:
+
+- No visible white flash between the native splash and the React Native startup layer
+- Native teal splash transitioned smoothly into the React Native startup layer
+- The standalone Interval mark remained visually continuous throughout (no swap/disappear)
+- The mark moved smoothly and deliberately left, not abruptly
+- The remaining "nterval" letters revealed progressively, not all at once
+- The movement felt organic and appropriately slow (not rushed, not sluggish)
+- Completed wordmark spacing and legibility looked correct
+- Final hold and fade into the app felt intentional
+- Existing product functionality remained intact: account restoration, sync, Recently Deleted,
+  navigation, deck creation, and card creation
+
+Not covered by this pass: Android, multiple device sizes, dark system appearance, reduced-motion
+setting. See the corresponding batch report for full scope and known remaining risks.
+
 ## v3.0-dev — Manual QA record: native identity + static startup handoff (2026-08-02)
 
 **Manual iOS Simulator QA — performed 2026-08-02.** Not an automated test; no automated test

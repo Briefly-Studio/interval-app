@@ -18,11 +18,6 @@ import { BRAND_STARTUP_TEAL, BrandStartup } from "../src/ui/BrandStartup";
 // safe to ignore (e.g. Fast Refresh calling this again after the splash already hid).
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// How long the static BrandStartup bridge stays visible after the native splash hides, before
-// handing off to real app content. Deliberately brief — this is a handoff, not a branding delay;
-// see BrandStartup.tsx for why the value is *not* tied to sync/auth readiness.
-const BRAND_STARTUP_HOLD_MS = 350;
-
 const APP_BG = BRAND_STARTUP_TEAL;
 
 export default function Layout() {
@@ -32,16 +27,21 @@ export default function Layout() {
   const [showBrandStartup, setShowBrandStartup] = useState(true);
   const didSyncRef = useRef(false);
 
-  // Deterministic handoff, not a readiness check: by the time this effect fires, React has
-  // already committed the BrandStartup layer (same #0F7A75 background + centered mark as the
-  // native splash), so hiding the native splash here cannot expose a blank or mismatched frame.
-  // This intentionally does not wait on i18n, sync, or auth — see BrandStartup.tsx and this
+  // The native splash is hidden only from BrandStartup's onReady callback (fired from that
+  // layer's own onLayout, with a bounded fallback) — never from a bare mount effect. A previous
+  // cut called SplashScreen.hideAsync() as soon as this component's own render committed, which
+  // is a JS-side signal only; it does not guarantee the native UI thread has actually painted
+  // BrandStartup's teal background + mark before the bridge call to hide the native splash
+  // resolves. That gap was the root cause of a white-flash: dismissing the native splash could
+  // briefly reveal the native root view's own default background before BrandStartup's first
+  // real frame had painted. onLayout is a native-confirmed signal that BrandStartup's view
+  // genuinely has real, laid-out bounds, so hiding the native splash there cannot expose that
+  // gap. This intentionally does not wait on i18n, sync, or auth — see BrandStartup.tsx and this
   // batch's handoff notes for why tying startup branding to network/auth readiness is out of
-  // scope here.
-  useEffect(() => {
+  // scope here. BrandStartup owns its own full motion sequence and timing (including the
+  // reduced-motion variant and stuck-overlay backstops).
+  const hideNativeSplash = useCallback(() => {
     SplashScreen.hideAsync().catch(() => {});
-    const timer = setTimeout(() => setShowBrandStartup(false), BRAND_STARTUP_HOLD_MS);
-    return () => clearTimeout(timer);
   }, []);
 
   const extractFileUri = (url: string): string | null => {
@@ -156,7 +156,9 @@ export default function Layout() {
           <Text style={styles.importText}>Importing deck…</Text>
         </View>
       )}
-      {showBrandStartup && <BrandStartup />}
+      {showBrandStartup && (
+        <BrandStartup onReady={hideNativeSplash} onFinished={() => setShowBrandStartup(false)} />
+      )}
     </View>
   );
 }
