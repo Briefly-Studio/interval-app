@@ -121,6 +121,20 @@ export default function DevToolsScreen() {
           }}
         />
       </Card>
+
+      <Card style={styles.toolCard}>
+        <Text style={typography.subheading}>Theme Lab</Text>
+        <Text style={typography.secondary}>
+          Visual-only exploration of Light/Dark/Warm appearance concepts. Development build only —
+          not connected to real data, storage, or account settings.
+        </Text>
+        <Button
+          label="Open Theme Lab"
+          variant="secondary"
+          fullWidth
+          onPress={() => router.push({ pathname: "/theme-lab" as any })}
+        />
+      </Card>
     </Screen>
   );
 }
