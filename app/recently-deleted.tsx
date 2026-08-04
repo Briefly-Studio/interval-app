@@ -20,7 +20,7 @@ import { EmptyState } from "../src/ui/EmptyState";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 import { SecondaryAction } from "../src/ui/SecondaryAction";
-import { spacing, typography } from "../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 const TRASH_DAYS = 30;
 
@@ -59,6 +59,7 @@ function withinCutoff(deletedAt: string | undefined, cutoff: number, showExpired
 export default function RecentlyDeletedScreen() {
   const router = useRouter();
   const { t, plural, language } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const [decks, setDecksState] = useState<DeckRecord[]>([]);
   const [cardEntries, setCardEntries] = useState<DeletedCardEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -336,16 +337,16 @@ export default function RecentlyDeletedScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={typography.title}>{t("recentlyDeleted.title")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("recentlyDeleted.title")}</Text>
       </View>
-      <Text style={typography.secondary}>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>
         {showExpired ? t("recentlyDeleted.showingAllNotice") : t("recentlyDeleted.hiddenExpiredNotice")}
       </Text>
 
       {__DEV__ && (
-        <View style={styles.actionsRow}>
+        <View style={[styles.actionsRow, { gap: spacing.sm }]}>
           <SecondaryAction
             icon={showExpired ? "eye-off-outline" : "eye-outline"}
             label={showExpired ? t("recentlyDeleted.hideExpired") : t("recentlyDeleted.showExpired")}
@@ -357,7 +358,7 @@ export default function RecentlyDeletedScreen() {
       <SectionList
         sections={sections}
         style={styles.flex1}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { gap: spacing.sm, paddingBottom: spacing.xl }]}
         stickySectionHeadersEnabled={false}
         keyExtractor={(item, index) => {
           if (item.kind === "deck") return `deck-${item.deck.id}`;
@@ -365,7 +366,13 @@ export default function RecentlyDeletedScreen() {
           return `${item.kind}-${index}`;
         }}
         renderSectionHeader={({ section }) => (
-          <Text style={styles.sectionLabel} accessibilityRole="header">
+          <Text
+            style={[
+              typography.label,
+              { color: colors.textPrimary, marginTop: spacing.md, marginBottom: spacing.xs },
+            ]}
+            accessibilityRole="header"
+          >
             {loaded ? `${section.title} (${section.count})` : section.title}
           </Text>
         )}
@@ -392,12 +399,14 @@ export default function RecentlyDeletedScreen() {
             const deck = item.deck;
             const isRestoring = restoringDeckIds.has(deck.id);
             return (
-              <Card style={styles.deletedRow}>
+              <Card style={[styles.deletedRow, { gap: spacing.sm }]}>
                 <View style={styles.flex1}>
-                  <Text style={typography.bodyMedium} numberOfLines={2}>
+                  <Text style={[typography.bodyMedium, { color: colors.textPrimary }]} numberOfLines={2}>
                     {deck.title}
                   </Text>
-                  <Text style={typography.caption}>{formatDeletedMeta(deck.deletedAt)}</Text>
+                  <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                    {formatDeletedMeta(deck.deletedAt)}
+                  </Text>
                 </View>
                 <Button
                   label={isRestoring ? t("recentlyDeleted.restoring") : t("recentlyDeleted.restore")}
@@ -419,17 +428,19 @@ export default function RecentlyDeletedScreen() {
           const isRestoring = restoringCardIds.has(entry.card.id);
           const cardLabel = entry.card.front.trim() || t("recentlyDeleted.untitledCard");
           return (
-            <Card style={styles.deletedRow}>
+            <Card style={[styles.deletedRow, { gap: spacing.sm }]}>
               <View style={styles.flex1}>
-                <Text style={typography.bodyMedium} numberOfLines={2}>
+                <Text style={[typography.bodyMedium, { color: colors.textPrimary }]} numberOfLines={2}>
                   {cardLabel}
                 </Text>
-                <Text style={typography.caption} numberOfLines={1}>
+                <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
                   {entry.deckDeleted
                     ? t("recentlyDeleted.cardInDeletedDeck", { deckTitle: entry.deckTitle })
                     : t("recentlyDeleted.cardInDeck", { deckTitle: entry.deckTitle })}
                 </Text>
-                <Text style={typography.caption}>{formatDeletedMeta(entry.card.deletedAt)}</Text>
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                  {formatDeletedMeta(entry.card.deletedAt)}
+                </Text>
               </View>
               <Button
                 label={isRestoring ? t("recentlyDeleted.restoring") : t("recentlyDeleted.restore")}
@@ -452,15 +463,13 @@ export default function RecentlyDeletedScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  actionsRow: { flexDirection: "row", gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
+  actionsRow: { flexDirection: "row" },
   flex1: { flex: 1 },
-  list: { gap: spacing.sm, paddingBottom: spacing.xl },
-  sectionLabel: { ...typography.label, marginTop: spacing.md, marginBottom: spacing.xs },
+  list: {},
   deletedRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: spacing.sm,
   },
 });

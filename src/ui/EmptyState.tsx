@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { colors, iconSizes, spacing, typography } from "./theme";
+import { useTheme } from "@/src/theme";
 
 type EmptyStateProps = {
   icon?: ComponentProps<typeof Ionicons>["name"];
@@ -12,40 +12,29 @@ type EmptyStateProps = {
 };
 
 // Shared empty-state layout: icon mark, title, optional description, and an optional action
-// slot (typically a Button) below. Not used by the auth screens in this batch — built now as
-// part of the shared foundation for the decks-home / list-screen batch that follows.
+// slot (typically a Button) below.
 export function EmptyState({ icon, title, description, children }: EmptyStateProps) {
+  const { colors, iconSizes, spacing, typography } = useTheme();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { gap: spacing.sm, paddingVertical: spacing.xl }]}>
       {icon ? (
-        <View style={styles.iconWrap}>
-          <Ionicons name={icon} size={iconSizes.lg} color={colors.accentStrong} />
+        <View style={[styles.iconWrap, { backgroundColor: colors.accentSubtle, marginBottom: spacing.xs }]}>
+          <Ionicons name={icon} size={iconSizes.lg} color={colors.accent} />
         </View>
       ) : null}
-      <Text style={styles.title}>{title}</Text>
-      {description ? <Text style={styles.description}>{description}</Text> : null}
-      {children ? <View style={styles.actions}>{children}</View> : null}
+      <Text style={[typography.heading, styles.title, { color: colors.textPrimary }]}>{title}</Text>
+      {description ? (
+        <Text style={[typography.secondary, styles.description, { color: colors.textSecondary }]}>{description}</Text>
+      ) : null}
+      {children ? <View style={[styles.actions, { marginTop: spacing.md, gap: spacing.sm }]}>{children}</View> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.xl,
-  },
-  iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.accentMuted,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.xs,
-  },
-  title: { ...typography.heading, textAlign: "center" },
-  description: { ...typography.secondary, textAlign: "center", maxWidth: 280 },
-  actions: { marginTop: spacing.md, gap: spacing.sm, width: "100%" },
+  container: { alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
+  title: { textAlign: "center" },
+  description: { textAlign: "center", maxWidth: 280 },
+  actions: { width: "100%" },
 });

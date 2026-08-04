@@ -7,11 +7,11 @@ import { formatDiagnosticSummary, gatherDiagnosticSummary } from "../src/domain/
 import { contactSupport } from "../src/domain/supportContact";
 import { useTranslation } from "../src/i18n";
 import type { TranslateFn } from "../src/i18n/translateFn";
+import { useTheme } from "@/src/theme";
 import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 import { SettingsRow } from "../src/ui/SettingsRow";
-import { colors, spacing, typography } from "../src/ui/theme";
 
 // Three actions below (bug report, suggestion, support request) all route through the same
 // contactSupport() from src/domain/supportContact.ts, differing only in the localized
@@ -34,6 +34,7 @@ function contactRequestFor(t: TranslateFn, kind: ContactKind): { subject: string
 export default function HelpFeedbackScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const [pendingAction, setPendingAction] = useState<ContactKind | "diagnostics" | null>(null);
 
   const runContactAction = async (kind: ContactKind) => {
@@ -72,26 +73,26 @@ export default function HelpFeedbackScreen() {
 
   return (
     <Screen scroll>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={typography.title}>{t("helpFeedback.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("helpFeedback.screenTitle")}</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t("helpFeedback.sections.contact")}</Text>
+      <View style={[styles.section, { gap: spacing.sm }]}>
+        <Text style={[typography.label, { color: colors.textPrimary }]}>{t("helpFeedback.sections.contact")}</Text>
         <Card style={styles.rowGroup}>
           <SettingsRow
             label={t("helpFeedback.reportBug")}
             loading={pendingAction === "bug"}
             onPress={() => runContactAction("bug")}
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <SettingsRow
             label={t("helpFeedback.suggestImprovement")}
             loading={pendingAction === "suggestion"}
             onPress={() => runContactAction("suggestion")}
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <SettingsRow
             label={t("helpFeedback.contactSupport")}
             loading={pendingAction === "support"}
@@ -100,8 +101,8 @@ export default function HelpFeedbackScreen() {
         </Card>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t("helpFeedback.sections.diagnostics")}</Text>
+      <View style={[styles.section, { gap: spacing.sm }]}>
+        <Text style={[typography.label, { color: colors.textPrimary }]}>{t("helpFeedback.sections.diagnostics")}</Text>
         <Card style={styles.rowGroup}>
           <SettingsRow
             label={t("helpFeedback.copyDiagnosticSummary")}
@@ -112,14 +113,14 @@ export default function HelpFeedbackScreen() {
         </Card>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t("helpFeedback.sections.about")}</Text>
+      <View style={[styles.section, { gap: spacing.sm }]}>
+        <Text style={[typography.label, { color: colors.textPrimary }]}>{t("helpFeedback.sections.about")}</Text>
         <Card style={styles.rowGroup}>
           <SettingsRow
             label={t("helpFeedback.viewBetaNotice")}
             onPress={() => router.push({ pathname: "/beta-notice" as any })}
           />
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <SettingsRow
             label={t("helpFeedback.viewPrivacyNotice")}
             onPress={() => router.push({ pathname: "/privacy-notice" as any })}
@@ -131,9 +132,8 @@ export default function HelpFeedbackScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  section: { gap: spacing.sm },
-  sectionLabel: { ...typography.label },
+  header: { flexDirection: "row", alignItems: "center" },
+  section: {},
   rowGroup: { gap: 0 },
-  divider: { height: 1, backgroundColor: colors.border },
+  divider: { height: 1 },
 });

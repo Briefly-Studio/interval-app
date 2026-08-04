@@ -1,15 +1,15 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { getAuthDiagnosticCode, mapAuthError } from "../src/auth/authErrors";
 import { useTranslation } from "../src/i18n";
+import { useTheme } from "@/src/theme";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { Screen } from "../src/ui/Screen";
 import { TextField } from "../src/ui/TextField";
-import { colors, spacing, typography } from "../src/ui/theme";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_CODE_LENGTH = 6;
@@ -17,6 +17,7 @@ const MIN_CODE_LENGTH = 6;
 export default function ConfirmSignUpScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const params = useLocalSearchParams<{ email?: string }>();
   const initialEmail = params.email?.trim();
   const [email, setEmail] = useState(initialEmail ?? "");
@@ -46,8 +47,8 @@ export default function ConfirmSignUpScreen() {
 
   return (
     <Screen scroll>
-      <Text style={typography.title}>{t("auth.confirmSignUp.title")}</Text>
-      <Text style={typography.secondary}>
+      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("auth.confirmSignUp.title")}</Text>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>
         {initialEmail
           ? t("auth.confirmSignUp.subtitleWithEmail", { email: initialEmail })
           : t("auth.confirmSignUp.subtitleGeneric")}
@@ -73,7 +74,7 @@ export default function ConfirmSignUpScreen() {
           keyboardType="number-pad"
           editable={!loading}
         />
-        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+        {errorText ? <Text style={[typography.caption, { color: colors.danger }]}>{errorText}</Text> : null}
       </Card>
 
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -96,7 +97,3 @@ export default function ConfirmSignUpScreen() {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  errorText: { ...typography.caption, color: colors.danger },
-});

@@ -12,11 +12,12 @@ import { DifficultySelector } from "../../../src/ui/DifficultySelector";
 import { IconButton } from "../../../src/ui/IconButton";
 import { Screen } from "../../../src/ui/Screen";
 import { TextField } from "../../../src/ui/TextField";
-import { spacing, typography } from "../../../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 export default function AddCardScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
 
   const params = useLocalSearchParams();
   const idParam = params.id;
@@ -68,17 +69,17 @@ export default function AddCardScreen() {
 
   return (
     <Screen scroll>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton
           name="chevron-back"
           accessibilityLabel={t("common.cancel")}
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={typography.title}>{t("addCard.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("addCard.screenTitle")}</Text>
       </View>
 
-      <Card style={styles.formCard}>
+      <Card style={[styles.formCard, { gap: spacing.md }]}>
         <TextField
           label={t("addCard.frontLabel")}
           value={front}
@@ -101,8 +102,8 @@ export default function AddCardScreen() {
         />
       </Card>
 
-      <View style={styles.difficultySection}>
-        <Text style={typography.label}>{t("addCard.difficultyLabel")}</Text>
+      <View style={[styles.difficultySection, { gap: spacing.xs }]}>
+        <Text style={[typography.label, { color: colors.textPrimary }]}>{t("addCard.difficultyLabel")}</Text>
         <DifficultySelector value={difficulty} onChange={setDifficulty} />
       </View>
 
@@ -119,7 +120,7 @@ export default function AddCardScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  formCard: { gap: spacing.md },
-  difficultySection: { gap: spacing.xs },
+  header: { flexDirection: "row", alignItems: "center" },
+  formCard: {},
+  difficultySection: {},
 });

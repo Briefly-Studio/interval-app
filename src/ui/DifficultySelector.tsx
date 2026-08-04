@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useTranslation } from "../i18n";
 import type { Difficulty } from "../models/card";
-import { colors, radii, touchTarget, typography } from "./theme";
+import { useTheme } from "@/src/theme";
 
 type DifficultySelectorProps = {
   value: Difficulty;
@@ -24,8 +24,9 @@ const LABEL_KEYS: Record<Difficulty, "deckDetail.difficultyEasy" | "deckDetail.d
 // Stores/reads the exact same Difficulty values as before — no new levels, no scheduling changes.
 export function DifficultySelector({ value, onChange }: DifficultySelectorProps) {
   const { t } = useTranslation();
+  const { colors, radii, touchTarget, typography } = useTheme();
   return (
-    <View style={styles.row} accessibilityRole="radiogroup">
+    <View style={[styles.row, { borderRadius: radii.md, borderColor: colors.border }]} accessibilityRole="radiogroup">
       {OPTIONS.map((option) => {
         const isActive = value === option;
         const label = t(LABEL_KEYS[option]);
@@ -36,9 +37,20 @@ export function DifficultySelector({ value, onChange }: DifficultySelectorProps)
             accessibilityRole="radio"
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={label}
-            style={[styles.segment, isActive && styles.segmentActive]}
+            style={[
+              styles.segment,
+              { minHeight: touchTarget.min, backgroundColor: isActive ? colors.accentSubtle : colors.surface },
+            ]}
           >
-            <Text style={[styles.label, isActive && styles.labelActive]}>{label}</Text>
+            <Text
+              style={[
+                typography.bodyMedium,
+                { color: isActive ? colors.accent : colors.textSecondary },
+                isActive && styles.labelActive,
+              ]}
+            >
+              {label}
+            </Text>
           </Pressable>
         );
       })}
@@ -47,21 +59,7 @@ export function DifficultySelector({ value, onChange }: DifficultySelectorProps)
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
-  },
-  segment: {
-    flex: 1,
-    minHeight: touchTarget.min,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface,
-  },
-  segmentActive: { backgroundColor: colors.accentMuted },
-  label: { ...typography.bodyMedium, color: colors.textSecondary },
-  labelActive: { color: colors.accentStrong, fontWeight: "700" },
+  row: { flexDirection: "row", borderWidth: 1, overflow: "hidden" },
+  segment: { flex: 1, alignItems: "center", justifyContent: "center" },
+  labelActive: { fontWeight: "700" },
 });

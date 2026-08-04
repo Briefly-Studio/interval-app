@@ -15,11 +15,12 @@ import { FlashcardSurface } from "../../../src/ui/FlashcardSurface";
 import { ProgressBar } from "../../../src/ui/ProgressBar";
 import { Screen } from "../../../src/ui/Screen";
 import { StudyHeader } from "../../../src/ui/StudyHeader";
-import { typography } from "../../../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 export default function ReviewScreen() {
   const router = useRouter();
   const { t, plural } = useTranslation();
+  const { colors, typography } = useTheme();
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -136,7 +137,7 @@ export default function ReviewScreen() {
   if (!loaded) {
     return (
       <Screen>
-        <Text style={typography.secondary}>{t("review.loading")}</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("review.loading")}</Text>
       </Screen>
     );
   }

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 
 import { Card } from "./Card";
-import { spacing, typography } from "./theme";
+import { useTheme } from "@/src/theme";
 import type { DeckRecord } from "../models/deck";
 
 type DeckCardProps = {
@@ -14,6 +14,7 @@ type DeckCardProps = {
 // fabricated. Long-press opens the existing rename/delete action sheet, unchanged from before
 // this redesign.
 export function DeckCard({ deck, onPress, onLongPress }: DeckCardProps) {
+  const { colors, spacing, typography } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -23,11 +24,11 @@ export function DeckCard({ deck, onPress, onLongPress }: DeckCardProps) {
       accessibilityLabel={`${deck.title}. Double tap to open. Long press for rename or delete options.`}
       style={({ pressed }) => [pressed && styles.pressed]}
     >
-      <Card style={styles.card}>
-        <Text style={typography.subheading} numberOfLines={2}>
+      <Card style={{ gap: spacing.xs }}>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]} numberOfLines={2}>
           {deck.title}
         </Text>
-        <Text style={typography.caption}>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>
           Created {new Date(deck.createdAt).toLocaleDateString()}
         </Text>
       </Card>
@@ -36,6 +37,5 @@ export function DeckCard({ deck, onPress, onLongPress }: DeckCardProps) {
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.xs },
   pressed: { opacity: 0.85 },
 });

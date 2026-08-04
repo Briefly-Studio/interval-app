@@ -2,7 +2,7 @@ import { useState } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 
 import { IconButton } from "./IconButton";
-import { colors, radii, spacing, typography, touchTarget } from "./theme";
+import { useTheme } from "@/src/theme";
 
 type TextFieldProps = Omit<TextInputProps, "style"> & {
   label?: string;
@@ -12,26 +12,37 @@ type TextFieldProps = Omit<TextInputProps, "style"> & {
 };
 
 export function TextField({ label, error, isPassword, ...inputProps }: TextFieldProps) {
+  const { colors, radii, spacing, typography, touchTarget } = useTheme();
   const [revealed, setRevealed] = useState(false);
   const isMultiline = !!inputProps.multiline;
 
   return (
-    <View style={styles.container}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+    <View style={[styles.container, { gap: spacing.xs }]}>
+      {label ? <Text style={[typography.label, { color: colors.textSecondary }]}>{label}</Text> : null}
       <View
         style={[
           styles.inputRow,
-          !isPassword && styles.inputRowNoAccessory,
-          isMultiline && styles.inputRowMultiline,
-          error && styles.inputRowError,
+          {
+            borderColor: error ? colors.danger : colors.inputBorder,
+            backgroundColor: colors.inputBackground,
+            borderRadius: radii.md,
+            paddingLeft: spacing.md,
+            paddingRight: isPassword ? spacing.xs : spacing.md,
+            minHeight: touchTarget.min,
+          },
+          isMultiline && { alignItems: "flex-start", minHeight: 96, paddingVertical: spacing.sm },
         ]}
       >
         <TextInput
           {...inputProps}
           secureTextEntry={isPassword ? !revealed : inputProps.secureTextEntry}
-          placeholderTextColor={colors.textPlaceholder}
+          placeholderTextColor={colors.placeholder}
           textAlignVertical={isMultiline ? "top" : inputProps.textAlignVertical}
-          style={[styles.input, isMultiline && styles.inputMultiline]}
+          style={[
+            styles.input,
+            { color: colors.textPrimary, paddingVertical: spacing.sm },
+            isMultiline && styles.inputMultiline,
+          ]}
         />
         {isPassword && (
           <IconButton
@@ -43,34 +54,15 @@ export function TextField({ label, error, isPassword, ...inputProps }: TextField
           />
         )}
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[typography.caption, { color: colors.danger }]}>{error}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { gap: spacing.xs },
-  label: { ...typography.label },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-    minHeight: touchTarget.min,
-  },
-  inputRowNoAccessory: { paddingRight: spacing.md },
-  inputRowMultiline: { alignItems: "flex-start", minHeight: 96, paddingVertical: spacing.sm },
-  inputRowError: { borderColor: colors.danger },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.textPrimary,
-    paddingVertical: spacing.sm,
-  },
+  container: {},
+  inputRow: { flexDirection: "row", alignItems: "center", borderWidth: 1 },
+  input: { flex: 1, fontSize: 16 },
   // Multiline rows use alignItems: "flex-start" (not the default "center"/stretch) so the
   // input starts at the top rather than vertically centering as it grows. Without an explicit
   // height on the TextInput itself, RN sizes it to its own intrinsic (near single-line) content
@@ -79,5 +71,4 @@ const styles = StyleSheet.create({
   // background View, which has no text input to focus, so the keyboard never opens. Giving the
   // TextInput its own minHeight makes its actual (touchable) box span the full visual field.
   inputMultiline: { paddingVertical: 0, minHeight: 80 },
-  error: { ...typography.caption, color: colors.danger },
 });

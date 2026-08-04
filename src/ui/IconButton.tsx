@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 
-import { colors, radii, touchTarget } from "./theme";
+import { useTheme } from "@/src/theme";
 
 type IconButtonVariant = "ghost" | "surface";
 
@@ -29,6 +29,7 @@ export function IconButton({
   disabled = false,
   style,
 }: IconButtonProps) {
+  const { colors, radii, touchTarget } = useTheme();
   const iconColor = color ?? (variant === "surface" ? colors.textPrimary : colors.textSecondary);
 
   return (
@@ -40,30 +41,19 @@ export function IconButton({
       hitSlop={8}
       style={({ pressed }) => [
         styles.base,
-        variant === "surface" && styles.surface,
-        pressed && !disabled && styles.pressed,
+        { width: touchTarget.min, height: touchTarget.min, borderRadius: radii.pill },
+        variant === "surface" && { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+        pressed && !disabled && { backgroundColor: colors.surfaceMuted },
         disabled && styles.disabled,
         style,
       ]}
     >
-      <Ionicons name={name} size={size} color={iconColor} />
+      <Ionicons name={name} size={size} color={disabled ? colors.disabledText : iconColor} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: {
-    width: touchTarget.min,
-    height: touchTarget.min,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radii.pill,
-  },
-  surface: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pressed: { backgroundColor: colors.surfaceMuted },
+  base: { alignItems: "center", justifyContent: "center" },
   disabled: { opacity: 0.4 },
 });

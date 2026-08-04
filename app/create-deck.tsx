@@ -11,11 +11,12 @@ import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 import { TextField } from "../src/ui/TextField";
-import { spacing, typography } from "../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 export default function CreateDeck() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const [title, setTitle] = useState("");
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -49,16 +50,16 @@ export default function CreateDeck() {
 
   return (
     <Screen>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton
           name="chevron-back"
           accessibilityLabel={t("common.back")}
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={typography.title}>{t("createDeck.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("createDeck.screenTitle")}</Text>
       </View>
-      <Text style={typography.secondary}>{t("createDeck.subtitle")}</Text>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("createDeck.subtitle")}</Text>
 
       <Card>
         <TextField
@@ -86,5 +87,5 @@ export default function CreateDeck() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
 });

@@ -10,7 +10,7 @@ import { Button } from "../../../src/ui/Button";
 import { Card } from "../../../src/ui/Card";
 import { ResultMetric } from "../../../src/ui/ResultMetric";
 import { Screen } from "../../../src/ui/Screen";
-import { colors, spacing, typography } from "../../../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 const formatDuration = (startedAt: number, finishedAt: number) => {
   const diff = Math.max(0, finishedAt - startedAt);
@@ -23,6 +23,7 @@ const formatDuration = (startedAt: number, finishedAt: number) => {
 export default function QuizResults() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const params = useLocalSearchParams();
 
   const pickParam = (value: string | string[] | undefined) =>
@@ -105,15 +106,15 @@ export default function QuizResults() {
 
   return (
     <Screen>
-      <View style={styles.center}>
-        <Text style={typography.title}>{t("quizResults.title")}</Text>
-        <Text style={styles.bigScore}>
+      <View style={[styles.center, { gap: spacing.md }]}>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("quizResults.title")}</Text>
+        <Text style={[styles.bigScore, { color: colors.textPrimary }]}>
           {correct} / {total}
         </Text>
-        <Text style={styles.percent}>{percent}%</Text>
+        <Text style={[styles.percent, { color: colors.textSecondary, marginBottom: spacing.sm }]}>{percent}%</Text>
 
         <Card style={styles.summaryCard}>
-          <View style={styles.metricsRow}>
+          <View style={[styles.metricsRow, { gap: spacing.xl }]}>
             <ResultMetric label={t("quizResults.correctLabel")} value={String(correct)} />
             <ResultMetric label={t("quizResults.incorrectLabel")} value={String(wrong)} />
             <ResultMetric label={t("quizResults.timeLabel")} value={durationText} />
@@ -140,9 +141,9 @@ export default function QuizResults() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: "center", gap: spacing.md },
-  bigScore: { fontSize: 48, fontWeight: "700", color: colors.textPrimary },
-  percent: { fontSize: 18, fontWeight: "600", color: colors.textSecondary, marginBottom: spacing.sm },
+  center: { flex: 1, justifyContent: "center" },
+  bigScore: { fontSize: 48, fontWeight: "700" },
+  percent: { fontSize: 18, fontWeight: "600" },
   summaryCard: { alignItems: "center" },
-  metricsRow: { flexDirection: "row", gap: spacing.xl },
+  metricsRow: { flexDirection: "row" },
 });

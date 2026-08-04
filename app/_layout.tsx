@@ -1,6 +1,7 @@
 import * as Linking from "expo-linking";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
@@ -11,28 +12,39 @@ import { getSyncState } from "../src/cloud/sync/syncState";
 import { initSyncState } from "../src/cloud/sync/useSyncState";
 import { handleIncomingFile } from "../src/domain/openFileHandler";
 import { initI18n } from "../src/i18n";
-import { BRAND_STARTUP_TEAL, BrandStartup } from "../src/ui/BrandStartup";
+import { initTheme, useTheme } from "@/src/theme";
+import { BrandStartup } from "../src/ui/BrandStartup";
 
 // Held here (module scope, not inside the component) so it runs as early as possible — before
 // the native splash would otherwise auto-hide on its own default timing. Failure is expected and
 // safe to ignore (e.g. Fast Refresh calling this again after the splash already hid).
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-const APP_BG = BRAND_STARTUP_TEAL;
-
 export default function Layout() {
-
   const router = useRouter();
+  // isInitialized comes straight from the canonical appearance store (src/theme/index.ts) — not
+  // a locally-duplicated readiness flag. It only becomes true once BOTH the persisted
+  // selectedMode has been read AND a fresh systemScheme has been confirmed (with an explicit,
+  // safe, self-healing System fallback if AsyncStorage hangs — see initTheme()'s own doc comment).
+  // BrandStartup is gated on this exact flag below, and derives its OWN treatment from this same
+  // canonical resolvedTheme internally, rather than receiving one computed here and handed down
+  // as a prop — see this batch's report, Phase B/E, for why a value frozen at the moment a parent
+  // decides to mount a child is exactly the kind of staleness that produced the confirmed bug.
+  const { colors, resolvedTheme, isInitialized } = useTheme();
   const [importing, setImporting] = useState(false);
   const [showBrandStartup, setShowBrandStartup] = useState(true);
   const didSyncRef = useRef(false);
+
+  useEffect(() => {
+    initTheme();
+  }, []);
 
   // The native splash is hidden only from BrandStartup's onReady callback (fired from that
   // layer's own onLayout, with a bounded fallback) — never from a bare mount effect. A previous
   // cut called SplashScreen.hideAsync() as soon as this component's own render committed, which
   // is a JS-side signal only; it does not guarantee the native UI thread has actually painted
-  // BrandStartup's teal background + mark before the bridge call to hide the native splash
-  // resolves. That gap was the root cause of a white-flash: dismissing the native splash could
+  // BrandStartup's background + mark before the bridge call to hide the native splash resolves.
+  // That gap was the root cause of an earlier white-flash bug: dismissing the native splash could
   // briefly reveal the native root view's own default background before BrandStartup's first
   // real frame had painted. onLayout is a native-confirmed signal that BrandStartup's view
   // genuinely has real, laid-out bounds, so hiding the native splash there cannot expose that
@@ -136,12 +148,22 @@ export default function Layout() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.canvas }]}>
+      {/* Status-bar icon style must match the resolved theme, not just the OS setting — a user
+          with an explicit Dark/Warm choice that differs from system appearance still needs
+          correctly-colored icons, so this reads resolvedTheme (already system-resolved when the
+          mode is "system"), never "auto" (which would only ever look at the OS, ignoring an
+          explicit override). Dark theme's canvas is dark -> light icons; Light/Warm canvases are
+          light -> dark icons. Rendered above BrandStartup in the tree but painted by the OS as a
+          logically separate layer either way — see BrandStartup.tsx for how its own startup-time
+          treatment is kept deliberately in sync with this exact same resolvedTheme so the two
+          never visibly disagree. */}
+      <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
       <Stack
         screenOptions={{
           headerShown: false,
           contentStyle: {
-            backgroundColor: APP_BG,
+            backgroundColor: colors.canvas,
           },
         }}
       >
@@ -156,7 +178,13 @@ export default function Layout() {
           <Text style={styles.importText}>Importing deck…</Text>
         </View>
       )}
-      {showBrandStartup && (
+      {/* Gated on the canonical store's isInitialized, not just showBrandStartup — BrandStartup
+          must never mount before the persisted appearance preference (and a fresh systemScheme
+          read) are both confirmed, or it would have to guess a treatment and risk a wrong-theme
+          flash. The native splash (see app.json, fixed teal — cannot read AsyncStorage before JS
+          starts) stays up for this entire gap, since hideNativeSplash is only ever called from
+          within BrandStartup itself. See this batch's report, Phase A/D, for the full analysis. */}
+      {isInitialized && showBrandStartup && (
         <BrandStartup onReady={hideNativeSplash} onFinished={() => setShowBrandStartup(false)} />
       )}
     </View>
@@ -164,7 +192,7 @@ export default function Layout() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: APP_BG },
+  container: { flex: 1 },
   importOverlay: {
     position: "absolute",
     left: 0,

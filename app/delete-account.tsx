@@ -12,7 +12,7 @@ import { EmptyState } from "../src/ui/EmptyState";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 import { TextField } from "../src/ui/TextField";
-import { spacing, typography } from "../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 // Mirrors contactSupport()'s resolved outcomes (see src/domain/supportContact.ts), plus null for
 // "hasn't been attempted yet in this screen session."
@@ -21,6 +21,7 @@ type RequestOutcome = "opened" | "copied" | "failed" | null;
 export default function DeleteAccountScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
 
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
   const [scopeLoaded, setScopeLoaded] = useState(false);
@@ -75,9 +76,9 @@ export default function DeleteAccountScreen() {
   };
 
   const header = (
-    <View style={styles.header}>
+    <View style={[styles.header, { gap: spacing.sm }]}>
       <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} disabled={submitting} />
-      <Text style={typography.title}>{t("deleteAccount.title")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("deleteAccount.title")}</Text>
     </View>
   );
 
@@ -130,13 +131,13 @@ export default function DeleteAccountScreen() {
     return (
       <Screen scroll>
         {header}
-        <Card style={styles.sectionCard}>
-          <Text style={typography.bodyMedium}>{t("deleteAccount.resultFailedTitle")}</Text>
-          <Text style={typography.secondary}>{t("deleteAccount.resultFailedBody")}</Text>
+        <Card style={[styles.sectionCard, { gap: spacing.xs }]}>
+          <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{t("deleteAccount.resultFailedTitle")}</Text>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("deleteAccount.resultFailedBody")}</Text>
         </Card>
-        <Card style={styles.sectionCard}>
-          <Text style={typography.label}>{t("deleteAccount.resultFailedFallbackLabel")}</Text>
-          <Text style={typography.secondary} selectable>
+        <Card style={[styles.sectionCard, { gap: spacing.xs }]}>
+          <Text style={[typography.label, { color: colors.textPrimary }]}>{t("deleteAccount.resultFailedFallbackLabel")}</Text>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]} selectable>
             {t("deleteAccount.supportBody")}
           </Text>
         </Card>
@@ -155,18 +156,18 @@ export default function DeleteAccountScreen() {
     <Screen scroll>
       {header}
 
-      <Card style={styles.sectionCard}>
-        <Text style={typography.secondary}>{t("deleteAccount.intro")}</Text>
+      <Card style={[styles.sectionCard, { gap: spacing.xs }]}>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("deleteAccount.intro")}</Text>
       </Card>
 
-      <Card style={styles.sectionCard}>
-        <Text style={typography.bodyMedium}>{t("deleteAccount.howItWorksTitle")}</Text>
-        <Text style={typography.secondary}>{t("deleteAccount.howItWorksBody")}</Text>
+      <Card style={[styles.sectionCard, { gap: spacing.xs }]}>
+        <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{t("deleteAccount.howItWorksTitle")}</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("deleteAccount.howItWorksBody")}</Text>
       </Card>
 
-      <Card style={styles.sectionCard}>
-        <Text style={typography.bodyMedium}>{t("deleteAccount.exportTitle")}</Text>
-        <Text style={typography.secondary}>{t("deleteAccount.exportBody")}</Text>
+      <Card style={[styles.sectionCard, { gap: spacing.xs }]}>
+        <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{t("deleteAccount.exportTitle")}</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("deleteAccount.exportBody")}</Text>
         <Button
           label={t("deleteAccount.exportButton")}
           variant="secondary"
@@ -175,9 +176,9 @@ export default function DeleteAccountScreen() {
         />
       </Card>
 
-      <Card style={styles.sectionCard}>
-        <Text style={typography.bodyMedium}>{t("deleteAccount.confirmTitle")}</Text>
-        <Text style={typography.secondary}>
+      <Card style={[styles.sectionCard, { gap: spacing.xs }]}>
+        <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{t("deleteAccount.confirmTitle")}</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
           {t("deleteAccount.confirmInstruction", { phrase: confirmPhrase })}
         </Text>
         <TextField
@@ -205,7 +206,7 @@ export default function DeleteAccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
   emptyFill: { flex: 1, justifyContent: "center" },
-  sectionCard: { gap: spacing.xs },
+  sectionCard: {},
 });

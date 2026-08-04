@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
-import { colors, radii, shadows, spacing } from "./theme";
+import { useTheme } from "@/src/theme";
 
 type CardProps = {
   children: ReactNode;
@@ -9,19 +9,24 @@ type CardProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-// Shared surface: white fill, hairline border, and a barely-there shadow — depth comes mostly
-// from tonal contrast against the tinted screen background, not the shadow itself.
+// Shared surface: themed fill, hairline border, and a barely-there shadow — depth comes mostly
+// from tonal contrast against the canvas, not the shadow itself.
 export function Card({ children, padded = true, style }: CardProps) {
-  return <View style={[styles.base, padded && styles.padded, style]}>{children}</View>;
+  const { colors, radii, spacing, shadow } = useTheme();
+  return (
+    <View
+      style={[
+        styles.base,
+        { backgroundColor: colors.surface, borderRadius: radii.lg, borderColor: colors.border, ...shadow },
+        padded && { padding: spacing.lg },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  base: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
-  },
-  padded: { padding: spacing.lg },
+  base: { borderWidth: 1 },
 });

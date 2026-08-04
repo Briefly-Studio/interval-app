@@ -11,6 +11,7 @@ const en = {
     sections: {
       profile: "Profile",
       account: "Account",
+      appearance: "Appearance",
       data: "Data",
       support: "Support",
       about: "About",
@@ -32,6 +33,7 @@ const en = {
     buildLabel: "Build {{build}}",
     betaLabel: "Beta",
     language: "Language",
+    appearance: "Appearance",
     notSignedInTitle: "You're not signed in",
     notSignedInDescription: "Sign in to view and manage your account.",
     signIn: "Sign in",
@@ -41,6 +43,33 @@ const en = {
       english: "English",
       espanol: "Español",
     },
+    appearanceOptions: {
+      system: "System",
+      light: "Light",
+      dark: "Dark",
+      warm: "Warm",
+    },
+  },
+  appearance: {
+    title: "Appearance",
+    personalizationNote: "More personalization may come later.",
+    system: {
+      name: "System",
+      description: "Follows your device appearance.",
+    },
+    light: {
+      name: "Light",
+      description: "A clean, bright study environment.",
+    },
+    dark: {
+      name: "Dark",
+      description: "A dimmer appearance for darker environments.",
+    },
+    warm: {
+      name: "Warm",
+      description: "Softer, warmer surfaces for a calmer study environment.",
+    },
+    selectedLabel: "Selected",
   },
   profile: {
     firstName: "First name",

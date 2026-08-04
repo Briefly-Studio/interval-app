@@ -17,6 +17,7 @@ import { useTranslation } from "../src/i18n";
 import type { DeckRecord } from "../src/models/deck";
 import { deleteDeckById, getDecksAll, setDecks } from "../src/storage/decks";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
+import { useTheme, type ThemeTokens } from "@/src/theme";
 import { AccountButton } from "../src/ui/AccountButton";
 import { Button } from "../src/ui/Button";
 import { DeckCard } from "../src/ui/DeckCard";
@@ -25,7 +26,6 @@ import { HomeHeader } from "../src/ui/HomeHeader";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 import { SecondaryAction } from "../src/ui/SecondaryAction";
-import { colors, spacing, typography } from "../src/ui/theme";
 
 // Falls back to a neutral bullet rather than ever rendering "undefined" — identity can briefly
 // lag one tick behind scope while refreshWorkspace resolves them separately (see below).
@@ -39,21 +39,22 @@ function accountInitial(identity: UserIdentity | null): string {
 
 // Status is never conveyed by color alone — every status renders an icon + text pairing.
 // "offline" is deliberately styled as neutral/muted (not danger) since it's expected, normal
-// behavior for an offline-first app, not an error.
-const SYNC_STATUS_META: Record<
-  SyncStatus,
-  { icon: ComponentProps<typeof Ionicons>["name"]; color: string }
-> = {
-  unknown: { icon: "time-outline", color: colors.textSecondary },
-  syncing: { icon: "sync-outline", color: colors.textSecondary },
-  synced: { icon: "checkmark-circle-outline", color: colors.success },
-  offline: { icon: "cloud-offline-outline", color: colors.textSecondary },
-  needsAttention: { icon: "alert-circle-outline", color: colors.danger },
-};
+// behavior for an offline-first app, not an error. Built from the live theme rather than a
+// module-level constant, since colors.* is now appearance-dependent.
+function syncStatusMetaFor(colors: ThemeTokens): Record<SyncStatus, { icon: ComponentProps<typeof Ionicons>["name"]; color: string }> {
+  return {
+    unknown: { icon: "time-outline", color: colors.textSecondary },
+    syncing: { icon: "sync-outline", color: colors.textSecondary },
+    synced: { icon: "checkmark-circle-outline", color: colors.success },
+    offline: { icon: "cloud-offline-outline", color: colors.textSecondary },
+    needsAttention: { icon: "alert-circle-outline", color: colors.danger },
+  };
+}
 
 export default function DecksHome() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const [decks, setDecksState] = useState<DeckRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -78,7 +79,7 @@ export default function DecksHome() {
   // rather than a fake "has a sync event fired this session" flag: it can render "syncing",
   // "offline", and "needs attention" too, not just a hardcoded "Synced".
   const syncStatusText = signedIn ? t(SYNC_STATUS_KEYS[syncState.status]) : null;
-  const syncStatusMeta = SYNC_STATUS_META[syncState.status];
+  const syncStatusMeta = syncStatusMetaFor(colors)[syncState.status];
 
   // Announce only meaningful status transitions (not the initial mount, and not every internal
   // isOnline/pending-count tick) — paired with the icon+color below so status is never
@@ -256,18 +257,20 @@ export default function DecksHome() {
         />
       </HomeHeader>
 
-      <View style={styles.greetingBlock}>
-        <Text style={typography.heading}>{greeting.headline}</Text>
-        {greeting.supporting ? <Text style={typography.secondary}>{greeting.supporting}</Text> : null}
+      <View style={[styles.greetingBlock, { gap: spacing.xs }]}>
+        <Text style={[typography.heading, { color: colors.textPrimary }]}>{greeting.headline}</Text>
+        {greeting.supporting ? (
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>{greeting.supporting}</Text>
+        ) : null}
         {syncStatusText ? (
-          <View style={styles.syncRow} accessibilityLiveRegion="polite">
+          <View style={[styles.syncRow, { gap: spacing.xs }]} accessibilityLiveRegion="polite">
             <Ionicons name={syncStatusMeta.icon} size={14} color={syncStatusMeta.color} />
-            <Text style={[styles.syncLabel, { color: syncStatusMeta.color }]}>{syncStatusText}</Text>
+            <Text style={[typography.caption, styles.syncLabel, { color: syncStatusMeta.color }]}>{syncStatusText}</Text>
           </View>
         ) : null}
       </View>
 
-      <View style={styles.secondaryRow}>
+      <View style={[styles.secondaryRow, { gap: spacing.sm }]}>
         <SecondaryAction icon="download-outline" label={t("settings.importDeck")} onPress={() => router.push("/import")} />
         <SecondaryAction
           icon="trash-outline"
@@ -292,9 +295,9 @@ export default function DecksHome() {
           </EmptyState>
         </View>
       ) : (
-        <View style={styles.deckSection}>
+        <View style={[styles.deckSection, { gap: spacing.md }]}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={typography.subheading}>{t("home.myDecks")}</Text>
+            <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("home.myDecks")}</Text>
             <Button
               label={t("home.newDeckButton")}
               variant="primary"
@@ -306,7 +309,7 @@ export default function DecksHome() {
             data={decks}
             keyExtractor={(item) => item.id}
             style={styles.list}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { gap: spacing.sm, paddingBottom: spacing.xl }]}
             renderItem={({ item }) => (
               <DeckCard
                 deck={item}
@@ -322,20 +325,20 @@ export default function DecksHome() {
 }
 
 const styles = StyleSheet.create({
-  greetingBlock: { gap: spacing.xs },
-  syncRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  syncLabel: { ...typography.caption },
+  greetingBlock: {},
+  syncRow: { flexDirection: "row", alignItems: "center" },
+  syncLabel: {},
 
-  secondaryRow: { flexDirection: "row", gap: spacing.sm },
+  secondaryRow: { flexDirection: "row" },
 
   emptyFill: { flex: 1, justifyContent: "center" },
 
-  deckSection: { flex: 1, gap: spacing.md },
+  deckSection: { flex: 1 },
   sectionHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   list: { flex: 1 },
-  listContent: { gap: spacing.sm, paddingBottom: spacing.xl },
+  listContent: {},
 });

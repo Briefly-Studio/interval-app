@@ -12,7 +12,7 @@ import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 import { TextField } from "../src/ui/TextField";
-import { colors, spacing, typography } from "../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 function nameFieldError(
   t: TranslateFn,
@@ -36,6 +36,7 @@ function nicknameFieldError(t: TranslateFn, value: string, touched: boolean): st
 export default function EditProfileScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
 
   const [loaded, setLoaded] = useState(false);
   const [originalFirstName, setOriginalFirstName] = useState("");
@@ -112,17 +113,17 @@ export default function EditProfileScreen() {
 
   return (
     <Screen scroll>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton
           name="chevron-back"
           accessibilityLabel={t("common.cancel")}
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={typography.title}>{t("settings.editProfile")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("settings.editProfile")}</Text>
       </View>
 
-      <Card style={styles.formCard}>
+      <Card style={[styles.formCard, { gap: spacing.md }]}>
         <TextField
           label={t("profile.firstName")}
           value={firstName}
@@ -147,10 +148,10 @@ export default function EditProfileScreen() {
           maxLength={50}
           editable={!submitting}
         />
-        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+        {errorText ? <Text style={[typography.caption, { color: colors.danger }]}>{errorText}</Text> : null}
       </Card>
 
-      <Card style={styles.formCard}>
+      <Card style={[styles.formCard, { gap: spacing.md }]}>
         <TextField
           label={t("profile.nicknameOptional")}
           value={nickname}
@@ -163,7 +164,7 @@ export default function EditProfileScreen() {
           editable={!submitting}
           accessibilityHint={t("profile.nicknameHint")}
         />
-        <Text style={typography.caption}>{t("profile.nicknameHelper")}</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>{t("profile.nicknameHelper")}</Text>
       </Card>
 
       <Button
@@ -179,7 +180,6 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  formCard: { gap: spacing.md },
-  errorText: { ...typography.caption, color: colors.danger },
+  header: { flexDirection: "row", alignItems: "center" },
+  formCard: {},
 });

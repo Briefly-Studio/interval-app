@@ -9,11 +9,11 @@ import { isValidName, trimName } from "../src/auth/nameValidation";
 import { getPasswordRequirements, isPasswordValid } from "../src/auth/passwordPolicy";
 import { useTranslation } from "../src/i18n";
 import type { TranslateFn } from "../src/i18n/translateFn";
+import { useTheme } from "@/src/theme";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { Screen } from "../src/ui/Screen";
 import { TextField } from "../src/ui/TextField";
-import { colors, spacing, typography } from "../src/ui/theme";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -25,20 +25,21 @@ function nameFieldError(t: TranslateFn, value: string, touched: boolean, field: 
 }
 
 function PasswordChecklist({ password }: { password: string }) {
+  const { colors, spacing, typography } = useTheme();
   const requirements = useMemo(() => getPasswordRequirements(), []);
 
   return (
-    <View style={styles.checklist}>
+    <View style={[styles.checklist, { gap: spacing.xs }]}>
       {requirements.map((requirement) => {
         const met = requirement.met(password);
         return (
-          <View key={requirement.key} style={styles.checklistRow}>
+          <View key={requirement.key} style={[styles.checklistRow, { gap: spacing.xs }]}>
             <Ionicons
               name={met ? "checkmark-circle" : "ellipse-outline"}
               size={16}
               color={met ? colors.success : colors.textSecondary}
             />
-            <Text style={[styles.checklistLabel, met && styles.checklistLabelMet]}>
+            <Text style={[typography.caption, met ? { color: colors.success } : { color: colors.textSecondary }]}>
               {requirement.label}
             </Text>
           </View>
@@ -51,6 +52,7 @@ function PasswordChecklist({ password }: { password: string }) {
 export default function SignUpScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [firstNameTouched, setFirstNameTouched] = useState(false);
@@ -84,11 +86,11 @@ export default function SignUpScreen() {
 
   return (
     <Screen scroll>
-      <Text style={typography.title}>{t("auth.signUp.title")}</Text>
-      <Text style={typography.secondary}>{t("auth.signUp.subtitle")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("auth.signUp.title")}</Text>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("auth.signUp.subtitle")}</Text>
 
       <Card style={{ gap: spacing.md }}>
-        <View style={styles.nameRow}>
+        <View style={[styles.nameRow, { gap: spacing.sm }]}>
           <View style={styles.nameField}>
             <TextField
               label={t("profile.firstName")}
@@ -142,7 +144,7 @@ export default function SignUpScreen() {
           editable={!loading}
         />
         {passwordTouched ? <PasswordChecklist password={password} /> : null}
-        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+        {errorText ? <Text style={[typography.caption, { color: colors.danger }]}>{errorText}</Text> : null}
       </Card>
 
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -167,11 +169,8 @@ export default function SignUpScreen() {
 }
 
 const styles = StyleSheet.create({
-  errorText: { ...typography.caption, color: colors.danger },
-  nameRow: { flexDirection: "row", gap: spacing.sm },
+  nameRow: { flexDirection: "row" },
   nameField: { flex: 1 },
-  checklist: { gap: spacing.xs },
-  checklistRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  checklistLabel: { ...typography.caption },
-  checklistLabelMet: { color: colors.success },
+  checklist: {},
+  checklistRow: { flexDirection: "row", alignItems: "center" },
 });

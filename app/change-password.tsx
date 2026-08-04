@@ -8,13 +8,13 @@ import { getAuthDiagnosticCode, getChangePasswordErrorKind } from "../src/auth/a
 import { getPasswordRequirements, isPasswordValid } from "../src/auth/passwordPolicy";
 import { useTranslation } from "../src/i18n";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
+import { useTheme } from "@/src/theme";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { EmptyState } from "../src/ui/EmptyState";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 import { TextField } from "../src/ui/TextField";
-import { colors, spacing, typography } from "../src/ui/theme";
 
 // Duplicated (not imported) from app/sign-up.tsx's PasswordChecklist: that component lives in a
 // screen file outside this batch's file ownership, so its minimal rendering logic is re-created
@@ -22,20 +22,21 @@ import { colors, spacing, typography } from "../src/ui/theme";
 // getPasswordRequirements()/isPasswordValid() in src/auth/passwordPolicy.ts, so the requirements
 // themselves never drift — only this presentation snippet is duplicated.
 function PasswordChecklist({ password }: { password: string }) {
+  const { colors, spacing, typography } = useTheme();
   const requirements = useMemo(() => getPasswordRequirements(), []);
 
   return (
-    <View style={styles.checklist}>
+    <View style={[styles.checklist, { gap: spacing.xs }]}>
       {requirements.map((requirement) => {
         const met = requirement.met(password);
         return (
-          <View key={requirement.key} style={styles.checklistRow}>
+          <View key={requirement.key} style={[styles.checklistRow, { gap: spacing.xs }]}>
             <Ionicons
               name={met ? "checkmark-circle" : "ellipse-outline"}
               size={16}
               color={met ? colors.success : colors.textSecondary}
             />
-            <Text style={[styles.checklistLabel, met && styles.checklistLabelMet]}>
+            <Text style={[typography.caption, met ? { color: colors.success } : { color: colors.textSecondary }]}>
               {requirement.label}
             </Text>
           </View>
@@ -48,6 +49,7 @@ function PasswordChecklist({ password }: { password: string }) {
 export default function ChangePasswordScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
 
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
   const [scopeLoaded, setScopeLoaded] = useState(false);
@@ -106,14 +108,14 @@ export default function ChangePasswordScreen() {
   };
 
   const header = (
-    <View style={styles.header}>
+    <View style={[styles.header, { gap: spacing.sm }]}>
       <IconButton
         name="chevron-back"
         accessibilityLabel={t("common.back")}
         onPress={() => router.back()}
         disabled={submitting}
       />
-      <Text style={typography.title}>{t("changePassword.title")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("changePassword.title")}</Text>
     </View>
   );
 
@@ -169,7 +171,7 @@ export default function ChangePasswordScreen() {
     <Screen scroll>
       {header}
 
-      <Card style={styles.formCard}>
+      <Card style={{ gap: spacing.md }}>
         <TextField
           label={t("changePassword.currentPasswordLabel")}
           value={currentPassword}
@@ -205,7 +207,7 @@ export default function ChangePasswordScreen() {
           isPassword
           editable={!submitting}
         />
-        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+        {errorText ? <Text style={[typography.caption, { color: colors.danger }]}>{errorText}</Text> : null}
       </Card>
 
       <Button
@@ -221,12 +223,8 @@ export default function ChangePasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
   emptyFill: { flex: 1, justifyContent: "center" },
-  formCard: { gap: spacing.md },
-  errorText: { ...typography.caption, color: colors.danger },
-  checklist: { gap: spacing.xs },
-  checklistRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  checklistLabel: { ...typography.caption },
-  checklistLabelMet: { color: colors.success },
+  checklist: {},
+  checklistRow: { flexDirection: "row", alignItems: "center" },
 });

@@ -11,11 +11,12 @@ import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
-import { colors, iconSizes, spacing, typography } from "../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 export default function ImportDeckScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, iconSizes, spacing, typography } = useTheme();
   const [selectedFile, setSelectedFile] = useState<{ name: string; uri: string } | null>(
     null
   );
@@ -75,29 +76,33 @@ export default function ImportDeckScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton
           name="chevron-back"
           accessibilityLabel={t("common.back")}
           onPress={() => router.back()}
           disabled={busy}
         />
-        <Text style={typography.title}>{t("importDeck.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("importDeck.screenTitle")}</Text>
       </View>
-      <Text style={typography.secondary}>{t("importDeck.subtitle")}</Text>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("importDeck.subtitle")}</Text>
 
-      <Card style={styles.fileCard}>
-        <View style={styles.fileRow}>
+      <Card style={[styles.fileCard, { gap: spacing.md }]}>
+        <View style={[styles.fileRow, { gap: spacing.sm }]}>
           <Ionicons
             name={selectedFile ? "document-text-outline" : "cloud-upload-outline"}
             size={iconSizes.lg}
-            color={colors.accentStrong}
+            color={colors.accent}
           />
           <View style={styles.flex1}>
-            <Text style={typography.bodyMedium} numberOfLines={1}>
+            <Text style={[typography.bodyMedium, { color: colors.textPrimary }]} numberOfLines={1}>
               {selectedFile ? selectedFile.name : t("importDeck.noFileSelected")}
             </Text>
-            {selectedFile ? <Text style={styles.readyText}>{t("importDeck.readyToImport")}</Text> : null}
+            {selectedFile ? (
+              <Text style={[typography.caption, { color: colors.success, marginTop: 2 }]}>
+                {t("importDeck.readyToImport")}
+              </Text>
+            ) : null}
           </View>
         </View>
         <Button
@@ -122,9 +127,8 @@ export default function ImportDeckScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  fileCard: { gap: spacing.md },
-  fileRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
+  fileCard: {},
+  fileRow: { flexDirection: "row", alignItems: "center" },
   flex1: { flex: 1 },
-  readyText: { ...typography.caption, color: colors.success, marginTop: 2 },
 });

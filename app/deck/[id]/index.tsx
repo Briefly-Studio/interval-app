@@ -14,12 +14,12 @@ import type { StudySession } from "../../../src/models/session";
 import { deleteCard, getCards, updateAllCardsDifficulty } from "../../../src/storage/cards";
 import { getDeckById } from "../../../src/storage/decks";
 import { getSessionsForDeck } from "../../../src/storage/sessions";
+import { useTheme } from "@/src/theme";
 import { Button } from "../../../src/ui/Button";
 import { Card as Surface } from "../../../src/ui/Card";
 import { EmptyState } from "../../../src/ui/EmptyState";
 import { IconButton } from "../../../src/ui/IconButton";
 import { Screen } from "../../../src/ui/Screen";
-import { colors, iconSizes, spacing, touchTarget, typography } from "../../../src/ui/theme";
 
 const DIFFICULTY_FILTERS = ["all", "hard", "medium", "easy"] as const;
 
@@ -35,6 +35,7 @@ const DIFFICULTY_LABEL_KEYS: Record<(typeof DIFFICULTY_FILTERS)[number], Transla
 export default function DeckDetails() {
   const router = useRouter();
   const { t, plural } = useTranslation();
+  const { colors, iconSizes, spacing, touchTarget, typography } = useTheme();
 
   const params = useLocalSearchParams();
   const idParam = params.id;
@@ -195,7 +196,7 @@ export default function DeckDetails() {
   if (!loaded) {
     return (
       <Screen>
-        <Text style={typography.secondary}>{t("deckDetail.loading")}</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("deckDetail.loading")}</Text>
       </Screen>
     );
   }
@@ -203,10 +204,10 @@ export default function DeckDetails() {
   if (!deck) {
     return (
       <Screen>
-        <View style={styles.header}>
+        <View style={[styles.header, { gap: spacing.sm }]}>
           <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={goBackHome} />
         </View>
-        <Text style={typography.secondary}>{t("deckDetail.deckNotFound")}</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("deckDetail.deckNotFound")}</Text>
       </Screen>
     );
   }
@@ -214,13 +215,13 @@ export default function DeckDetails() {
   if (isEmptyCards) {
     return (
       <Screen>
-        <View style={styles.header}>
+        <View style={[styles.header, { gap: spacing.sm }]}>
           <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={goBackHome} />
-          <Text style={[typography.title, styles.headerTitle]} numberOfLines={1}>
+          <Text style={[typography.title, styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
             {deck.title}
           </Text>
         </View>
-        <Text style={typography.secondary}>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
           {t("deckDetail.createdOn", { date: new Date(deck.createdAt).toLocaleString() })}
         </Text>
         <View style={styles.emptyFill}>
@@ -240,9 +241,9 @@ export default function DeckDetails() {
 
   return (
     <Screen>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={goBackHome} />
-        <Text style={[typography.title, styles.headerTitle]} numberOfLines={1}>
+        <Text style={[typography.title, styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
           {deck.title}
         </Text>
         <IconButton
@@ -251,11 +252,11 @@ export default function DeckDetails() {
           onPress={onOverflowPress}
         />
       </View>
-      <Text style={typography.secondary}>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>
         {t("deckDetail.createdOn", { date: new Date(deck.createdAt).toLocaleString() })}
       </Text>
 
-      <View style={styles.studyRow}>
+      <View style={[styles.studyRow, { gap: spacing.sm }]}>
         <Button label={t("deckDetail.startReview")} variant="primary" onPress={goReview} style={styles.flex1} />
         <Button label={t("deckDetail.startQuiz")} variant="secondary" onPress={goQuiz} style={styles.flex1} />
       </View>
@@ -264,9 +265,9 @@ export default function DeckDetails() {
         onPress={() => setShowStats((prev) => !prev)}
         accessibilityRole="button"
         accessibilityState={{ expanded: showStats }}
-        style={styles.statsToggle}
+        style={[styles.statsToggle, { minHeight: touchTarget.min }]}
       >
-        <Text style={typography.subheading}>{t("deckDetail.statsToggle")}</Text>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("deckDetail.statsToggle")}</Text>
         <Ionicons
           name={showStats ? "chevron-up" : "chevron-down"}
           size={iconSizes.sm}
@@ -275,30 +276,41 @@ export default function DeckDetails() {
       </Pressable>
 
       {showStats && (
-        <Surface style={styles.statsCard}>
-          <Text style={typography.secondary}>
+        <Surface style={[styles.statsCard, { gap: spacing.xs }]}>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>
             {t("deckDetail.statsToday", { sessions: stats.todaySessions, minutes: stats.todayMinutes })}
           </Text>
-          <Text style={typography.secondary}>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>
             {stats.avgQuizPercent7d !== null
               ? t("deckDetail.statsWeekWithAvg", { sessions: stats.weekSessions, percent: stats.avgQuizPercent7d })
               : t("deckDetail.statsWeek", { sessions: stats.weekSessions })}
           </Text>
-          <Text style={typography.secondary}>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>
             {stats.bestQuizPercent !== null
               ? t("deckDetail.statsBestQuiz", { percent: stats.bestQuizPercent })
               : t("deckDetail.statsBestQuizNone")}
           </Text>
-          <Text style={typography.secondary}>{plural("deckDetail.statsStreak", stats.streakDays)}</Text>
-          <Text style={typography.caption}>{t("deckDetail.statsTotalSessions", { count: stats.totalSessions })}</Text>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+            {plural("deckDetail.statsStreak", stats.streakDays)}
+          </Text>
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>
+            {t("deckDetail.statsTotalSessions", { count: stats.totalSessions })}
+          </Text>
 
           {lastSession ? (
-            <Pressable onPress={goHistory} style={styles.historyRow} accessibilityRole="button">
+            <Pressable
+              onPress={goHistory}
+              style={[
+                styles.historyRow,
+                { gap: spacing.sm, marginTop: spacing.xs, paddingTop: spacing.sm, borderTopColor: colors.border },
+              ]}
+              accessibilityRole="button"
+            >
               <View style={styles.flex1}>
-                <Text style={typography.bodyMedium}>
+                <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>
                   {t("deckDetail.studyHistoryRow", { count: sessions.length })}
                 </Text>
-                <Text style={typography.caption}>
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>
                   {formatTimestamp(lastSession.finishedAt)} •{" "}
                   {lastSession.mode === "quiz"
                     ? `${t("history.sessionModeQuiz")} • ${
@@ -311,8 +323,15 @@ export default function DeckDetails() {
               <Ionicons name="chevron-forward" size={iconSizes.sm} color={colors.textSecondary} />
             </Pressable>
           ) : (
-            <Pressable onPress={goHistory} style={styles.historyRow} accessibilityRole="button">
-              <Text style={typography.caption}>{t("deckDetail.noHistoryYet")}</Text>
+            <Pressable
+              onPress={goHistory}
+              style={[
+                styles.historyRow,
+                { gap: spacing.sm, marginTop: spacing.xs, paddingTop: spacing.sm, borderTopColor: colors.border },
+              ]}
+              accessibilityRole="button"
+            >
+              <Text style={[typography.caption, { color: colors.textSecondary }]}>{t("deckDetail.noHistoryYet")}</Text>
               <Ionicons name="chevron-forward" size={iconSizes.sm} color={colors.textSecondary} />
             </Pressable>
           )}
@@ -320,11 +339,11 @@ export default function DeckDetails() {
       )}
 
       <View style={styles.sectionHeaderRow}>
-        <Text style={typography.subheading}>{t("deckDetail.cardsSectionTitle")}</Text>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("deckDetail.cardsSectionTitle")}</Text>
         <Button label={t("deckDetail.addCardButton")} variant="primary" size="sm" onPress={goAddCard} />
       </View>
 
-      <View style={styles.filterRow}>
+      <View style={[styles.filterRow, { gap: spacing.sm }]}>
         {DIFFICULTY_FILTERS.map((value) => {
           const isActive = difficultyFilter === value;
           const label = t(DIFFICULTY_LABEL_KEYS[value]);
@@ -335,22 +354,38 @@ export default function DeckDetails() {
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={t("deckDetail.filterLabel", { label })}
-              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              style={[
+                styles.filterChip,
+                {
+                  minHeight: touchTarget.min,
+                  paddingHorizontal: spacing.md,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                },
+                isActive && { backgroundColor: colors.accentSubtle, borderColor: colors.accent },
+              ]}
             >
-              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+              <Text
+                style={[
+                  typography.caption,
+                  styles.filterChipText,
+                  { color: colors.textPrimary },
+                  isActive && { color: colors.accent, fontWeight: "700" },
+                ]}
+              >
                 {label}
               </Text>
             </Pressable>
           );
         })}
       </View>
-      <Text style={typography.caption}>
+      <Text style={[typography.caption, { color: colors.textSecondary }]}>
         {t("deckDetail.showingCount", { shown: filteredCards.length, total: cards.length })}
       </Text>
 
       {filteredCards.length === 0 && (
         <Surface>
-          <Text style={typography.secondary}>{t("deckDetail.noCardsForDifficulty")}</Text>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("deckDetail.noCardsForDifficulty")}</Text>
         </Surface>
       )}
 
@@ -358,7 +393,7 @@ export default function DeckDetails() {
         data={filteredCards}
         keyExtractor={(item) => item.id}
         style={styles.flex1}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { gap: spacing.sm, paddingBottom: spacing.xl }]}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push(`/deck/${id}/edit-card/${item.id}`)}
@@ -368,16 +403,16 @@ export default function DeckDetails() {
             accessibilityLabel={t("deckDetail.cardAccessibilityLabel", { front: item.front })}
             style={({ pressed }) => [pressed && styles.pressed]}
           >
-            <Surface style={styles.cardRow}>
-              <View style={styles.cardRowHeader}>
-                <Text style={typography.bodyMedium} numberOfLines={2}>
+            <Surface style={[styles.cardRow, { gap: spacing.xs }]}>
+              <View style={[styles.cardRowHeader, { gap: spacing.sm }]}>
+                <Text style={[typography.bodyMedium, { color: colors.textPrimary }]} numberOfLines={2}>
                   {item.front}
                 </Text>
-                <Text style={typography.caption}>
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>
                   {t(DIFFICULTY_LABEL_KEYS[item.difficulty ?? "medium"])}
                 </Text>
               </View>
-              <Text style={typography.secondary} numberOfLines={2}>
+              <Text style={[typography.secondary, { color: colors.textSecondary }]} numberOfLines={2}>
                 {item.back}
               </Text>
             </Surface>
@@ -389,30 +424,25 @@ export default function DeckDetails() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
   headerTitle: { flex: 1 },
   flex1: { flex: 1 },
 
   emptyFill: { flex: 1, justifyContent: "center" },
 
-  studyRow: { flexDirection: "row", gap: spacing.sm },
+  studyRow: { flexDirection: "row" },
 
   statsToggle: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    minHeight: touchTarget.min,
   },
-  statsCard: { gap: spacing.xs },
+  statsCard: {},
   historyRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-    paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
 
   sectionHeaderRow: {
@@ -421,26 +451,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  filterRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
+  filterRow: { flexDirection: "row", flexWrap: "wrap" },
   filterChip: {
-    minHeight: touchTarget.min,
-    paddingHorizontal: spacing.md,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
-  filterChipActive: {
-    backgroundColor: colors.accentMuted,
-    borderColor: colors.accentStrong,
-  },
-  filterChipText: { ...typography.caption, fontWeight: "600" },
-  filterChipTextActive: { color: colors.accentStrong, fontWeight: "700" },
+  filterChipText: { fontWeight: "600" },
 
-  list: { gap: spacing.sm, paddingBottom: spacing.xl },
-  cardRow: { gap: spacing.xs },
-  cardRowHeader: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm },
+  list: {},
+  cardRow: {},
+  cardRowHeader: { flexDirection: "row", justifyContent: "space-between" },
   pressed: { opacity: 0.85 },
 });

@@ -10,7 +10,7 @@ import { Button } from "../../../src/ui/Button";
 import { Card } from "../../../src/ui/Card";
 import { ResultMetric } from "../../../src/ui/ResultMetric";
 import { Screen } from "../../../src/ui/Screen";
-import { spacing, typography } from "../../../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 const formatDuration = (startedAt: number, finishedAt: number) => {
   const diff = Math.max(0, finishedAt - startedAt);
@@ -23,6 +23,7 @@ const formatDuration = (startedAt: number, finishedAt: number) => {
 export default function ReviewResults() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const params = useLocalSearchParams();
 
   const pickParam = (value: string | string[] | undefined) =>
@@ -96,11 +97,11 @@ export default function ReviewResults() {
 
   return (
     <Screen>
-      <View style={styles.center}>
-        <Text style={typography.title}>{t("reviewResults.title")}</Text>
+      <View style={[styles.center, { gap: spacing.lg }]}>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("reviewResults.title")}</Text>
 
         <Card style={styles.summaryCard}>
-          <View style={styles.metricsRow}>
+          <View style={[styles.metricsRow, { gap: spacing.xxl }]}>
             <ResultMetric label={t("reviewResults.cardsReviewedLabel")} value={String(total)} />
             <ResultMetric label={t("reviewResults.timeLabel")} value={durationText} />
           </View>
@@ -126,7 +127,7 @@ export default function ReviewResults() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: "center", gap: spacing.lg },
+  center: { flex: 1, justifyContent: "center" },
   summaryCard: { alignItems: "center" },
-  metricsRow: { flexDirection: "row", gap: spacing.xxl },
+  metricsRow: { flexDirection: "row" },
 });

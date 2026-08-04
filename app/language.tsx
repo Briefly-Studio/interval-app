@@ -3,10 +3,10 @@ import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useTranslation, type LanguagePreference } from "../src/i18n";
+import { useTheme } from "@/src/theme";
 import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
-import { colors, iconSizes, spacing, touchTarget, typography } from "../src/ui/theme";
 
 // English and Spanish are the supported languages today — System default, English, or an
 // explicit Español override. No flags, no country ties: language and country are deliberately
@@ -23,12 +23,13 @@ const OPTIONS: {
 export default function LanguageScreen() {
   const router = useRouter();
   const { t, preference, setLanguagePreference } = useTranslation();
+  const { colors, iconSizes, spacing, touchTarget, typography } = useTheme();
 
   return (
     <Screen>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={typography.title}>{t("settings.language")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("settings.language")}</Text>
       </View>
 
       <Card style={styles.rowGroup}>
@@ -36,16 +37,20 @@ export default function LanguageScreen() {
           const selected = preference === option.value;
           return (
             <View key={option.value}>
-              {index > 0 ? <View style={styles.divider} /> : null}
+              {index > 0 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
               <Pressable
                 onPress={() => setLanguagePreference(option.value)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}
                 accessibilityLabel={t(option.labelKey)}
-                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.row,
+                  { minHeight: touchTarget.min, paddingVertical: spacing.sm },
+                  pressed && { backgroundColor: colors.surfaceMuted },
+                ]}
               >
-                <Text style={typography.bodyMedium}>{t(option.labelKey)}</Text>
-                {selected ? <Ionicons name="checkmark" size={iconSizes.md} color={colors.accentStrong} /> : null}
+                <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{t(option.labelKey)}</Text>
+                {selected ? <Ionicons name="checkmark" size={iconSizes.md} color={colors.accent} /> : null}
               </Pressable>
             </View>
           );
@@ -56,15 +61,12 @@ export default function LanguageScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
   rowGroup: { gap: 0 },
-  divider: { height: 1, backgroundColor: colors.border },
+  divider: { height: 1 },
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    minHeight: touchTarget.min,
-    paddingVertical: spacing.sm,
   },
-  pressed: { backgroundColor: colors.surfaceMuted },
 });

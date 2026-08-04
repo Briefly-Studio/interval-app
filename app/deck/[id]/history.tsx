@@ -13,7 +13,7 @@ import { EmptyState } from "../../../src/ui/EmptyState";
 import { IconButton } from "../../../src/ui/IconButton";
 import { Screen } from "../../../src/ui/Screen";
 import { SessionCard } from "../../../src/ui/SessionCard";
-import { spacing, typography } from "../../../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 // `language` is the active, explicitly-resolved app language (see src/i18n/index.ts) — never
 // the device's raw locale — so date formatting stays consistent with whatever language the user
@@ -32,6 +32,7 @@ const formatDuration = (startedAt: number, finishedAt: number) => {
 export default function DeckHistoryScreen() {
   const router = useRouter();
   const { t, plural, language } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -101,9 +102,9 @@ export default function DeckHistoryScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={typography.title}>{t("history.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("history.screenTitle")}</Text>
         <Button
           label={t("history.clearButton")}
           variant="danger"
@@ -112,7 +113,7 @@ export default function DeckHistoryScreen() {
           onPress={confirmClear}
         />
       </View>
-      <Text style={typography.secondary}>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>
         {deck?.title ? `${deck.title} • ` : ""}
         {loaded ? plural("history.sessionsCount", sessions.length) : "Loading…"}
       </Text>
@@ -137,7 +138,7 @@ export default function DeckHistoryScreen() {
           data={sorted}
           keyExtractor={(item) => item.id}
           style={styles.flex1}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { gap: spacing.sm, paddingBottom: spacing.xl }]}
           renderItem={({ item }) => {
             const parts = [
               item.mode === "quiz" ? t("history.sessionModeQuiz") : t("history.sessionModeReview"),
@@ -159,8 +160,8 @@ export default function DeckHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
   emptyFill: { flex: 1, justifyContent: "center" },
   flex1: { flex: 1 },
-  list: { gap: spacing.sm, paddingBottom: spacing.xl },
+  list: {},
 });

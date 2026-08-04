@@ -16,7 +16,7 @@ import { EmptyState } from "../../../src/ui/EmptyState";
 import { ProgressBar } from "../../../src/ui/ProgressBar";
 import { Screen } from "../../../src/ui/Screen";
 import { StudyHeader } from "../../../src/ui/StudyHeader";
-import { colors, spacing, typography } from "../../../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 type Option = {
   id: string;
@@ -35,6 +35,7 @@ function shuffle<T>(arr: T[]): T[] {
 export default function QuizScreen() {
   const router = useRouter();
   const { t, plural } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -201,7 +202,7 @@ export default function QuizScreen() {
   if (!loaded) {
     return (
       <Screen>
-        <Text style={typography.secondary}>{t("quiz.loading")}</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("quiz.loading")}</Text>
       </Screen>
     );
   }
@@ -251,12 +252,12 @@ export default function QuizScreen() {
       <StudyHeader title={deck?.title ?? t("quiz.fallbackTitle")} progressLabel={progress} onClose={goBack} />
       <ProgressBar current={index} total={cards.length} />
 
-      <Surface style={styles.questionCard}>
-        <Text style={typography.label}>{t("quiz.questionLabel")}</Text>
-        <Text style={styles.questionText}>{current.front}</Text>
+      <Surface style={[styles.questionCard, { gap: spacing.sm }]}>
+        <Text style={[typography.label, { color: colors.textPrimary }]}>{t("quiz.questionLabel")}</Text>
+        <Text style={[typography.title, styles.questionText, { color: colors.textPrimary }]}>{current.front}</Text>
       </Surface>
 
-      <View style={styles.optionsList}>
+      <View style={[styles.optionsList, { gap: spacing.sm }]}>
         {options.map((opt) => {
           const isSelected = selectedId === opt.id;
           const isCorrectOption = !!current && opt.id === current.id;
@@ -282,7 +283,13 @@ export default function QuizScreen() {
       </View>
 
       {wasCorrect !== null && (
-        <Text style={[styles.feedback, wasCorrect ? styles.feedbackCorrect : styles.feedbackIncorrect]}>
+        <Text
+          style={[
+            typography.bodyMedium,
+            styles.feedback,
+            { color: wasCorrect ? colors.success : colors.danger },
+          ]}
+        >
           {wasCorrect ? t("quiz.correctFeedback") : t("quiz.incorrectFeedback")}
         </Text>
       )}
@@ -304,10 +311,8 @@ export default function QuizScreen() {
 
 const styles = StyleSheet.create({
   emptyFill: { flex: 1, justifyContent: "center" },
-  questionCard: { gap: spacing.sm },
-  questionText: { ...typography.title, fontSize: 22 },
-  optionsList: { gap: spacing.sm },
-  feedback: { ...typography.bodyMedium, textAlign: "center" },
-  feedbackCorrect: { color: colors.success },
-  feedbackIncorrect: { color: colors.danger },
+  questionCard: {},
+  questionText: { fontSize: 22 },
+  optionsList: {},
+  feedback: { textAlign: "center" },
 });

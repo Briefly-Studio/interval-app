@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { useTranslation } from "../i18n";
 import { IconButton } from "./IconButton";
-import { spacing, typography } from "./theme";
+import { useTheme } from "@/src/theme";
 
 type StudyHeaderProps = {
   title: string;
@@ -17,18 +17,19 @@ type StudyHeaderProps = {
 // localized common.close string instead of a hardcoded English literal.
 export function StudyHeader({ title, progressLabel, onClose, closeLabel }: StudyHeaderProps) {
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { gap: spacing.sm }]}>
       <IconButton name="close" accessibilityLabel={closeLabel ?? t("common.close")} onPress={onClose} />
-      <Text style={[typography.subheading, styles.title]} numberOfLines={1}>
+      <Text style={[typography.subheading, styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
         {title}
       </Text>
-      {progressLabel ? <Text style={typography.caption}>{progressLabel}</Text> : null}
+      {progressLabel ? <Text style={[typography.caption, { color: colors.textSecondary }]}>{progressLabel}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  row: { flexDirection: "row", alignItems: "center" },
   title: { flex: 1 },
 });

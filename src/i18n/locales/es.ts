@@ -13,6 +13,7 @@ const es = {
     sections: {
       profile: "Perfil",
       account: "Cuenta",
+      appearance: "Apariencia",
       data: "Datos",
       support: "Soporte",
       about: "Acerca de",
@@ -34,6 +35,7 @@ const es = {
     buildLabel: "Compilación {{build}}",
     betaLabel: "Beta",
     language: "Idioma",
+    appearance: "Apariencia",
     notSignedInTitle: "No has iniciado sesión",
     notSignedInDescription: "Inicia sesión para ver y administrar tu cuenta.",
     signIn: "Iniciar sesión",
@@ -43,6 +45,33 @@ const es = {
       english: "English",
       espanol: "Español",
     },
+    appearanceOptions: {
+      system: "Sistema",
+      light: "Claro",
+      dark: "Oscuro",
+      warm: "Cálido",
+    },
+  },
+  appearance: {
+    title: "Apariencia",
+    personalizationNote: "Más personalización podría llegar más adelante.",
+    system: {
+      name: "Sistema",
+      description: "Sigue la apariencia de tu dispositivo.",
+    },
+    light: {
+      name: "Claro",
+      description: "Un entorno de estudio limpio y luminoso.",
+    },
+    dark: {
+      name: "Oscuro",
+      description: "Una apariencia más tenue para entornos oscuros.",
+    },
+    warm: {
+      name: "Cálido",
+      description: "Superficies más suaves y cálidas para un estudio más tranquilo.",
+    },
+    selectedLabel: "Seleccionado",
   },
   profile: {
     firstName: "Nombre",

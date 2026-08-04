@@ -9,12 +9,13 @@ import {
   getTransitionRestoringMessage,
 } from "../src/content/transitionMessages";
 import { useTranslation } from "../src/i18n";
+import { useTheme } from "@/src/theme";
 import { Screen } from "../src/ui/Screen";
-import { typography } from "../src/ui/theme";
 
 export default function SignInTransitionScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, typography } = useTheme();
   const [phase, setPhase] = useState<"restoring" | "ready">("restoring");
   const [readyMessage, setReadyMessage] = useState<string | null>(null);
   const opacity = useRef(new Animated.Value(0)).current;
@@ -68,7 +69,7 @@ export default function SignInTransitionScreen() {
     <Screen>
       <View style={styles.center}>
         <Animated.View style={{ opacity }}>
-          <Text style={typography.heading}>
+          <Text style={[typography.heading, { color: colors.textPrimary }]}>
             {phase === "restoring" ? getTransitionRestoringMessage(t) : readyMessage ?? t("auth.workspaceReady")}
           </Text>
         </Animated.View>

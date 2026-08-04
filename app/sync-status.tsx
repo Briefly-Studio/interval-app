@@ -12,18 +12,25 @@ import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
-import { colors, spacing, typography } from "../src/ui/theme";
+import { useTheme, type ThemeTokens } from "@/src/theme";
 
 // Status is never conveyed by color alone — every status renders an icon + text pairing.
 // "offline" is deliberately neutral/muted rather than danger-colored: it's expected, normal
 // behavior for an offline-first app, not an error condition.
-const STATUS_META: Record<SyncStatus, { icon: ComponentProps<typeof Ionicons>["name"]; color: string }> = {
-  unknown: { icon: "time-outline", color: colors.textSecondary },
-  syncing: { icon: "sync-outline", color: colors.textSecondary },
-  synced: { icon: "checkmark-circle-outline", color: colors.success },
-  offline: { icon: "cloud-offline-outline", color: colors.textSecondary },
-  needsAttention: { icon: "alert-circle-outline", color: colors.danger },
-};
+// Built from live theme colors inside the component body (not at module scope) — colors must
+// stay reactive to the resolved theme, matching the same fix applied to app/index.tsx's
+// SYNC_STATUS_META.
+function statusMetaFor(
+  colors: ThemeTokens
+): Record<SyncStatus, { icon: ComponentProps<typeof Ionicons>["name"]; color: string }> {
+  return {
+    unknown: { icon: "time-outline", color: colors.textSecondary },
+    syncing: { icon: "sync-outline", color: colors.textSecondary },
+    synced: { icon: "checkmark-circle-outline", color: colors.success },
+    offline: { icon: "cloud-offline-outline", color: colors.textSecondary },
+    needsAttention: { icon: "alert-circle-outline", color: colors.danger },
+  };
+}
 
 // Retry is only meaningful when a sync is not already running. It's shown for "needsAttention"
 // (a real, actionable failure) and also for "offline" — per the product spec, connectivity
@@ -35,27 +42,28 @@ const RETRYABLE: ReadonlySet<SyncStatus> = new Set(["needsAttention", "offline"]
 export default function SyncStatusScreen() {
   const router = useRouter();
   const { t, plural } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const syncState = useSyncState();
-  const meta = STATUS_META[syncState.status];
+  const meta = statusMetaFor(colors)[syncState.status];
   const canRetry = RETRYABLE.has(syncState.status) && syncState.status !== "syncing";
 
   return (
     <Screen scroll>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={typography.title}>{t("sync.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("sync.screenTitle")}</Text>
       </View>
 
-      <Card style={styles.statusCard}>
-        <View style={styles.statusRow} accessibilityLiveRegion="polite">
+      <Card style={[styles.statusCard, { gap: spacing.md }]}>
+        <View style={[styles.statusRow, { gap: spacing.sm }]} accessibilityLiveRegion="polite">
           <Ionicons name={meta.icon} size={28} color={meta.color} />
           <Text style={[styles.statusText, { color: meta.color }]}>
             {t(SYNC_STATUS_KEYS[syncState.status])}
           </Text>
         </View>
 
-        <View style={styles.detailRows}>
-          <Text style={typography.secondary}>
+        <View style={[styles.detailRows, { gap: spacing.xs }]}>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>
             {syncState.lastSuccessfulSyncAt
               ? t("sync.detail.lastSynced", {
                   time: (() => {
@@ -67,7 +75,7 @@ export default function SyncStatusScreen() {
                 })
               : t("sync.detail.neverSynced")}
           </Text>
-          <Text style={typography.secondary}>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>
             {syncState.pendingDirtyCount > 0
               ? plural("sync.detail.pendingCount", syncState.pendingDirtyCount)
               : t("sync.detail.noPendingChanges")}
@@ -88,9 +96,9 @@ export default function SyncStatusScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  statusCard: { gap: spacing.md },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
+  statusCard: {},
+  statusRow: { flexDirection: "row", alignItems: "center" },
   statusText: { fontSize: 18, fontWeight: "600" },
-  detailRows: { gap: spacing.xs },
+  detailRows: {},
 });

@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { colors, iconSizes, spacing, touchTarget, typography } from "./theme";
+import { useTheme } from "@/src/theme";
 
 type SettingsRowProps = {
   icon?: ComponentProps<typeof Ionicons>["name"];
@@ -32,6 +32,7 @@ export function SettingsRow({
   destructive = false,
   loading = false,
 }: SettingsRowProps) {
+  const { colors, spacing, iconSizes, touchTarget, typography } = useTheme();
   const isInert = disabled || !onPress;
 
   const content = (
@@ -40,14 +41,19 @@ export function SettingsRow({
         <Ionicons
           name={icon}
           size={iconSizes.md}
-          color={isInert ? colors.textPlaceholder : destructive ? colors.danger : colors.textSecondary}
+          color={isInert ? colors.disabledText : destructive ? colors.danger : colors.textSecondary}
         />
       ) : null}
       <View style={styles.textCol}>
-        <Text style={[styles.label, isInert && styles.inertLabel, destructive && !isInert && styles.destructiveLabel]}>
+        <Text
+          style={[
+            typography.bodyMedium,
+            { color: isInert ? colors.disabledText : destructive ? colors.danger : colors.textPrimary },
+          ]}
+        >
           {label}
         </Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        {subtitle ? <Text style={[typography.caption, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
       </View>
       {!isInert && !loading ? (
         <Ionicons name="chevron-forward" size={iconSizes.sm} color={colors.textSecondary} />
@@ -57,7 +63,7 @@ export function SettingsRow({
 
   if (isInert) {
     return (
-      <View style={styles.row} accessibilityRole="text">
+      <View style={[styles.row, { gap: spacing.md, minHeight: touchTarget.min, paddingVertical: spacing.sm }]} accessibilityRole="text">
         {content}
       </View>
     );
@@ -69,7 +75,11 @@ export function SettingsRow({
       disabled={loading}
       accessibilityRole="button"
       accessibilityState={{ busy: loading }}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row,
+        { gap: spacing.md, minHeight: touchTarget.min, paddingVertical: spacing.sm },
+        pressed && { backgroundColor: colors.surfaceMuted },
+      ]}
     >
       {content}
     </Pressable>
@@ -77,17 +87,6 @@ export function SettingsRow({
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minHeight: touchTarget.min,
-    paddingVertical: spacing.sm,
-  },
-  pressed: { backgroundColor: colors.surfaceMuted },
+  row: { flexDirection: "row", alignItems: "center" },
   textCol: { flex: 1, gap: 2 },
-  label: { ...typography.bodyMedium },
-  inertLabel: { color: colors.textPlaceholder },
-  destructiveLabel: { color: colors.danger },
-  subtitle: { ...typography.caption },
 });

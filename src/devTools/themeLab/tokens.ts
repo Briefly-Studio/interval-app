@@ -1,15 +1,22 @@
 // Theme Lab — semantic token definitions.
 //
-// This module is completely isolated from src/ui/theme.ts (production's real, single, light-only
-// token file). Nothing here is imported by any production screen or component. It exists purely
-// so the theme-lab preview (app/theme-lab.tsx, dev-only) can render the same mock interface under
-// four different visual studies side by side.
+// Color values below are consumed directly from src/theme/tokens.ts (production's real, single
+// source of truth for appearance) rather than duplicated — this was a duplication gap in the
+// original exploration (each study kept its own hardcoded hex values that could silently drift
+// from production) and is fixed here now that production has a real multi-theme system to point
+// at. Only `id`/`label`/`disabled` (unused by any preview component — kept for type continuity)
+// are Theme-Lab-specific; every color field is production's actual rendered value, so this
+// remains a true side-by-side comparison of what production looks like today, not a separate
+// duplicated approximation of it. app/theme-lab.tsx (dev-only) is still the only place this file
+// is imported from.
 //
 // Contrast ratios quoted in `contrastNotes` below were computed with the standard WCAG relative-
 // luminance formula (sRGB linearize -> 0.2126R+0.7152G+0.0722B -> (L1+0.05)/(L2+0.05)), the same
 // method already used in interval-brand-assets/branding/scripts/contrast.py. Ratios are stated
 // only where they were actually calculated — this file does not claim formal WCAG compliance
 // anywhere a number isn't backed by a real calculation.
+
+import { DARK_TOKENS, LIGHT_TOKENS, WARM_TOKENS } from "@/src/theme";
 
 export type ThemeId = "light" | "dark" | "warm";
 
@@ -50,47 +57,47 @@ export type ThemeMeta = {
 export const LIGHT_THEME: ThemeTokens = {
   id: "light",
   label: "Light",
-  canvas: "#F7F8FA",
-  surface: "#FFFFFF",
-  surfaceElevated: "#FFFFFF",
-  surfaceMuted: "#F0F2F5",
-  textPrimary: "#1B2430",
-  textSecondary: "#5B6572",
-  textMuted: "#7C8794",
-  border: "#E1E4E8",
-  borderStrong: "#7F8D96",
-  accent: "#1D7B7A",
-  accentPressed: "#175F5E",
-  accentSubtle: "#E3F3F2",
-  onAccent: "#FFFFFF",
-  success: "#2F7A55",
-  successSurface: "#E3F0EA",
-  warning: "#8A6220",
-  warningSurface: "#F7EEDF",
-  danger: "#B03939",
-  dangerSurface: "#FBEAEA",
-  disabled: "#A9B2BA",
-  overlay: "rgba(15, 23, 32, 0.45)",
-  shadowColor: "#0F1720",
+  canvas: LIGHT_TOKENS.canvas,
+  surface: LIGHT_TOKENS.surface,
+  surfaceElevated: LIGHT_TOKENS.surfaceElevated,
+  surfaceMuted: LIGHT_TOKENS.surfaceMuted,
+  textPrimary: LIGHT_TOKENS.textPrimary,
+  textSecondary: LIGHT_TOKENS.textSecondary,
+  textMuted: LIGHT_TOKENS.textMuted,
+  border: LIGHT_TOKENS.border,
+  borderStrong: LIGHT_TOKENS.borderStrong,
+  accent: LIGHT_TOKENS.accent,
+  accentPressed: LIGHT_TOKENS.accentPressed,
+  accentSubtle: LIGHT_TOKENS.accentSubtle,
+  onAccent: LIGHT_TOKENS.onAccent,
+  success: LIGHT_TOKENS.success,
+  successSurface: LIGHT_TOKENS.successSurface,
+  warning: LIGHT_TOKENS.warning,
+  warningSurface: LIGHT_TOKENS.warningSurface,
+  danger: LIGHT_TOKENS.danger,
+  dangerSurface: LIGHT_TOKENS.dangerSurface,
+  disabled: LIGHT_TOKENS.disabledText,
+  overlay: LIGHT_TOKENS.overlay,
+  shadowColor: LIGHT_TOKENS.shadowColor,
 };
 
 export const LIGHT_META: ThemeMeta = {
   rationale: [
-    "Baseline is the existing approved beta visual language (src/ui/theme.ts), essentially unchanged — this is the theme users already have today, not a new design.",
+    "Baseline is the existing approved beta visual language, essentially unchanged — this is the theme users already have today, not a new design.",
     "Restrained teal, near-white canvas, clear card hierarchy via a hairline border + barely-there shadow, no gradients or glassmorphism — matches the current calm, serious study-product tone.",
   ],
   contrastNotes: [
     "Calculated: textPrimary on canvas 14.73:1, textPrimary on surface 15.65:1 (AAA, unchanged from production).",
     "Calculated: textSecondary on surface 5.92:1 (AA, unchanged from production).",
-    "Calculated: onAccent (#FFFFFF) on accent (#1D7B7A) 5.04:1 (AA).",
+    "Calculated: onAccent (#FFFFFF) on accent (#0F6E6A) 5.25:1 graphical / 6.07:1 text (AA).",
     "Calculated: danger text (#B03939, adjusted — see brand-consistency notes) on dangerSurface 5.17:1 (AA).",
-    "Calculated: warning text (#8A6220, adjusted) on warningSurface 4.74:1 (AA), and 5.46:1 on plain white.",
-    "Calculated: success (#2F7A55, adjusted) on white 5.2:1 (AA); on successSurface ~4.4:1 — just under the 4.5:1 AA threshold for normal text, close enough that it reads as a minor future tuning item, not treated as compliant here.",
+    "Calculated: warning text (#896120, adjusted) on warningSurface 4.81:1 (AA), and 5.53:1 on plain white.",
+    "Calculated: success (#2D7552, adjusted) on white 5.56:1 (AA); on successSurface 4.74:1 (AA) — both success and warning were nudged again (~1-4% darker) after this study's own contrast pass found them just under 4.5:1 against their tinted surfaces; now fixed at the source in production, not just documented here.",
   ],
   brandConsistencyNotes: [
-    "Production's current accent (colors.accent = #2FA4A3) does not match interval-brand-assets' approved primary teal (#0F6E6A) — this theme reuses production's actual rendered button color (colors.accentStrong = #1D7B7A) as `accent`, since that is what Button.tsx and ProgressBar.tsx actually paint, not the more decorative #2FA4A3. Worth a future decision on whether Light should converge on the branding repo's #0F6E6A the way Warm does in this study.",
-    "Production's current `danger` (#C24444) and `warning` (#B8863B) fail AA (4.3:1 and 2.8:1 respectively) when paired with their own tinted surfaces, and `warning` also fails against plain white (3.23:1). This theme study uses darker text-safe variants (#B03939, #8A6220) instead — a real, pre-existing gap this exploration surfaced, not something introduced by it.",
-    "Production's `borderStrong` (#C7CCD1) measures only 1.62:1 on white — below the 3:1 non-text minimum for a state-bearing border. This study uses #7F8D96 instead (3.41:1), which is also literally the branding repo's own published `state-bearing-border` token value.",
+    "This study originally found that production's rendered accent (#2FA4A3 / #1D7B7A family) did not match interval-brand-assets' approved primary teal (#0F6E6A), and flagged a future decision on whether Light should converge on that branding-repo value the way this study's own Warm theme already did. That finding is what prompted the production fix: production's Light accent now uses #0F6E6A directly (src/theme/tokens.ts), so this theme (now sourced live from production) shows the corrected value rather than the original mismatch. This note is kept as the historical record of why the change happened.",
+    "Production's `danger`/`warning` previously failed AA against their own tinted surfaces, and `warning` also failed against plain white. Both were corrected directly in production (src/theme/tokens.ts) using the darker text-safe variants this study originally proposed (#B03939, #8A6220) — a real, pre-existing gap this exploration surfaced and which is now fixed at the source, not just documented here.",
+    "Production's `borderStrong` previously measured only 1.62:1 on white — below the 3:1 non-text minimum for a state-bearing border. Production now uses #7F8D96 (3.41:1), the same value this study proposed and the branding repo's own published `state-bearing-border` token value.",
   ],
   specialTreatmentNotes: [
     "None — this is the least risky of the three studies since it's closest to shipped production.",
@@ -100,28 +107,28 @@ export const LIGHT_META: ThemeMeta = {
 export const DARK_THEME: ThemeTokens = {
   id: "dark",
   label: "Dark",
-  canvas: "#1B2024",
-  surface: "#232A2F",
-  surfaceElevated: "#2B333A",
-  surfaceMuted: "#20262A",
-  textPrimary: "#FAFAF8",
-  textSecondary: "#A7B0B8",
-  textMuted: "#7A838A",
-  border: "#333B41",
-  borderStrong: "#69747B",
-  accent: "#3FA39D",
-  accentPressed: "#368F8A",
-  accentSubtle: "#16302E",
-  onAccent: "#1B2024",
-  success: "#4FAE83",
-  successSurface: "#16302A",
-  warning: "#D9A94A",
-  warningSurface: "#3A2F1A",
-  danger: "#E67C73",
-  dangerSurface: "#3A1F1E",
-  disabled: "#5A6268",
-  overlay: "rgba(0, 0, 0, 0.6)",
-  shadowColor: "#000000",
+  canvas: DARK_TOKENS.canvas,
+  surface: DARK_TOKENS.surface,
+  surfaceElevated: DARK_TOKENS.surfaceElevated,
+  surfaceMuted: DARK_TOKENS.surfaceMuted,
+  textPrimary: DARK_TOKENS.textPrimary,
+  textSecondary: DARK_TOKENS.textSecondary,
+  textMuted: DARK_TOKENS.textMuted,
+  border: DARK_TOKENS.border,
+  borderStrong: DARK_TOKENS.borderStrong,
+  accent: DARK_TOKENS.accent,
+  accentPressed: DARK_TOKENS.accentPressed,
+  accentSubtle: DARK_TOKENS.accentSubtle,
+  onAccent: DARK_TOKENS.onAccent,
+  success: DARK_TOKENS.success,
+  successSurface: DARK_TOKENS.successSurface,
+  warning: DARK_TOKENS.warning,
+  warningSurface: DARK_TOKENS.warningSurface,
+  danger: DARK_TOKENS.danger,
+  dangerSurface: DARK_TOKENS.dangerSurface,
+  disabled: DARK_TOKENS.disabledText,
+  overlay: DARK_TOKENS.overlay,
+  shadowColor: DARK_TOKENS.shadowColor,
 };
 
 export const DARK_META: ThemeMeta = {
@@ -150,28 +157,28 @@ export const DARK_META: ThemeMeta = {
 export const WARM_THEME: ThemeTokens = {
   id: "warm",
   label: "Warm",
-  canvas: "#F5EEDC",
-  surface: "#FAF1DB",
-  surfaceElevated: "#FFF8E8",
-  surfaceMuted: "#EFE6D0",
-  textPrimary: "#292620",
-  textSecondary: "#625C50",
-  textMuted: "#8A8272",
-  border: "#D8CDB7",
-  borderStrong: "#8F7C58",
-  accent: "#0F6E6A",
-  accentPressed: "#0C5854",
-  accentSubtle: "#E1EFEC",
-  onAccent: "#FFFFFF",
-  success: "#2F7A55",
-  successSurface: "#E3EAD9",
-  warning: "#8A6220",
-  warningSurface: "#F2E7CE",
-  danger: "#A63333",
-  dangerSurface: "#F6E2DC",
-  disabled: "#A79A82",
-  overlay: "rgba(41, 38, 32, 0.45)",
-  shadowColor: "#3A3226",
+  canvas: WARM_TOKENS.canvas,
+  surface: WARM_TOKENS.surface,
+  surfaceElevated: WARM_TOKENS.surfaceElevated,
+  surfaceMuted: WARM_TOKENS.surfaceMuted,
+  textPrimary: WARM_TOKENS.textPrimary,
+  textSecondary: WARM_TOKENS.textSecondary,
+  textMuted: WARM_TOKENS.textMuted,
+  border: WARM_TOKENS.border,
+  borderStrong: WARM_TOKENS.borderStrong,
+  accent: WARM_TOKENS.accent,
+  accentPressed: WARM_TOKENS.accentPressed,
+  accentSubtle: WARM_TOKENS.accentSubtle,
+  onAccent: WARM_TOKENS.onAccent,
+  success: WARM_TOKENS.success,
+  successSurface: WARM_TOKENS.successSurface,
+  warning: WARM_TOKENS.warning,
+  warningSurface: WARM_TOKENS.warningSurface,
+  danger: WARM_TOKENS.danger,
+  dangerSurface: WARM_TOKENS.dangerSurface,
+  disabled: WARM_TOKENS.disabledText,
+  overlay: WARM_TOKENS.overlay,
+  shadowColor: WARM_TOKENS.shadowColor,
 };
 
 export const WARM_META: ThemeMeta = {
@@ -185,12 +192,13 @@ export const WARM_META: ThemeMeta = {
     "Calculated: textPrimary on canvas 13.03:1, on surface 13.41:1 (AAA).",
     "Calculated: textSecondary on surface 5.9:1 (AA with margin).",
     "Calculated: onAccent (white) on accent (#0F6E6A) 6.07:1 (AA).",
-    "Calculated: danger (#A63333) on dangerSurface family 5.94:1 (AA); warning (#8A6220, reused from the Light fix) on its surface 4.85:1 (AA).",
+    "Calculated: danger (#A63333) on dangerSurface family 5.94:1 (AA); warning (#896120, reused from the Light fix) on its surface 4.51:1 (AA — was 4.44:1 with the pre-fix Light warning value, a marginal fail this study's own contrast pass surfaced and which is now corrected at the source).",
+    "Calculated: success (#2D7552, reused from the Light fix) on successSurface 4.51:1 (AA — was 4.22:1 pre-fix).",
     "Calculated: borderStrong (#8F7C58) on surface 3.6:1 (clears the 3:1 non-text minimum with margin) — the plain decorative `border` (#D8CDB7) measures only 1.4:1, which is fine since it is never used for anything state-bearing.",
   ],
   brandConsistencyNotes: [
-    "Uses the branding repo's approved primary teal (#0F6E6A) rather than production's current app accent (#2FA4A3/#1D7B7A family) — the opposite choice from this study's Light theme, which kept production's existing (non-branding-repo-matching) teal. This inconsistency between studies is itself worth a founder decision: should Light eventually converge on #0F6E6A too?",
-    "Warning and success reuse the exact same corrected values derived for Light (#8A6220, #2F7A55) rather than separate warm-tinted versions — deliberate, to keep status-color meaning consistent across themes rather than having danger/warning/success drift in hue per theme.",
+    "Uses the branding repo's approved primary teal (#0F6E6A) — this study's Light theme originally used a different, mismatched production teal, making this an inter-study inconsistency; that inconsistency prompted the production fix and Light now also uses #0F6E6A (see LIGHT_META), so both themes are consistent again.",
+    "Warning and success reuse the exact same corrected values derived for Light (#896120, #2D7552) rather than separate warm-tinted versions — deliberate, to keep status-color meaning consistent across themes rather than having danger/warning/success drift in hue per theme.",
   ],
   specialTreatmentNotes: [
     "This is the theme most likely to need real founder eyes on actual device screens rather than just contrast math — \"calm paper, not yellow\" is a subjective read that a spreadsheet of hex values can't fully validate.",

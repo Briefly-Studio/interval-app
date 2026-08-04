@@ -5,18 +5,19 @@ import { StyleSheet, Text, View } from "react-native";
 import { AuthService } from "../src/auth/AuthService";
 import { getAuthDiagnosticCode, mapAuthError } from "../src/auth/authErrors";
 import { useTranslation } from "../src/i18n";
+import { useTheme } from "@/src/theme";
 import { BrandMark } from "../src/ui/BrandMark";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { Screen } from "../src/ui/Screen";
 import { TextField } from "../src/ui/TextField";
-import { colors, spacing, typography } from "../src/ui/theme";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignInScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = useState(params.email ?? "");
   const [password, setPassword] = useState("");
@@ -46,8 +47,8 @@ export default function SignInScreen() {
   return (
     <Screen scroll>
       <BrandMark />
-      <Text style={typography.title}>{t("auth.signIn.title")}</Text>
-      <Text style={typography.secondary}>{t("auth.signIn.subtitle")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("auth.signIn.title")}</Text>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("auth.signIn.subtitle")}</Text>
 
       <Card style={{ gap: spacing.md }}>
         <TextField
@@ -70,7 +71,7 @@ export default function SignInScreen() {
           isPassword
           editable={!loading}
         />
-        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+        {errorText ? <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>{errorText}</Text> : null}
       </Card>
 
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -102,5 +103,5 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  errorText: { ...typography.caption, color: colors.danger },
+  errorText: {},
 });

@@ -14,11 +14,12 @@ import { Button } from "../../../src/ui/Button";
 import { Card } from "../../../src/ui/Card";
 import { IconButton } from "../../../src/ui/IconButton";
 import { Screen } from "../../../src/ui/Screen";
-import { colors, spacing, typography } from "../../../src/ui/theme";
+import { useTheme } from "@/src/theme";
 
 export default function ExportDeckScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -97,22 +98,22 @@ export default function ExportDeckScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} disabled={busy} />
-        <Text style={typography.title}>{t("export.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("export.screenTitle")}</Text>
       </View>
-      <Text style={typography.secondary}>{t("export.description")}</Text>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("export.description")}</Text>
 
-      <Card style={styles.identityCard}>
-        <Text style={typography.bodyMedium} numberOfLines={2}>
+      <Card style={[styles.identityCard, { gap: spacing.xs }]}>
+        <Text style={[typography.bodyMedium, { color: colors.textPrimary }]} numberOfLines={2}>
           {deck?.title ?? t("export.fallbackDeckTitle")}
         </Text>
-        <Text style={typography.caption}>{t("export.exportsAsFile")}</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>{t("export.exportsAsFile")}</Text>
       </Card>
 
       {error ? (
-        <Card style={styles.errorCard}>
-          <Text style={styles.errorText}>{error}</Text>
+        <Card style={[styles.errorCard, { borderColor: colors.danger }]}>
+          <Text style={[typography.secondary, { color: colors.danger }]}>{error}</Text>
         </Card>
       ) : null}
 
@@ -128,8 +129,7 @@ export default function ExportDeckScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  identityCard: { gap: spacing.xs },
-  errorCard: { borderColor: colors.danger },
-  errorText: { ...typography.secondary, color: colors.danger },
+  header: { flexDirection: "row", alignItems: "center" },
+  identityCard: {},
+  errorCard: {},
 });

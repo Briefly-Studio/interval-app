@@ -9,15 +9,16 @@ import { SyncService } from "../src/cloud/sync/SyncService";
 import { useTranslation } from "../src/i18n";
 import { ForceResyncUnsyncedChangesError, forceFullResyncPrep, resetLocalData } from "../src/storage/devReset";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
+import { useTheme } from "@/src/theme";
 import { Button } from "../src/ui/Button";
 import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
-import { spacing, typography } from "../src/ui/theme";
 
 export default function DevToolsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
   const isGuest = scope.kind === "guest";
 
@@ -39,26 +40,28 @@ export default function DevToolsScreen() {
   if (!__DEV__) {
     return (
       <Screen>
-        <View style={styles.header}>
+        <View style={[styles.header, { gap: spacing.sm }]}>
           <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-          <Text style={typography.title}>Developer tools</Text>
+          <Text style={[typography.title, { color: colors.textPrimary }]}>Developer tools</Text>
         </View>
-        <Text style={typography.secondary}>This screen is only available in development.</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+          This screen is only available in development.
+        </Text>
       </Screen>
     );
   }
 
   return (
     <Screen>
-      <View style={styles.header}>
+      <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={typography.title}>Developer tools</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]}>Developer tools</Text>
       </View>
-      <Text style={typography.secondary}>For debugging only.</Text>
+      <Text style={[typography.secondary, { color: colors.textSecondary }]}>For debugging only.</Text>
 
-      <Card style={styles.toolCard}>
-        <Text style={typography.subheading}>Force Resync</Text>
-        <Text style={typography.secondary}>
+      <Card style={[styles.toolCard, { gap: spacing.sm }]}>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]}>Force Resync</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
           Re-pushes and re-pulls this account&apos;s data with the cloud. Available only when signed in.
         </Text>
         <Button
@@ -88,13 +91,15 @@ export default function DevToolsScreen() {
           }}
         />
         {isGuest && (
-          <Text style={typography.caption}>Cloud resync is available only when signed in.</Text>
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>
+            Cloud resync is available only when signed in.
+          </Text>
         )}
       </Card>
 
-      <Card style={styles.toolCard}>
-        <Text style={typography.subheading}>Reset Local Data</Text>
-        <Text style={typography.secondary}>
+      <Card style={[styles.toolCard, { gap: spacing.sm }]}>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]}>Reset Local Data</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
           Clears all locally stored decks, cards, and sessions for the current workspace.
         </Text>
         <Button
@@ -122,9 +127,9 @@ export default function DevToolsScreen() {
         />
       </Card>
 
-      <Card style={styles.toolCard}>
-        <Text style={typography.subheading}>Theme Lab</Text>
-        <Text style={typography.secondary}>
+      <Card style={[styles.toolCard, { gap: spacing.sm }]}>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]}>Theme Lab</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
           Visual-only exploration of Light/Dark/Warm appearance concepts. Development build only —
           not connected to real data, storage, or account settings.
         </Text>
@@ -140,6 +145,6 @@ export default function DevToolsScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  toolCard: { gap: spacing.sm },
+  header: { flexDirection: "row", alignItems: "center" },
+  toolCard: {},
 });
