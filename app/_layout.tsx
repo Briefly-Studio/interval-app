@@ -39,19 +39,20 @@ export default function Layout() {
     initTheme();
   }, []);
 
-  // The native splash is hidden only from BrandStartup's onReady callback (fired from that
-  // layer's own onLayout, with a bounded fallback) — never from a bare mount effect. A previous
-  // cut called SplashScreen.hideAsync() as soon as this component's own render committed, which
-  // is a JS-side signal only; it does not guarantee the native UI thread has actually painted
-  // BrandStartup's background + mark before the bridge call to hide the native splash resolves.
-  // That gap was the root cause of an earlier white-flash bug: dismissing the native splash could
-  // briefly reveal the native root view's own default background before BrandStartup's first
-  // real frame had painted. onLayout is a native-confirmed signal that BrandStartup's view
-  // genuinely has real, laid-out bounds, so hiding the native splash there cannot expose that
-  // gap. This intentionally does not wait on i18n, sync, or auth — see BrandStartup.tsx and this
-  // batch's handoff notes for why tying startup branding to network/auth readiness is out of
-  // scope here. BrandStartup owns its own full motion sequence and timing (including the
-  // reduced-motion variant and stuck-overlay backstops).
+  // The native splash is hidden only from BrandStartup's onReady callback — never from a bare
+  // mount effect. A previous cut called SplashScreen.hideAsync() as soon as this component's own
+  // render committed, a JS-side signal only that doesn't guarantee the native UI thread has
+  // actually painted anything yet; a later cut trusted onLayout alone, which confirms the Yoga
+  // layout pass completed but not that the compositor has actually painted that (already-opaque)
+  // frame to the screen — layout-computed and paint-committed are two different pipeline stages.
+  // BrandStartup now waits for onLayout AND two subsequent requestAnimationFrame ticks before
+  // firing onReady, closing that gap deterministically (frame-synchronized, not a magic delay) —
+  // see BrandStartup.tsx's handleLayout/handleLayoutConfirmed and this batch's report for the
+  // full trace of the founder-observed decks-screen blink this closes. This intentionally does
+  // not wait on i18n, sync, or auth — see BrandStartup.tsx and this batch's handoff notes for why
+  // tying startup branding to network/auth readiness is out of scope here. BrandStartup owns its
+  // own full motion sequence and timing (including the reduced-motion variant and stuck-overlay
+  // backstops).
   const hideNativeSplash = useCallback(() => {
     SplashScreen.hideAsync().catch(() => {});
   }, []);

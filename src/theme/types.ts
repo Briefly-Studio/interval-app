@@ -3,6 +3,10 @@
 // "system" — it is always an explicit, manual choice (see resolveAppearance.ts).
 export type AppearanceMode = "system" | "light" | "dark" | "warm";
 export type ResolvedTheme = "light" | "dark" | "warm";
+// The OS's own raw appearance signal — always exactly light or dark, never warm (the OS has no
+// concept of Warm). Defined here (not in index.ts, where it previously lived) so both index.ts
+// and startupTreatment.ts can depend on it without either importing from the other.
+export type SystemScheme = "light" | "dark";
 
 export const APPEARANCE_MODES: readonly AppearanceMode[] = ["system", "light", "dark", "warm"];
 

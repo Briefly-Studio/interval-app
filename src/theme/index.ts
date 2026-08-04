@@ -7,19 +7,26 @@ import {
 } from "./appearancePreference";
 import { resolveAppearance } from "./resolveAppearance";
 import { cardShadow, iconSizes, radii, spacing, THEME_TOKENS, touchTarget, typographySizes } from "./tokens";
-import type { AppearanceMode, IconSizes, Radii, ResolvedTheme, Spacing, ThemeTokens, TouchTarget } from "./types";
+import type {
+  AppearanceMode,
+  IconSizes,
+  Radii,
+  ResolvedTheme,
+  Spacing,
+  SystemScheme,
+  ThemeTokens,
+  TouchTarget,
+} from "./types";
 
-export type { AppearanceMode, ResolvedTheme, ThemeTokens } from "./types";
+export type { AppearanceMode, ResolvedTheme, SystemScheme, ThemeTokens } from "./types";
 export { isAppearanceMode, APPEARANCE_MODES } from "./types";
 export { LIGHT_TOKENS, DARK_TOKENS, WARM_TOKENS, THEME_TOKENS, typographySizes } from "./tokens";
 export { resolveAppearance } from "./resolveAppearance";
-export { startupTreatmentFor, type StartupTreatment } from "./startupTreatment";
+export { startupTreatmentFor, startupBridgeFor, type StartupTreatment, type StartupBridge } from "./startupTreatment";
 // Re-exported so dev-only tooling (Theme Lab's diagnostics/test actions) can read the raw
 // persisted value without importing a sub-path directly — @/src/theme stays the one canonical
 // entrypoint for everything this module owns, persistence included.
 export { getAppearancePreference } from "./appearancePreference";
-
-export type SystemScheme = "light" | "dark";
 
 // Exactly the contract this batch's report specifies — no extra fields. Diagnostic-only data
 // (store revision, last-change reason) is tracked separately below and exposed through its own

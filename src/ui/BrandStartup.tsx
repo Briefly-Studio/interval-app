@@ -1,3 +1,4 @@
+import { Asset } from "expo-asset";
 import { useCallback, useEffect, useRef } from "react";
 import { AccessibilityInfo, StyleSheet, View } from "react-native";
 import Animated, {
@@ -12,23 +13,38 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import { startupTreatmentFor, useTheme, type StartupTreatment } from "@/src/theme";
+import { startupBridgeFor, startupTreatmentFor, useTheme, type StartupTreatment } from "@/src/theme";
 
-// Approved app-icon-background token (#0F7A75) — matches app.json's expo-splash-screen config
-// verbatim. The native splash cannot read the persisted appearance preference before JS starts,
-// so it stays this fixed teal in every case, by design. This layer's own opening frame (the
-// "bridge" below) deliberately renders pixel-identical to it, so the native-splash → BrandStartup
-// handoff is an imperceptible cut, not a color jump — see this batch's report, Phase F/G.
+// Approved app-icon-background token (#0F7A75) — matches app.json's expo-splash-screen
+// LIGHT-appearance config verbatim. Kept as a named export for anything that still wants "the
+// brand teal", but the bridge itself is no longer hardcoded to it — see BRIDGE_TREATMENTS below.
 const BRIDGE_TEAL = "#0F7A75";
 export const BRAND_STARTUP_TEAL = BRIDGE_TEAL;
 
 // Native splash's own calibrated mark size (app.json's expo-splash-screen imageWidth) — the
-// bridge frame below uses this exact square box with the exact same source image
-// (splash-icon.png) so its first frame is pixel-identical to the native splash it replaces. Also
-// used to derive MARK_DISPLAY_SCALE further down, which sizes the (differently-shaped) treatment
-// mark crops to match this same on-screen glyph height.
+// bridge frame below uses this exact square box (for either variant) so its first frame is
+// pixel-identical to whichever native splash variant iOS/Android actually displayed. Also used to
+// derive MARK_DISPLAY_SCALE further down, which sizes the (differently-shaped) treatment mark
+// crops to match this same on-screen glyph height.
 const ORIGINAL_MARK_SIZE = 180;
-const BRIDGE_MARK_SOURCE = require("../../assets/images/splash-icon.png");
+
+// The native splash is adaptive (app.json's expo-splash-screen "dark" config — see this batch's
+// report, Phase 2), using the OS's OWN system-appearance signal (the only thing native launch
+// resources can observe — they cannot read Interval's persisted Light/Dark/Warm override, which
+// lives in JS/AsyncStorage and isn't available until React Native starts). The two possible native
+// splash variants:
+//   Light-system native splash (unchanged, pre-existing): #0F7A75 teal background, white mark.
+//   Dark-system native splash: #1B2024 background, mark recolored to #3FA39D — same source
+//     geometry as the white mark (assets/images/splash-icon-dark.png is a pixel-for-pixel recolor
+//     of splash-icon.png; alpha channel and bounding box verified byte-identical, only RGB
+//     changed — no redrawing), so ORIGINAL_MARK_SIZE applies unchanged to both variants.
+// Which of these two this component's OWN bridge frame renders is decided by startupBridgeFor()
+// (src/theme/startupTreatment.ts) — a function of BOTH `selectedMode` and `systemScheme`, not
+// `systemScheme` alone (see the `bridge` derivation below for why that distinction matters).
+const BRIDGE_TREATMENTS: Record<"light" | "dark", { background: string; markSource: number }> = {
+  light: { background: BRIDGE_TEAL, markSource: require("../../assets/images/splash-icon.png") },
+  dark: { background: "#1B2024", markSource: require("../../assets/images/splash-icon-dark.png") },
+};
 
 // Approved startup-animation treatments (branding/motion/founder-motion-notes.md, "Founder
 // decisions formalized here" — production lock, not an open comparison):
@@ -175,6 +191,41 @@ const MARK_BOX_HEIGHT = MARK_CROP_HEIGHT * MARK_DISPLAY_SCALE; // ≈84.18
 // asset represents "at rest" as long as its displayed glyph height matches TARGET_GLYPH_HEIGHT —
 // which MARK_DISPLAY_SCALE guarantees by construction — so it needs no adjustment here.
 
+// Best-effort, fire-and-forget prefetch of every mark/word PNG this component can possibly need,
+// kicked off at module-evaluation time (as early as this file is first imported by app/_layout.tsx
+// — before BrandStartup ever mounts). This is defense-in-depth for the mark/word IMAGES' own
+// decode timing, not for the opacity-coverage guarantee itself: the bridge and treatment
+// BACKGROUNDS are plain solid colors applied directly to an always-opaque root (see
+// styles.container below and its inline backgroundColor), so screen coverage never depends on
+// whether an Image has finished decoding. Deliberately not awaited anywhere and never gates the
+// native-splash-hide signal — a slow or failed prefetch just means the mark/word may pop in a few
+// ms after an already-opaque, correctly-colored frame is on screen, never a transparent gap.
+const DEV = typeof __DEV__ !== "undefined" && __DEV__;
+const MODULE_LOADED_AT = Date.now();
+
+Asset.loadAsync([
+  BRIDGE_TREATMENTS.light.markSource,
+  BRIDGE_TREATMENTS.dark.markSource,
+  MARK_SOURCES.light,
+  MARK_SOURCES.dark,
+  NTERVAL_SOURCES.light,
+  NTERVAL_SOURCES.dark,
+])
+  .then(() => {
+    if (DEV) console.log(`[startup] +${Date.now() - MODULE_LOADED_AT}ms (since module load) startup assets ready`);
+  })
+  .catch(() => {});
+
+// Development-only, removable timestamp instrumentation for diagnosing the brief flash/abrupt
+// transition founder QA observed during the native-splash → runtime handoff. Logs elapsed ms
+// since this BrandStartup instance mounted (not wall-clock time) so gaps between milestones are
+// immediately readable in Metro logs without doing date arithmetic. Never logs secrets or user
+// data — only milestone names and millisecond offsets. See this batch's report, Phase 2E.
+function startupLog(mountedAt: number, milestone: string) {
+  if (!DEV) return;
+  console.log(`[startup] +${Date.now() - mountedAt}ms`, milestone);
+}
+
 type BrandStartupProps = {
   // Called exactly once, as soon as this layer's first real native layout is confirmed (via
   // onLayout, with a bounded fallback — see effect below). This is the *only* signal app/
@@ -199,13 +250,26 @@ export function BrandStartup({ onReady, onFinished }: BrandStartupProps) {
   // prop computed once by a parent — this is what makes BrandStartup itself just another
   // consumer of the same single source of truth every other themed surface in the app reads, per
   // this batch's report, Phase B. isInitialized gates whether app/_layout.tsx mounts this
-  // component at all (see app/_layout.tsx), so resolvedTheme here is always already the real,
-  // confirmed value by the time this ever renders.
-  const { resolvedTheme } = useTheme();
+  // component at all (see app/_layout.tsx), so selectedMode/resolvedTheme here are always already
+  // the real, confirmed values by the time this ever renders.
+  const { selectedMode, resolvedTheme, systemScheme } = useTheme();
   const treatment = startupTreatmentFor(resolvedTheme);
   const markSource = MARK_SOURCES[treatment];
   const ntervalSource = NTERVAL_SOURCES[treatment];
   const treatmentBackground = TREATMENTS[treatment].background;
+
+  // Which bridge frame to show first. A PREVIOUS cut derived this from `systemScheme` alone
+  // (matching whatever native splash variant the OS happened to display) — that was correct only
+  // for System mode, and produced a real, deterministic bug for explicit Light/Warm on a phone
+  // with OS-level Dark Mode on: the bridge would show Dark (matching the phone) even though the
+  // user's own saved preference — known and final by the time BrandStartup ever mounts — was
+  // Light or Warm, producing a spurious Dark frame before the correct Light treatment appeared.
+  // startupBridgeFor() fixes this by consulting `selectedMode` first: only "system" still follows
+  // the phone; every explicit mode picks its own bridge outright, matching the required product
+  // rule (explicit Light/Warm never show a Dark bridge; explicit Dark never shows a Light bridge)
+  // — see src/theme/startupTreatment.ts for the full mapping and this batch's report for the trace.
+  const bridgeKey = startupBridgeFor(selectedMode, systemScheme);
+  const bridge = BRIDGE_TREATMENTS[bridgeKey];
 
   // ---- Bridge phase ----
   // bridgeOpacity: the pixel-identical-to-native-splash frame. 1 throughout the bridge hold, then
@@ -238,16 +302,41 @@ export function BrandStartup({ onReady, onFinished }: BrandStartupProps) {
   const finishedRef = useRef(false);
   const reduceMotionRef = useRef<boolean | null>(null);
   const layoutConfirmedRef = useRef(false);
+  // Captured once, at the first render — the reference point every startupLog() call below
+  // measures elapsed time from. See startupLog()'s own doc comment (Phase 2E flash instrumentation).
+  const mountedAtRef = useRef(Date.now());
+
+  useEffect(() => {
+    // One concise, greppable line covering the full decision chain — the exact shape this batch's
+    // report specifies, so a founder (or a future debugging session) can see at a glance whether
+    // `bridge` ever disagrees with `mode` in a way it shouldn't (e.g. mode=warm bridge=dark would
+    // be the bug this batch fixes; mode=warm bridge=light is correct).
+    startupLog(
+      mountedAtRef.current,
+      `mode=${selectedMode} system=${systemScheme} resolved=${resolvedTheme} bridge=${bridgeKey} treatment=${treatment}`
+    );
+    // Logged once, at mount, so the invariant this batch's report proves (every layer starts at
+    // an opacity that keeps the combined surface fully opaque) is visible directly in Metro logs,
+    // not just asserted in code comments.
+    startupLog(
+      mountedAtRef.current,
+      `initial opacity — root(container)=${containerOpacity.value} bridge=${bridgeOpacity.value} treatment=${treatmentOpacity.value}; ` +
+        `root background=${bridge.background} bridge background=${bridge.background} treatment background=${treatmentBackground}`
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const finish = useCallback(() => {
     if (finishedRef.current) return;
     finishedRef.current = true;
+    startupLog(mountedAtRef.current, "overlay removed");
     onFinished?.();
   }, [onFinished]);
 
   const markReady = useCallback(() => {
     if (readyRef.current) return;
     readyRef.current = true;
+    startupLog(mountedAtRef.current, "native splash hidden (onReady fired)");
     onReady?.();
   }, [onReady]);
 
@@ -273,6 +362,27 @@ export function BrandStartup({ onReady, onFinished }: BrandStartupProps) {
       BRIDGE_HOLD_MS,
       withTiming(1, { duration: BRIDGE_CROSSFADE_MS, easing: Easing.linear })
     );
+
+    // JS-thread-observable milestones matching the UI-thread-driven Reanimated timeline above —
+    // scheduled with the same delay constants, for Phase 2E flash diagnosis. A few ms of drift
+    // from the actual UI-thread paint is expected and acceptable for this purpose.
+    setTimeout(() => startupLog(mountedAtRef.current, "bridge → treatment crossfade started"), BRIDGE_HOLD_MS);
+    setTimeout(
+      () => startupLog(mountedAtRef.current, "bridge → treatment crossfade completed"),
+      PRE_REVEAL_DELAY_MS
+    );
+    if (!reduced) {
+      setTimeout(() => startupLog(mountedAtRef.current, "wordmark reveal started"), PRE_REVEAL_DELAY_MS);
+      setTimeout(
+        () => startupLog(mountedAtRef.current, "overlay fade started"),
+        PRE_REVEAL_DELAY_MS + REVEAL_MS + HOLD_LOCKUP_MS
+      );
+    } else {
+      setTimeout(
+        () => startupLog(mountedAtRef.current, "overlay fade started"),
+        PRE_REVEAL_DELAY_MS + REDUCED_HOLD_MARK_MS + REDUCED_CROSSFADE_MS + REDUCED_HOLD_LOCKUP_MS
+      );
+    }
 
     if (reduced) {
       // Non-spatial: no translation, no scale, no growing width — after the shared bridge
@@ -325,18 +435,49 @@ export function BrandStartup({ onReady, onFinished }: BrandStartupProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finish, markReady]);
 
-  const handleLayout = useCallback(() => {
+  // onLayout confirms the YOGA layout pass has computed this view's bounds — it does NOT confirm
+  // the native compositor has actually painted this (already-opaque) frame to the screen. Those
+  // are two different stages of the render pipeline; treating layout-computed as paint-committed
+  // was the structural gap behind the founder-observed decks-screen blink (this batch's report,
+  // Phase A). Two nested requestAnimationFrame calls after onLayout is the standard React Native
+  // technique for waiting past that gap: the first rAF fires once the current JS frame's changes
+  // have been handed to the native side; the second confirms a full subsequent frame has been
+  // composited, meaning the first one (carrying this opaque bridge frame) is now genuinely on
+  // screen. Only then is it safe to ask the native splash to hide — see handleLayoutConfirmed's
+  // own comment and app/_layout.tsx's hideNativeSplash. No magic milliseconds: this is frame-
+  // synchronized, and in practice adds at most ~1-2 display refreshes (well under 33ms) to the
+  // fixed 150ms bridge hold, imperceptible.
+  const onLayoutEventReceivedRef = useRef(false);
+
+  const handleLayoutConfirmed = useCallback(() => {
     if (layoutConfirmedRef.current) return;
     layoutConfirmedRef.current = true;
+    startupLog(mountedAtRef.current, "BrandStartup paint confirmed (2x requestAnimationFrame after onLayout)");
     maybeStart();
   }, [maybeStart]);
+
+  const handleLayout = useCallback(() => {
+    if (onLayoutEventReceivedRef.current) return;
+    onLayoutEventReceivedRef.current = true;
+    startupLog(mountedAtRef.current, "BrandStartup laid out (onLayout fired)");
+    requestAnimationFrame(() => {
+      startupLog(mountedAtRef.current, "first requestAnimationFrame");
+      requestAnimationFrame(() => {
+        startupLog(mountedAtRef.current, "second requestAnimationFrame — paint confirmed");
+        handleLayoutConfirmed();
+      });
+    });
+  }, [handleLayoutConfirmed]);
 
   useEffect(() => {
     let cancelled = false;
 
     // Absolute backstops — independent of each other and of everything above — so this layer can
     // never get permanently stuck even if onLayout never fires, the accessibility check never
-    // resolves, or any animation callback fails.
+    // resolves, or any animation callback fails. This one deliberately skips the two-rAF paint
+    // confirmation handleLayoutConfirmed() normally requires: if onLayout itself hasn't fired
+    // within 500ms, something is already unusual, and getting the app moving forward safely
+    // matters more here than one more paint-timing guarantee on top of an already-degraded path.
     const layoutBackstop = setTimeout(() => {
       if (!layoutConfirmedRef.current) {
         layoutConfirmedRef.current = true;
@@ -423,14 +564,21 @@ export function BrandStartup({ onReady, onFinished }: BrandStartupProps) {
 
   return (
     <Animated.View
-      style={[styles.container, containerAnimatedStyle]}
+      // backgroundColor is set directly on this ROOT view (not left to the first child layer
+      // below) so the surface is opaque and correctly colored from this component's very first
+      // paint, independent of child-layer paint ordering — see this batch's report, Phase C/D,
+      // for why relying solely on a child layer's own background was the structural gap behind
+      // the founder-observed decks-screen blink. zIndex/elevation guarantee this composites above
+      // the Expo Router Stack regardless of paint/mount-order subtleties, not just JSX sibling
+      // order (which is correct today but not something to depend on exclusively).
+      style={[styles.container, { backgroundColor: bridge.background, zIndex: 1000, elevation: 1000 }, containerAnimatedStyle]}
       onLayout={handleLayout}
       accessible
       accessibilityRole="image"
       accessibilityLabel="Interval"
     >
       {/* Full-surface background layers, crossfading — always behind everything else. */}
-      <Animated.View style={[styles.fill, { backgroundColor: BRIDGE_TEAL }, bridgeLayerAnimatedStyle]} pointerEvents="none" />
+      <Animated.View style={[styles.fill, { backgroundColor: bridge.background }, bridgeLayerAnimatedStyle]} pointerEvents="none" />
       <Animated.View
         style={[styles.fill, { backgroundColor: treatmentBackground }, treatmentBackgroundAnimatedStyle]}
         pointerEvents="none"
@@ -450,11 +598,12 @@ export function BrandStartup({ onReady, onFinished }: BrandStartupProps) {
         </View>
       </Animated.View>
 
-      {/* The bridge mark — pixel-identical to the native splash (same source image, same size,
-          same centered position). Visible alone during the bridge hold, then crossfades away. */}
+      {/* The bridge mark — pixel-identical to whichever native splash variant iOS/Android actually
+          displayed (see `bridge` above). Visible alone during the bridge hold, then crossfades
+          away. */}
       <View style={styles.layer} pointerEvents="none">
         <Animated.Image
-          source={BRIDGE_MARK_SOURCE}
+          source={bridge.markSource}
           style={[styles.bridgeMark, bridgeLayerAnimatedStyle]}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
