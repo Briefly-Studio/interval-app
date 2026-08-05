@@ -2,12 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { AccessibilityInfo, Alert, FlatList, Platform, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Alert, FlatList, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import type { UserIdentity } from "../src/auth/identity";
-import { SyncService } from "../src/cloud/sync/SyncService";
 import { onSyncComplete } from "../src/cloud/sync/syncSignal";
 import type { SyncStatus } from "../src/cloud/sync/syncState";
 import { SYNC_STATUS_KEYS } from "../src/cloud/sync/syncStatusCopy";
@@ -15,7 +14,7 @@ import { useSyncState } from "../src/cloud/sync/useSyncState";
 import { getHomeGreeting } from "../src/content/timeGreeting";
 import { useTranslation } from "../src/i18n";
 import type { DeckRecord } from "../src/models/deck";
-import { deleteDeckById, getDecksAll, setDecks } from "../src/storage/decks";
+import { deleteDeckById, getDecksAll } from "../src/storage/decks";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { useTheme, type ThemeTokens } from "@/src/theme";
 import { AccountButton } from "../src/ui/AccountButton";
@@ -192,55 +191,9 @@ export default function DecksHome() {
     ]);
   };
 
-  const renameDeck = (deck: DeckRecord) => {
-    if (mutating) return;
-    if (Platform.OS === "ios" && typeof Alert.prompt === "function") {
-      Alert.prompt(
-        t("home.renameDeckTitle"),
-        undefined,
-        async (text) => {
-          const title = text.trim();
-          if (!title) return;
-          setMutating(true);
-          try {
-            const activeScope = await AuthService.getActiveScope();
-            const allDecks = await getDecksAll(activeScope);
-            const now = new Date().toISOString();
-            const updated = allDecks.map((item) => {
-              if (item.id !== deck.id) return item;
-              return {
-                ...item,
-                title,
-                updatedAt: now,
-                rev: (item.rev ?? 0) + 1,
-                dirty: true,
-              };
-            });
-            await setDecks(activeScope, updated);
-            // The local rename above has already fully succeeded — a background sync failure
-            // (e.g. offline) must never flip this rename's outcome to "failed". Fire-and-forget,
-            // matching the same reasoning already used by recently-deleted.tsx's restoreDeck.
-            SyncService.syncOnce().catch(() => {});
-            await loadDecks(activeScope);
-          } catch (error) {
-            console.error("[home] rename deck failed:", error);
-            Alert.alert(t("home.renameDeckFailedTitle"), t("home.renameDeckFailedBody"));
-          } finally {
-            setMutating(false);
-          }
-        },
-        "plain-text",
-        deck.title
-      );
-      return;
-    }
-
-    Alert.alert(t("home.renameNotAvailableTitle"), t("home.renameNotAvailableBody"));
-  };
-
   const onDeckLongPress = (deck: DeckRecord) => {
     Alert.alert(t("home.deckActionsTitle"), undefined, [
-      { text: t("home.renameAction"), onPress: () => renameDeck(deck) },
+      { text: t("home.renameAction"), onPress: () => router.push(`/deck/${deck.id}/edit`) },
       { text: t("deckDetail.deleteAction"), style: "destructive", onPress: () => confirmDelete(deck) },
       { text: t("common.cancel"), style: "cancel" },
     ]);
@@ -250,7 +203,9 @@ export default function DecksHome() {
 
   return (
     <Screen>
-      <HomeHeader onTitleLongPress={() => router.push({ pathname: "/dev-tools" as any })}>
+      <HomeHeader
+        onTitleLongPress={__DEV__ ? () => router.push({ pathname: "/dev-tools" as any }) : undefined}
+      >
         {__DEV__ && (
           <IconButton
             name="construct-outline"

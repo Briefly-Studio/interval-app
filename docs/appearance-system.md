@@ -172,13 +172,13 @@ screen, sync status, Recently Deleted, import, create/edit deck, deck detail, cr
 review, quiz, both results screens, history, export, privacy notice, beta notice, help & feedback,
 language, and the dev-tools screen — now call `useTheme()` and render zero hardcoded colors.
 
-**Deliberately not migrated:**
-- `app/import-deck.tsx` — a legacy paste-JSON import flow. Confirmed dead: no route in the app
-  (`app/*.tsx`, `src/**`) pushes or replaces to `/import-deck`; `app/import.tsx` (the reachable,
-  choose-file flow linked from Settings/Home) fully superseded it. This was already documented as
-  unreachable in `src/i18n/locales/en.ts`'s `importDeckLegacy` comment before this batch. Left
-  un-migrated and un-themed per "don't revive dead routes merely to theme them" — reported here,
-  not silently deleted (deleting it wasn't in scope for this batch).
+**Removed, not migrated:**
+- `app/import-deck.tsx` — a legacy paste-JSON import flow, off-brand and un-themed. Confirmed dead
+  across multiple audits: no route in the app (`app/*.tsx`, `src/**`) ever pushed or replaced to
+  `/import-deck`; `app/import.tsx` (the reachable, choose-file flow linked from Settings/Home)
+  fully superseded it. Deleted in the V3 Beta Readiness batch, along with its now-unused
+  `importDeckLegacy` locale namespace — `app/import.tsx` and the shared
+  `src/domain/deckPortability.ts` import/export logic it uses are unaffected.
 
 **Two pre-existing module-scope color bugs found and fixed as part of migration**: `app/index.tsx`'s
 `SYNC_STATUS_META` and `app/sync-status.tsx`'s `STATUS_META` both read `colors.*` once at module

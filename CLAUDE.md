@@ -15,7 +15,52 @@ Interval is an offline-first mobile flashcard and study application built with:
 - Lambda
 - DynamoDB
 
-The application was previously called Briefly, so some storage keys, filenames, comments, and package metadata may still use that name.
+The application was previously called Briefly. Production-facing UI (screens, alerts, share
+sheets, app display name, exported file naming) now says Interval throughout. Legacy `.briefly`
+deck files remain fully importable, and a number of internal-only identifiers still use the old
+name intentionally — see "Legacy Briefly identifiers" below before renaming any of them.
+
+V3 beta is iOS-first. Android is buildable and expected to be core-flow compatible but has not
+received the same testing depth. Authenticated web support is explicitly out of scope for this
+beta — see `docs/platform-scope.md` for the full platform-support decision and rationale.
+
+### Legacy Briefly identifiers
+
+These remain `briefly.*`/Briefly-named on purpose. None are user-visible, and renaming any of
+them would orphan existing users' local data or break already-registered platform identifiers —
+do not rename them for branding alone.
+
+- **AsyncStorage keys** — `src/storage/keys.ts` (`briefly.decks.v1`, `briefly.cards.v1`,
+  `briefly.sessions.v1`), `src/theme/appearancePreference.ts` (`briefly.appearancePreference.v1`),
+  `src/i18n/languagePreference.ts` (`briefly.languagePreference.v1`). Not user-visible. Renaming
+  any of these would make every existing installed user's local decks, cards, sessions, theme
+  preference, or language preference invisible to the app (a fresh read under a new key returns
+  empty) — not corrupted, but effectively lost from the user's point of view. A rename would
+  require a real migration (read old key → write new key → delete old key) verified with test
+  coverage; not something to do incidentally in a branding pass.
+- **SecureStore device-ID key** — `src/storage/device.ts` (`briefly.deviceId`). Not user-visible.
+  Renaming would generate a new device ID for every existing native install (the old one becomes
+  unreachable under the new key) — low real-world impact (`deviceId` is only used as an opaque
+  tag in sync push/pull requests, not for scope/identity), but still unnecessary churn with no
+  user-facing benefit.
+- **npm package name** — `package.json`'s `"name": "briefly-app"`. Not user-visible (pure
+  internal npm/build metadata, never rendered anywhere in the app). Left untouched deliberately —
+  package files are treated as protected in beta-cleanup batches to avoid unrelated
+  lockfile churn.
+- **Expo `slug`** — `app.json`'s `"slug": "briefly-app"`. Not user-visible in the app itself, but
+  is the identifier EAS/Expo's own infrastructure would use to associate this project with a
+  hosted project, update channel, or build history if one already exists. There is no `eas.json`
+  in this repo to confirm one way or the other, so changing it could silently disconnect the
+  project from infrastructure this repository can't see. Preserved out of caution; safe to
+  revisit once EAS project status is confirmed with the founder.
+- **iOS bundle identifier / Xcode product name** — `com.anonymous.briefly-app` /
+  `brieflyapp` (visible only in `ios/brieflyapp.xcodeproj`, gitignored, locally generated).
+  Explicitly out of scope per this batch's own instructions — bundle identifiers are a
+  signing/App-Store-identity concern, not a branding concern.
+- **Support email domain** — `src/domain/supportContact.ts`'s `intervalsupport@briefly-studios.com`.
+  This is a real, currently-owned external email address/domain, not leftover app branding —
+  changing the string would misdirect real support requests unless a new domain/mailbox is
+  actually provisioned first. Not touched.
 
 ## Core Product Rule
 
@@ -64,7 +109,10 @@ The sync flow is:
 5. apply remote changes locally
 6. persist the new cursor
 
-The device ID is persisted in Expo SecureStore.
+The device ID and auth tokens are persisted in Expo SecureStore on native (iOS/Android) only,
+via the platform-safe wrapper at `src/storage/secureStore.ts` — SecureStore has no real web
+implementation, so on web every call through that wrapper resolves to a safe no-op rather than
+throwing. See `docs/platform-scope.md`.
 
 ## AWS Resources
 
@@ -136,7 +184,10 @@ Never accept the user ID from the request body or query parameters.
   accepted beta risk, not a solved problem — see docs/sync-invariants.md's "no conflict
   UI for concurrent multi-device edits" section for the full explanation and what a
   future resolution could involve.
-- README and some Briefly naming are outdated.
+- README carries a disclaimer pointing readers to this file and `docs/` for current
+  details (fixed this batch), but its own Features/Project Structure sections still
+  describe an earlier version of the app rather than being fully rewritten. Some
+  Briefly naming remains elsewhere (storage keys, filenames, comments).
 - AWS infrastructure is not yet managed through Infrastructure as Code.
 - Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.
 

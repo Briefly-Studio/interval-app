@@ -172,8 +172,13 @@ export default function DeckDetails() {
   // Consolidates the old "Show tools" section (Set difficulty / Share deck / Study history)
   // into a single header overflow control — same handlers, same routes, no new behavior, just
   // one less layer of nested toggles competing with the deck's own content.
+  const onEditDeck = () => {
+    router.push(`/deck/${id}/edit`);
+  };
+
   const onOverflowPress = () => {
     Alert.alert(deck?.title ?? t("deckDetail.deckOptionsTitle"), undefined, [
+      { text: t("deckDetail.editDeckAction"), onPress: onEditDeck },
       { text: t("deckDetail.setDifficultyTitle"), onPress: onSetDifficulty },
       { text: t("deckDetail.shareDeckAction"), onPress: onExportDeck },
       { text: t("deckDetail.studyHistoryAction", { count: sessions.length }), onPress: goHistory },

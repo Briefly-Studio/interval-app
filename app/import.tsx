@@ -33,7 +33,7 @@ export default function ImportDeckScreen() {
     if (result.canceled || !result.assets?.length) return;
 
     const asset = result.assets[0];
-    setSelectedFile({ name: asset.name ?? "deck.briefly", uri: asset.uri });
+    setSelectedFile({ name: asset.name ?? "deck.interval", uri: asset.uri });
   };
 
   const onImport = async () => {
@@ -86,6 +86,7 @@ export default function ImportDeckScreen() {
         <Text style={[typography.title, { color: colors.textPrimary }]}>{t("importDeck.screenTitle")}</Text>
       </View>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("importDeck.subtitle")}</Text>
+      <Text style={[typography.caption, { color: colors.textSecondary }]}>{t("importDeck.legacyNote")}</Text>
 
       <Card style={[styles.fileCard, { gap: spacing.md }]}>
         <View style={[styles.fileRow, { gap: spacing.sm }]}>

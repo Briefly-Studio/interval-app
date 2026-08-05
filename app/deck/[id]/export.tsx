@@ -71,7 +71,10 @@ export default function ExportDeckScreen() {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-+|-+$)/g, "");
-      const fileName = `briefly-deck-${safeTitle || "deck"}-${Date.now()}.briefly`;
+      // .interval is the current export extension; legacy .briefly files remain fully
+      // importable (see src/domain/deckPortability.ts — import validates JSON payload shape
+      // only, never the file extension).
+      const fileName = `interval-deck-${safeTitle || "deck"}-${Date.now()}.interval`;
       const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
       if (!baseDir) {
         setError(t("export.unavailableError"));

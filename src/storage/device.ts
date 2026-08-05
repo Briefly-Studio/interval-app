@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "./secureStore";
 import { makeId } from "../models/deck";
 
 const KEY = "briefly.deviceId";

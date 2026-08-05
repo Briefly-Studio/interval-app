@@ -25,11 +25,11 @@ export async function handleIncomingFile(uri: string): Promise<string> {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error("This file is not a valid Briefly deck.");
+    throw new Error("This file is not a valid Interval deck file.");
   }
 
   if (!validatePayload(parsed)) {
-    throw new Error("This file is not a valid Briefly deck.");
+    throw new Error("This file is not a valid Interval deck file.");
   }
 
   const payload = parsed;

@@ -1,12 +1,22 @@
-## Current Version
-Briefly v1.5 — Manual Study MVP (Offline-first)
+> This README describes the app's original MVP shape and is not kept fully current. For the
+> accurate, up-to-date architecture, platform support, and technical-debt status, see
+> [`CLAUDE.md`](./CLAUDE.md) and [`docs/`](./docs) (in particular `docs/platform-scope.md` and
+> `docs/sync-invariants.md`). The project was renamed from Briefly to Interval; production UI now
+> says Interval throughout, legacy `.briefly` deck files remain fully importable, and a few
+> internal-only identifiers (storage keys, filenames, comments) still reference the old name
+> intentionally — see `CLAUDE.md`'s "Legacy Briefly identifiers" section before renaming any of
+> them.
 
+# Interval — Flashcards + Review + Quiz (Expo Router + AsyncStorage)
 
-# Briefly — Flashcards + Review + Quiz (Expo Router + AsyncStorage)
+Interval is an offline-first mobile flashcard app built with **Expo (React Native)** using
+**file-based routing (expo-router)** and **local persistence (AsyncStorage)**, with optional
+Cognito-authenticated cloud backup and multi-device sync. Users can create decks, add/edit/delete
+cards, review cards in flip mode, and take a multiple-choice quiz with a results screen — fully
+usable without an account (see `CLAUDE.md`'s Core Product Rule).
 
-Briefly is a mobile flashcard app built with **Expo (React Native)** using **file-based routing (expo-router)** and **local persistence (AsyncStorage)**. Users can create decks, add/edit/delete cards, review cards in flip mode, and take a multiple-choice quiz with a results screen.
-
-This project focuses on clean, scalable architecture: separation of concerns between UI routes and storage utilities, and safe deletion behavior to prevent orphaned data.
+This project focuses on clean, scalable architecture: separation of concerns between UI routes and
+storage utilities, and safe (soft-delete/tombstone) deletion behavior to prevent orphaned data.
 
 ---
 
@@ -40,34 +50,19 @@ This project focuses on clean, scalable architecture: separation of concerns bet
 
 ## Tech Stack
 
-- **Expo + React Native**
+- **Expo + React Native** (iOS-first for the current beta; Android buildable — see
+  `docs/platform-scope.md`)
 - **expo-router** (file-based routing)
-- **AsyncStorage** for local persistence
+- **AsyncStorage** for local persistence, **Expo SecureStore** for tokens/device ID (native only)
+- **AWS Cognito** for authentication, **API Gateway + Lambda + DynamoDB** for sync (see `CLAUDE.md`)
+- Localization (English/Spanish) and a canonical light/dark/warm appearance system
 - TypeScript
 
 ---
 
 ## Project Structure
 
-```txt
-app/
-  index.tsx                       # Decks Home (list/create/delete decks)
-  create-deck.tsx                 # Create deck screen
-  deck/
-    [id]/
-      _layout.tsx                 # Deck stack layout
-      index.tsx                   # Deck details + card list
-      add-card.tsx                # Add card
-      review.tsx                  # Review mode (flip cards)
-      quiz.tsx                    # Quiz mode (multiple choice)
-      quiz-results.tsx            # Results screen
-      edit-card/
-        [cardId].tsx              # Edit/delete card
-
-src/
-  models/
-    deck.ts                       # Deck type definition
-    card.ts                       # Card type definition
-  storage/
-    decks.ts                      # Deck storage functions
-    cards.ts                      # Card storage functions (per-deck keys)
+This section previously carried an inline file tree that drifted out of date. For the current,
+accurate route inventory and module map, see `CLAUDE.md`'s architecture notes and browse `app/`
+and `src/` directly — both are organized by feature (deck/card/session screens under `app/`,
+storage/sync/auth/theme/i18n under `src/`).

@@ -4,12 +4,12 @@ import type { Deck } from "../models/deck";
 export type ExportPayload = {
   version: 1;
   deck: { title: string; createdAt: number };
-  cards: Array<{
+  cards: {
     front: string;
     back: string;
     difficulty: "easy" | "medium" | "hard";
     createdAt: number;
-  }>;
+  }[];
 };
 
 export function buildExportPayload(deck: Deck, cards: Card[]): ExportPayload {
@@ -36,12 +36,12 @@ export function validatePayload(data: unknown): data is ExportPayload {
   const payload = data as {
     version?: unknown;
     deck?: { title?: unknown; createdAt?: unknown };
-    cards?: Array<{
+    cards?: {
       front?: unknown;
       back?: unknown;
       difficulty?: unknown;
       createdAt?: unknown;
-    }>;
+    }[];
   };
 
   if (payload.version !== 1) return false;

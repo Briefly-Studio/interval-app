@@ -51,7 +51,6 @@ export default function QuizScreen() {
   const [loaded, setLoaded] = useState(false);
 
   const [index, setIndex] = useState(0);
-  const [score, setScore] = useState(0);
   const scoreRef = useRef(0);
 
   const [startedAt, setStartedAt] = useState(() => Date.now());
@@ -80,8 +79,6 @@ export default function QuizScreen() {
         setCards(ordered);
         setLoaded(true);
         setIndex(0);
-
-        setScore(0);
         scoreRef.current = 0;
 
         setStartedAt(Date.now());
@@ -137,7 +134,6 @@ export default function QuizScreen() {
 
     if (correct) {
       scoreRef.current += 1;
-      setScore(scoreRef.current);
     }
   };
 

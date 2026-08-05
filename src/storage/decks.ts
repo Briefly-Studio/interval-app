@@ -111,3 +111,30 @@ export async function deleteDeckById(
 
   return updated;
 }
+
+// Same invariant as updateAllCardsDifficulty in src/storage/cards.ts: only a deck whose title
+// actually changes bumps `rev`/`updatedAt`/`dirty` — calling this with the deck's current title
+// (a no-op save) must never manufacture a dirty write. Trimming/non-empty validation is the
+// caller's responsibility (see app/deck/[id]/edit.tsx), matching how updateCard leaves its own
+// callers responsible for field validation.
+export async function renameDeck(
+  scope: WorkspaceScope,
+  deckId: string,
+  title: string
+): Promise<DeckRecord[]> {
+  const decks = await getDecksAll(scope);
+  const now = new Date().toISOString();
+  const updated = decks.map((deck) => {
+    if (deck.id !== deckId) return deck;
+    if (deck.title === title) return deck;
+    return {
+      ...deck,
+      title,
+      updatedAt: now,
+      rev: deck.rev + 1,
+      dirty: true,
+    };
+  });
+  await setDecks(scope, updated);
+  return updated;
+}

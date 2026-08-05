@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "briefly-app",
+    "name": "Interval",
     "slug": "briefly-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "briefly",
+    "scheme": ["interval", "briefly"],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -13,12 +13,13 @@
       "infoPlist": {
         "CFBundleDocumentTypes": [
           {
-            "CFBundleTypeName": "Briefly Deck",
+            "CFBundleTypeName": "Interval Deck",
             "LSItemContentTypes": [
               "public.json"
             ],
             "LSHandlerRank": "Owner",
             "CFBundleTypeExtensions": [
+              "interval",
               "briefly"
             ]
           }

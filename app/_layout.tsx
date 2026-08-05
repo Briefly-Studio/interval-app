@@ -3,7 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, StyleSheet, Text, View } from "react-native";
 
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import { getSyncDiagnosticCode } from "../src/cloud/sync/http";
@@ -11,9 +11,21 @@ import { SyncService } from "../src/cloud/sync/SyncService";
 import { getSyncState } from "../src/cloud/sync/syncState";
 import { initSyncState } from "../src/cloud/sync/useSyncState";
 import { handleIncomingFile } from "../src/domain/openFileHandler";
-import { initI18n } from "../src/i18n";
+import { initI18n, useTranslation } from "../src/i18n";
 import { initTheme, useTheme } from "@/src/theme";
 import { BrandStartup } from "../src/ui/BrandStartup";
+import { EmptyState } from "../src/ui/EmptyState";
+import { Screen } from "../src/ui/Screen";
+
+// Interval V3 beta is iOS-first (Android buildable/core-flow compatible; full authenticated web
+// support is explicitly out of scope — see docs/platform-scope.md). expo-secure-store's web
+// target has no real implementation (see src/storage/secureStore.ts), so rather than let web
+// silently degrade into an unauthenticated, never-tested-on-web experience, the entire app is
+// gated behind a single honest "not available on web yet" screen below, before any route ever
+// mounts. src/storage/secureStore.ts is still platform-safe independently of this gate (defense
+// in depth), but this is what actually keeps web users from wandering into an experience nobody
+// has verified.
+const IS_WEB = Platform.OS === "web";
 
 // Held here (module scope, not inside the component) so it runs as early as possible — before
 // the native splash would otherwise auto-hide on its own default timing. Failure is expected and
@@ -22,6 +34,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function Layout() {
   const router = useRouter();
+  const { t } = useTranslation();
   // isInitialized comes straight from the canonical appearance store (src/theme/index.ts) — not
   // a locally-duplicated readiness flag. It only becomes true once BOTH the persisted
   // selectedMode has been read AND a fresh systemScheme has been confirmed (with an explicit,
@@ -105,7 +118,11 @@ export default function Layout() {
     initSyncState();
   }, []);
 
+  // File-open (deep-link) handling is a native-only concept (file:// URIs from the OS's "Open
+  // with Interval" flow) — meaningless on web, and skipped there rather than left to silently
+  // no-op through handleUrl's own guards, since web never renders anything that would care.
   useEffect(() => {
+    if (IS_WEB) return;
     Linking.getInitialURL().then((url) => {
       handleUrl(url);
     });
@@ -115,7 +132,12 @@ export default function Layout() {
     return () => sub.remove();
   }, [handleUrl]);
 
+  // Sync is never attempted on web this beta — the entire app is gated behind the web-unsupported
+  // screen below before a user could ever reach a signed-in, syncable state, so there is nothing
+  // productive for these effects to do. Guarded explicitly (rather than relying solely on the
+  // render-level gate) so this stays correct even if the gate is ever bypassed for testing.
   useEffect(() => {
+    if (IS_WEB) return;
     if (importing) return;
     if (didSyncRef.current) return;
     didSyncRef.current = true;
@@ -133,6 +155,7 @@ export default function Layout() {
   // not just the one-shot sync above that only fires on cold launch. Guest transitions are
   // safe to pass through unconditionally — SyncService itself no-ops without a cloud identity.
   useEffect(() => {
+    if (IS_WEB) return;
     const unsub = onWorkspaceChanged((scope) => {
       if (scope.kind === "user") {
         SyncService.syncOnce().catch((e) => {
@@ -147,6 +170,38 @@ export default function Layout() {
     });
     return unsub;
   }, []);
+
+  // On native, the splash is hidden only from BrandStartup's onReady callback (see the comment
+  // above hideNativeSplash). BrandStartup is never mounted on web (see the render below), so
+  // nothing else would ever call hideNativeSplash there — this is web's only trigger for it, and
+  // fires as soon as the same isInitialized signal BrandStartup itself waits for is ready.
+  useEffect(() => {
+    if (!IS_WEB || !isInitialized) return;
+    hideNativeSplash();
+  }, [isInitialized, hideNativeSplash]);
+
+  // Web gate: no Stack, no routes, no BrandStartup, no auth/sync — just an honest, themed,
+  // localized message once the theme is ready (isInitialized), and nothing (the browser's own
+  // static page shell) before that brief window closes. See docs/platform-scope.md for the V3
+  // beta platform-support decision this implements.
+  if (IS_WEB) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.canvas }]}>
+        <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
+        {isInitialized && (
+          <Screen>
+            <View style={styles.webUnsupportedFill}>
+              <EmptyState
+                icon="desktop-outline"
+                title={t("webUnsupported.title")}
+                description={t("webUnsupported.description")}
+              />
+            </View>
+          </Screen>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.canvas }]}>
@@ -194,6 +249,7 @@ export default function Layout() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  webUnsupportedFill: { flex: 1, justifyContent: "center" },
   importOverlay: {
     position: "absolute",
     left: 0,

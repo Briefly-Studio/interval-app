@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "../storage/secureStore";
 
 import { getAuthConfig, type AuthConfig } from "./AuthConfig";
 import { emitWorkspaceChanged } from "./authSignal";

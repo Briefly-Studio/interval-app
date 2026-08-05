@@ -130,7 +130,7 @@ export default function EditProfileScreen() {
           onChangeText={setFirstName}
           onBlur={() => setFirstNameTouched(true)}
           error={nameFieldError(t, firstName, firstNameTouched, "profile.enterFirstName")}
-          placeholder="Ada"
+          placeholder={t("profile.firstNamePlaceholder")}
           autoCapitalize="words"
           autoComplete="given-name"
           maxLength={50}
@@ -142,7 +142,7 @@ export default function EditProfileScreen() {
           onChangeText={setLastName}
           onBlur={() => setLastNameTouched(true)}
           error={nameFieldError(t, lastName, lastNameTouched, "profile.enterLastName")}
-          placeholder="Lovelace"
+          placeholder={t("profile.lastNamePlaceholder")}
           autoCapitalize="words"
           autoComplete="family-name"
           maxLength={50}
@@ -158,7 +158,7 @@ export default function EditProfileScreen() {
           onChangeText={setNickname}
           onBlur={() => setNicknameTouched(true)}
           error={nicknameFieldError(t, nickname, nicknameTouched)}
-          placeholder="What should we call you?"
+          placeholder={t("profile.nicknamePlaceholder")}
           autoCapitalize="words"
           maxLength={50}
           editable={!submitting}

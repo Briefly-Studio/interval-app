@@ -115,7 +115,7 @@ export default function DeckHistoryScreen() {
       </View>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>
         {deck?.title ? `${deck.title} • ` : ""}
-        {loaded ? plural("history.sessionsCount", sessions.length) : "Loading…"}
+        {loaded ? plural("history.sessionsCount", sessions.length) : t("history.loading")}
       </Text>
 
       {isEmpty ? (

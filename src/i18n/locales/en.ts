@@ -6,6 +6,13 @@ const en = {
     cancel: "Cancel",
     close: "Close",
   },
+  // Shown app-wide on web in place of the entire app this beta — see app/_layout.tsx and
+  // docs/platform-scope.md. Deliberately says "not available in this beta", never "broken" or
+  // "coming soon" (no committed timeline exists).
+  webUnsupported: {
+    title: "Not available on web yet",
+    description: "Interval web access is not available in this beta. Please use the iOS or Android app to sign in and study your decks.",
+  },
   settings: {
     title: "Settings",
     sections: {
@@ -73,8 +80,11 @@ const en = {
   },
   profile: {
     firstName: "First name",
+    firstNamePlaceholder: "Ada",
     lastName: "Last name",
+    lastNamePlaceholder: "Lovelace",
     nicknameOptional: "Nickname (optional)",
+    nicknamePlaceholder: "What should we call you?",
     nicknameHelper: "Interval will use this name in greetings.",
     nicknameHint: "Interval will use this name in greetings, instead of your first name.",
     save: "Save",
@@ -109,11 +119,6 @@ const en = {
     deleteDeckBody: "“{{title}}” will be removed from this device.",
     deleteDeckFailedTitle: "Couldn't delete deck",
     deleteDeckFailedBody: "Something went wrong. Please try again.",
-    renameDeckTitle: "Rename deck",
-    renameNotAvailableTitle: "Rename not available",
-    renameNotAvailableBody: "Rename is currently supported on iOS only.",
-    renameDeckFailedTitle: "Couldn't rename deck",
-    renameDeckFailedBody: "Something went wrong. Please try again.",
   },
   auth: {
     welcomeBack: "Welcome back, {{name}}.",
@@ -151,6 +156,7 @@ const en = {
   // Pluralization foundation example (see src/i18n/index.ts's plural()). Not wired into a
   // screen yet — demonstrated via tests only, per this batch's scope.
   history: {
+    loading: "Loading…",
     sessionsCount: {
       one: "{{count}} session",
       other: "{{count}} sessions",
@@ -439,9 +445,21 @@ const en = {
     createFailedTitle: "Couldn't create deck",
     createFailedBody: "Something went wrong. Please try again.",
   },
+  editDeck: {
+    screenTitle: "Edit deck",
+    loading: "Loading…",
+    deckNotFound: "Deck not found.",
+    nameLabel: "Deck name",
+    namePlaceholder: "e.g. AWS SysOps",
+    nameRequiredError: "Enter a name for your deck.",
+    saveButton: "Save changes",
+    saveFailedTitle: "Couldn't save deck",
+    saveFailedBody: "Something went wrong. Please try again.",
+  },
   importDeck: {
     screenTitle: "Import deck",
-    subtitle: "Choose a .briefly file to import.",
+    subtitle: "Choose an Interval deck file to import.",
+    legacyNote: "Older .briefly files are still supported.",
     noFileSelected: "No file selected",
     readyToImport: "Ready to import",
     chooseFileButton: "Choose file",
@@ -452,24 +470,6 @@ const en = {
     invalidFileError: "Invalid export file",
     failedTitle: "Import failed",
     failedGenericBody: "Unable to read or parse the file.",
-  },
-  // app/import-deck.tsx — an older paste-JSON import flow that isn't linked to from anywhere in
-  // the app anymore (app/import.tsx, using the `importDeck` namespace above, is the reachable
-  // screen from Settings/Home). Kept as its own namespace rather than merged into `importDeck`
-  // since the copy itself differs (paste-JSON vs. choose-file).
-  importDeckLegacy: {
-    backLabel: "← Back",
-    importButton: "Import",
-    screenTitle: "Import deck",
-    deckJsonLabel: "Deck JSON",
-    pasteButton: "Paste",
-    pastePlaceholder: "Paste exported JSON here",
-    clipboardUnavailableTitle: "Clipboard unavailable",
-    clipboardUnavailableBody: "Please paste the JSON manually.",
-    nothingToImportTitle: "Nothing to import",
-    nothingToImportBody: "Paste a deck export JSON to continue.",
-    failedTitle: "Import failed",
-    failedGenericBody: "Please check the JSON and try again.",
   },
   deckDetail: {
     loading: "Loading…",
@@ -513,6 +513,7 @@ const en = {
     setDifficultyBody: "Apply to all cards in this deck?",
     updatedAllTo: "Updated all cards to {{difficulty}}",
     deckOptionsTitle: "Deck options",
+    editDeckAction: "Edit deck",
     shareDeckAction: "Share deck",
     studyHistoryAction: "Study history ({{count}})",
   },
@@ -549,13 +550,13 @@ const en = {
   },
   export: {
     screenTitle: "Export deck",
-    description: "Creates a .briefly file with this deck's cards, ready to share or import on another device.",
+    description: "Creates an Interval deck file with this deck's cards, ready to share or import on another device.",
     fallbackDeckTitle: "This deck",
-    exportsAsFile: "Exports as a .briefly file",
+    exportsAsFile: "Exports as an Interval deck file",
     deckNotFoundError: "Deck not found.",
     unavailableError: "File export isn't available in this runtime.",
     shareFailedError: "Share failed.",
-    shareDialogTitle: "Share deck",
+    shareDialogTitle: "Share Interval deck",
     sharedTitle: "Shared",
     sharedBody: "Deck file is ready to share.",
     preparingButton: "Preparing…",
