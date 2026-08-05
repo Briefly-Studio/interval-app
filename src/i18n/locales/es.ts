@@ -27,6 +27,8 @@ const es = {
     requestAccountDeletion: "Solicitar eliminación de cuenta",
     comingSoon: "Próximamente",
     signOut: "Cerrar sesión",
+    signOutFailedTitle: "No se pudo cerrar sesión",
+    signOutFailedBody: "Algo salió mal. Inténtalo de nuevo.",
     sync: "Sincronización",
     recentlyDeleted: "Eliminado recientemente",
     importDeck: "Importar mazo",

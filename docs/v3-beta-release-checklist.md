@@ -3,33 +3,40 @@
 Legend: `[x]` confirmed · `[ ]` pending · `[~]` accepted limitation (not a blocker, tracked
 intentionally — see "Known accepted beta limitations" below).
 
-Items are pre-filled `[x]` **only** where this repository's own tooling confirmed them during the
-V3 Beta Readiness batch (dated against commit `bc06207` plus the uncommitted changes in that
-batch), or where the founder has explicitly confirmed something in conversation. Everything else
-starts `[ ]` — do not mark an item passed without actually doing it.
+Items are pre-filled `[x]` **only** where this repository's own tooling confirmed them (current
+validation commands or static code facts), or where the founder has explicitly confirmed
+something in conversation. Everything else starts `[ ]` — do not mark an item passed without
+actually doing it. Last reconciled against commit `acb813f` (Beta Readiness + Interval rebrand,
+pushed to `origin/v3.0-dev`) plus founder simulator/device QA reported after that push.
 
 ---
 
 ## Repository
 
-- [ ] Working tree clean before tagging/release build
-- [ ] HEAD is the expected, reviewed commit
-- [ ] No secrets, tokens, or credentials in the diff or history
-- [ ] No debug UI reachable from production navigation (Dev Tools / Theme Lab entry points
-      `__DEV__`-gated — see docs/platform-scope.md)
-- [ ] No uncommitted files before building for distribution
-- [ ] No AI/co-author metadata in any commit intended for release
+- [ ] Working tree clean before tagging/release build (re-check immediately before the actual
+      release build — was clean as of `acb813f`, but this must be re-verified at build time, not
+      assumed from an earlier checkpoint)
+- [ ] HEAD is the expected, reviewed commit (re-check at actual release time)
+- [x] No secrets, tokens, or credentials in the diff or history — verified by direct diff
+      inspection before committing `acb813f`
+- [x] No debug UI reachable from production navigation (Dev Tools / Theme Lab entry points
+      `__DEV__`-gated — verified by code inspection; see docs/platform-scope.md)
+- [ ] No uncommitted files before building for distribution (re-check at build time)
+- [x] No AI/co-author metadata in any commit intended for release — verified for `acb813f`
+      (author/committer both the founder's local Git identity, no trailers)
 
 ## Build
 
-- [ ] `npx tsc --noEmit` passes with 0 errors
-- [ ] `npm run lint` passes with 0 errors, 0 warnings
-- [ ] `npx expo-doctor` — passing, or any failing check explicitly triaged and accepted (see
-      Expo SDK patch-drift note below)
-- [ ] `expo export --platform ios` succeeds
-- [ ] `expo export --platform android` succeeds
-- [ ] `expo export --platform web` succeeds
-- [ ] iOS native build succeeds (Xcode/EAS)
+- [x] `npx tsc --noEmit` passes with 0 errors — confirmed against `acb813f`
+- [x] `npm run lint` passes with 0 errors, 0 warnings — confirmed against `acb813f`
+- [x] `npx expo-doctor` — 17/18; the one failing check is the Expo SDK patch-drift note below,
+      explicitly triaged and deferred, not an unreviewed failure
+- [x] `expo export --platform ios` succeeds — confirmed against `acb813f`
+- [x] `expo export --platform android` succeeds — confirmed against `acb813f`
+- [x] `expo export --platform web` succeeds — confirmed against `acb813f`
+- [ ] iOS native build succeeds (Xcode/EAS) — not performed by this tooling; founder has run the
+      app on-device/Simulator, but an explicit from-source native build has not been re-verified
+      since the branding changes to `app.json`
 - [ ] Android native build succeeds, when a native Android build is actually attempted
 
 ## Auth
@@ -42,11 +49,16 @@ starts `[ ]` — do not mark an item passed without actually doing it.
 
 ## Core data
 
-- [ ] Create / edit (new Edit Deck screen) / delete deck
-- [ ] Create / edit / delete card
-- [ ] Recently Deleted restore (deck and card)
-- [ ] Offline mutation (create/edit/delete while offline, confirm it queues and later syncs)
-- [ ] Restart persistence (force-quit and relaunch; local data intact)
+- [x] Create / edit (new Edit Deck screen) / delete deck — founder-confirmed: cross-platform Edit
+      Deck is reachable and behaves correctly; normal deck workflows looked correct
+- [x] Create / edit / delete card — founder-confirmed: normal card workflows looked correct
+- [ ] Recently Deleted restore (deck and card) — not explicitly exercised in the founder QA
+      reported so far
+- [ ] Offline mutation (create/edit/delete while offline, confirm it queues and later syncs) —
+      not explicitly exercised in the founder QA reported so far
+- [x] Restart persistence (force-quit and relaunch; local data intact) — founder-confirmed
+      ("existing local data remains available"; persistence after full kill confirmed under
+      Appearance/Startup)
 
 ## Study flows
 
@@ -71,16 +83,29 @@ starts `[ ]` — do not mark an item passed without actually doing it.
 - [~] Multi-device conflict limitation acknowledged — rev-only last-writer-wins, no merge, no
       conflict UI. Documented in docs/sync-invariants.md and docs/platform-scope.md.
 
+## Portability / branding
+
+- [x] App visibly branded Interval — founder-confirmed
+- [x] Import screen branded Interval — founder-confirmed
+- [x] Export screen branded Interval — founder-confirmed
+- [x] New `.interval` export works — founder-confirmed
+- [x] New `.interval` import works — founder-confirmed
+- [x] Legacy `.briefly` import still works — founder-confirmed
+- [x] Export → reimport round trip works — founder-confirmed
+- [x] Deck/card content remains correct through export/import — founder-confirmed
+
 ## Appearance
 
-- [ ] System Light
-- [ ] System Dark
-- [ ] Explicit Light
-- [ ] Explicit Dark
-- [ ] Warm
-- [ ] Reduced motion variant (BrandStartup)
-- [ ] Adaptive native splash (light/dark) matches the resolved theme
-- [ ] No startup flash / wrong-theme frame on cold launch
+- [x] System Light — founder-confirmed
+- [x] System Dark — founder-confirmed
+- [x] Explicit Light — founder-confirmed
+- [x] Explicit Dark — founder-confirmed
+- [x] Warm — founder-confirmed
+- [ ] Reduced motion variant (BrandStartup) — not specifically founder-confirmed; do not treat
+      the general appearance confirmation above as covering this
+- [x] Adaptive native splash (light/dark) matches the resolved theme — founder-confirmed
+- [x] No startup flash / wrong-theme frame on cold launch, no deck-screen blink —
+      founder-confirmed
 
 ## Localization
 
@@ -93,11 +118,13 @@ starts `[ ]` — do not mark an item passed without actually doing it.
 
 ## Platforms
 
-- [ ] iOS founder QA (device and/or Simulator)
+- [x] iOS founder QA (device and/or Simulator) — founder has exercised Edit Deck, import/export,
+      branding, and appearance directly
 - [ ] Android manual QA — not yet performed; do not mark passed without an actual device/emulator
       pass (see docs/platform-scope.md's "supported, manual QA required" list)
-- [ ] Web unsupported-state QA — confirm the gate screen appears, no console exceptions, no
-      infinite loading, native platforms unaffected
+- [x] Web unsupported-state screen displays — founder-confirmed
+- [x] Web: no SecureStore runtime exception — founder-confirmed
+- [x] Web: no infinite loading — founder-confirmed
 - [x] Platform-scope documentation exists and is current — `docs/platform-scope.md` (added this
       batch)
 

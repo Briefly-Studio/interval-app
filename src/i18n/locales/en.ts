@@ -28,6 +28,8 @@ const en = {
     requestAccountDeletion: "Request Account Deletion",
     comingSoon: "Coming soon",
     signOut: "Sign out",
+    signOutFailedTitle: "Couldn't sign out",
+    signOutFailedBody: "Something went wrong. Please try again.",
     sync: "Sync",
     recentlyDeleted: "Recently Deleted",
     importDeck: "Import deck",

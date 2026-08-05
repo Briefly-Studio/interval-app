@@ -2,7 +2,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
@@ -132,6 +132,9 @@ export default function SettingsScreen() {
     try {
       await AuthService.signOut();
       router.back();
+    } catch (error) {
+      console.error("[settings] sign out failed:", error);
+      Alert.alert(t("settings.signOutFailedTitle"), t("settings.signOutFailedBody"));
     } finally {
       setSigningOut(false);
     }
