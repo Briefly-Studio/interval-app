@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { useTranslation } from "../src/i18n";
@@ -43,6 +43,12 @@ export default function CreateDeck() {
       const scope = await AuthService.getActiveScope();
       await addDeck(scope, deck);
       router.back();
+    } catch (error) {
+      // Keep the entered title and stay on this screen — the user shouldn't have to retype
+      // anything after a failed save. Only a concise diagnostic tag is logged; the raw error
+      // (and never the title itself) is never shown to the user.
+      console.error("[create-deck] failed:", error);
+      Alert.alert(t("createDeck.createFailedTitle"), t("createDeck.createFailedBody"));
     } finally {
       setSubmitting(false);
     }

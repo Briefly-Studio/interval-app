@@ -126,11 +126,16 @@ Never accept the user ID from the request body or query parameters.
 
 ## Current Known Technical Debt
 
-- Refresh tokens are stored but not used.
-- Expired access tokens are not refreshed automatically.
-- Rejected sync changes are not surfaced clearly.
-- src/cloud/sync/meta.ts appears unused and duplicates device/cursor logic.
-- dev reset logic may leave orphaned per-deck card keys.
+- Rejected sync push changes are not surfaced clearly to the user — only a generic "Sync
+  needs attention" status, not which records or why. (Pulled remote changes that fail
+  validation are now surfaced distinctly, as a "Synced, with warnings" status with a
+  count — see src/cloud/sync/validateChange.ts and syncState.ts.)
+- Multi-device conflict handling is rev-only last-writer-wins with no merge and no
+  conflict UI — an offline device's un-pushed edit can be silently superseded by
+  another device's already-synced edit, with no notice to the user. This is a known,
+  accepted beta risk, not a solved problem — see docs/sync-invariants.md's "no conflict
+  UI for concurrent multi-device edits" section for the full explanation and what a
+  future resolution could involve.
 - README and some Briefly naming are outdated.
 - AWS infrastructure is not yet managed through Infrastructure as Code.
 - Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.

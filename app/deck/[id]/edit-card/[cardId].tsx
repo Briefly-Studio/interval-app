@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../../src/auth/AuthService";
 import { useTranslation } from "../../../../src/i18n";
@@ -96,16 +96,31 @@ export default function EditCardScreen() {
       const scope = await AuthService.getActiveScope();
       await updateCard(scope, deckId, updated);
       router.back();
+    } catch (error) {
+      // Keep the edited front/back/difficulty and stay on this screen — the user shouldn't
+      // have to redo anything after a failed save. Only a concise diagnostic tag is logged; the
+      // raw error (and never the card content itself) is never shown to the user.
+      console.error("[edit-card] save failed:", error);
+      Alert.alert(t("editCard.saveFailedTitle"), t("editCard.saveFailedBody"));
     } finally {
       setSubmitting(false);
     }
   };
 
   const onDelete = async () => {
-    if (!card || !deckId) return;
-    const scope = await AuthService.getActiveScope();
-    await deleteCard(scope, deckId, card.id);
-    router.back();
+    if (!card || !deckId || submitting) return;
+    setSubmitting(true);
+    try {
+      const scope = await AuthService.getActiveScope();
+      await deleteCard(scope, deckId, card.id);
+      router.back();
+    } catch (error) {
+      // The card is left intact and the screen stays put — same failure contract as onSave.
+      console.error("[edit-card] delete failed:", error);
+      Alert.alert(t("editCard.deleteFailedTitle"), t("editCard.deleteFailedBody"));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!loaded) {

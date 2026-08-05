@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import { useTranslation } from "../../../src/i18n";
@@ -62,6 +62,12 @@ export default function AddCardScreen() {
       const scope = await AuthService.getActiveScope();
       await addCard(scope, deckId, card);
       router.back();
+    } catch (error) {
+      // Keep the entered front/back and stay on this screen — the user shouldn't have to retype
+      // anything after a failed save. Only a concise diagnostic tag is logged; the raw error
+      // (and never the card content itself) is never shown to the user.
+      console.error("[add-card] failed:", error);
+      Alert.alert(t("addCard.createFailedTitle"), t("addCard.createFailedBody"));
     } finally {
       setSubmitting(false);
     }

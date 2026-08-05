@@ -115,6 +115,10 @@ export default function DeckDetails() {
             // reload silently re-fetches the filtered list.
             const updated = await deleteCard(scope, id, card.id);
             setCards(updated.filter((c) => !c.deletedAt));
+          } catch (error) {
+            // The card is left intact — only the busy state clears, nothing navigates away.
+            console.error("[deck-detail] delete card failed:", error);
+            Alert.alert(t("deckDetail.deleteCardFailedTitle"), t("deckDetail.deleteCardFailedBody"));
           } finally {
             setDeletingCardIds((prev) => {
               const next = new Set(prev);

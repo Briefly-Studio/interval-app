@@ -46,6 +46,7 @@ function syncStatusMetaFor(colors: ThemeTokens): Record<SyncStatus, { icon: Comp
     unknown: { icon: "time-outline", color: colors.textSecondary },
     syncing: { icon: "sync-outline", color: colors.textSecondary },
     synced: { icon: "checkmark-circle-outline", color: colors.success },
+    syncedWithWarnings: { icon: "alert-circle-outline", color: colors.warning },
     offline: { icon: "cloud-offline-outline", color: colors.textSecondary },
     needsAttention: { icon: "alert-circle-outline", color: colors.danger },
   };
@@ -180,6 +181,9 @@ export default function DecksHome() {
             await deleteDeckById(activeScope, deck.id);
 
             await loadDecks(activeScope);
+          } catch (error) {
+            console.error("[home] delete deck failed:", error);
+            Alert.alert(t("home.deleteDeckFailedTitle"), t("home.deleteDeckFailedBody"));
           } finally {
             setMutating(false);
           }
@@ -213,8 +217,14 @@ export default function DecksHome() {
               };
             });
             await setDecks(activeScope, updated);
-            await SyncService.syncOnce();
+            // The local rename above has already fully succeeded — a background sync failure
+            // (e.g. offline) must never flip this rename's outcome to "failed". Fire-and-forget,
+            // matching the same reasoning already used by recently-deleted.tsx's restoreDeck.
+            SyncService.syncOnce().catch(() => {});
             await loadDecks(activeScope);
+          } catch (error) {
+            console.error("[home] rename deck failed:", error);
+            Alert.alert(t("home.renameDeckFailedTitle"), t("home.renameDeckFailedBody"));
           } finally {
             setMutating(false);
           }

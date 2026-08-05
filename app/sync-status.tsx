@@ -27,6 +27,7 @@ function statusMetaFor(
     unknown: { icon: "time-outline", color: colors.textSecondary },
     syncing: { icon: "sync-outline", color: colors.textSecondary },
     synced: { icon: "checkmark-circle-outline", color: colors.success },
+    syncedWithWarnings: { icon: "alert-circle-outline", color: colors.warning },
     offline: { icon: "cloud-offline-outline", color: colors.textSecondary },
     needsAttention: { icon: "alert-circle-outline", color: colors.danger },
   };
@@ -80,6 +81,11 @@ export default function SyncStatusScreen() {
               ? plural("sync.detail.pendingCount", syncState.pendingDirtyCount)
               : t("sync.detail.noPendingChanges")}
           </Text>
+          {syncState.status === "syncedWithWarnings" && syncState.skippedPullRecordCount ? (
+            <Text style={[typography.secondary, { color: colors.warning }]}>
+              {plural("sync.detail.skippedPullRecords", syncState.skippedPullRecordCount)}
+            </Text>
+          ) : null}
         </View>
 
         {canRetry ? (
@@ -91,6 +97,14 @@ export default function SyncStatusScreen() {
           />
         ) : null}
       </Card>
+
+      {/* A restrained, always-visible informational note — not an alert, not colored as a
+          warning — about the current beta's rev-only conflict model. See
+          docs/sync-invariants.md's "no conflict UI for concurrent multi-device edits" section
+          for the full detail behind this one calm sentence. */}
+      <Text style={[typography.secondary, { color: colors.textMuted, marginTop: spacing.lg }]}>
+        {t("sync.conflictNote")}
+      </Text>
     </Screen>
   );
 }

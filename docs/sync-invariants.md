@@ -136,3 +136,60 @@ In practice, ordinary user-driven edits (separated by real human interaction tim
 essentially never collide at millisecond precision, so this is a low-probability edge
 case rather than a routine failure mode — but it is a real gap, and is documented here
 rather than silently accepted.
+
+## Known limitation: no conflict UI for concurrent multi-device edits
+
+The "Conflict model" section above and invariant #5 describe a real, deterministic
+guarantee: given two candidate revisions of the same record, the system always resolves
+to the same winner, and a strictly-lower incoming `rev` can never overwrite a strictly-
+higher one. That guarantee is about **system consistency** — it does not mean a user
+can never lose an edit.
+
+**Exact user risk.** Suppose a record is at `rev 5` when Device A goes offline and
+edits it locally (still `rev 5` on the server, A's local copy queues the edit dirty).
+Meanwhile Device B, already synced, edits the same record and successfully pushes it —
+the server is now at `rev 6`. When Device A reconnects and syncs: its push is rejected
+(the server's `ConditionExpression` requires `incoming.rev >= stored.rev`, and A is
+still proposing based on the old `rev 5`), and A's own edit stays dirty (per invariant
+#12) — so far so correct. But A's very next pull step applies B's `rev 6` record via
+the same `incomingWins` rev comparison, which — because a pull-side apply does not
+re-check whether the local dirty copy represents unsent work worth protecting — writes
+B's version over A's local storage. A's own edit, from A's user's point of view, has
+now vanished. Nothing in the product surfaces this: no conflict prompt, no "your edit
+couldn't be saved" notice, no backup copy of what A typed. The system did exactly what
+its rev-based contract promises (a lower revision never wins), but the human
+consequence — a real edit, silently gone — is not something today's UI communicates at
+all.
+
+**Why this is accepted for the current small beta.** The founder/product decision for
+this beta is that a rev-only, no-merge model is the right amount of complexity for a
+small, mostly-single-device beta cohort, and that building conflict UI or field-level
+merge logic now would be premature relative to actually seeing how often (if ever) this
+occurs in practice. This is an accepted, known risk, not an oversight, and not
+considered solved.
+
+**What future resolution could involve**, roughly in order of how much new
+infrastructure each requires:
+- Surfacing a plain-language "this device's change may have been overwritten by
+  another device" notice in Sync Status (or similar) when a locally dirty record is
+  about to be superseded by a pulled change with a higher `rev`, so the loss is at
+  least visible rather than silent.
+- Keeping a local, non-syncing backup copy of a losing edit (a "conflict copy"),
+  recoverable by the user, without attempting to merge it automatically.
+- An explicit conflict-resolution UI letting the user choose which version to keep, or
+  manually reconcile the two.
+- Server-side version history (rather than a single current revision per record),
+  giving the client something to actually resolve against instead of only the latest
+  state.
+- Device metadata (which device made which change, and when) as supporting evidence
+  shown to the user during resolution — but never as the resolution mechanism itself.
+
+**Timestamps alone must not silently replace revision correctness.** Any future work
+here must preserve the existing rule that a strictly lower `rev` never wins regardless
+of `updatedAt` (see "Conflict model" above) — `updatedAt` may inform what a user is
+shown, but re-introducing wall-clock comparison as the primary conflict rule would
+reopen the exact clock-skew problem the rev-based model exists to close.
+
+This remains a known, documented beta risk — not a solved problem, and not something
+this batch attempted to fix. See the V3.0 stabilization audit for how this was
+originally identified.

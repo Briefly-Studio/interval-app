@@ -96,6 +96,13 @@ export async function updateCard(
   return updated;
 }
 
+// Invariant every syncable local mutation must uphold: a record that actually changes bumps
+// `rev` exactly once, refreshes `updatedAt`, and sets `dirty: true` — sync's push-side conflict
+// detection (see backend/lambdas/sync-push) is a rev comparison, so a mutation that sets
+// `dirty: true` without bumping `rev` is invisible to that check and can be silently dropped or
+// misapplied on the next sync. A record that does NOT actually change is left untouched
+// entirely, so an all-cards bulk action never manufactures no-op dirty writes for cards that
+// were already at the requested value.
 export async function updateAllCardsDifficulty(
   scope: WorkspaceScope,
   deckId: string,
@@ -103,17 +110,19 @@ export async function updateAllCardsDifficulty(
 ): Promise<CardRecord[]> {
   const cards = await getCardsAll(scope, deckId);
   const now = new Date().toISOString();
-  const updated = cards.map((card) =>
-    card.deletedAt
-      ? card
-      : {
-          ...card,
-          difficulty,
-          updatedAt: now,
-          dirty: true,
-          deletedAt: undefined,
-        }
-  );
+  const updated = cards.map((card) => {
+    // Deleted (tombstoned) cards are excluded — a bulk difficulty change must never revive a
+    // tombstone or otherwise touch a deleted card's fields.
+    if (card.deletedAt) return card;
+    if (card.difficulty === difficulty) return card;
+    return {
+      ...card,
+      difficulty,
+      updatedAt: now,
+      rev: card.rev + 1,
+      dirty: true,
+    };
+  });
   await setCards(scope, deckId, updated);
   return updated;
 }

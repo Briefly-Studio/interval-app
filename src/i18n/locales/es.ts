@@ -109,9 +109,13 @@ const es = {
     renameAction: "Cambiar nombre",
     deleteDeckTitle: "¿Eliminar mazo?",
     deleteDeckBody: "“{{title}}” se eliminará de este dispositivo.",
+    deleteDeckFailedTitle: "No se pudo eliminar el mazo",
+    deleteDeckFailedBody: "Algo salió mal. Inténtalo de nuevo.",
     renameDeckTitle: "Cambiar nombre del mazo",
     renameNotAvailableTitle: "Cambio de nombre no disponible",
     renameNotAvailableBody: "Cambiar el nombre solo está disponible en iOS por ahora.",
+    renameDeckFailedTitle: "No se pudo cambiar el nombre del mazo",
+    renameDeckFailedBody: "Algo salió mal. Inténtalo de nuevo.",
   },
   auth: {
     welcomeBack: "Bienvenido de nuevo, {{name}}.",
@@ -217,6 +221,7 @@ const es = {
       unknown: "Aún no sincronizado",
       syncing: "Sincronizando cambios…",
       synced: "Actualizado",
+      syncedWithWarnings: "Sincronizado, con advertencias",
       offline: "Sin conexión — los cambios se sincronizarán más tarde",
       needsAttention: "La sincronización necesita atención",
     },
@@ -230,7 +235,12 @@ const es = {
         one: "{{count}} cambio pendiente de sincronizar",
         other: "{{count}} cambios pendientes de sincronizar",
       },
+      skippedPullRecords: {
+        one: "La sincronización se completó, pero no se pudo aplicar {{count}} cambio de la nube.",
+        other: "La sincronización se completó, pero no se pudieron aplicar {{count}} cambios de la nube.",
+      },
     },
+    conflictNote: "Interval conserva la edición más reciente de cada elemento en tus dispositivos. Si la misma tarjeta o mazo se edita en dos dispositivos estando sin conexión, solo se conserva una edición — la otra no se puede recuperar.",
     relativeTime: {
       justNow: "justo ahora",
       minutes: {
@@ -422,6 +432,8 @@ const es = {
     namePlaceholder: "p. ej. AWS SysOps",
     nameRequiredError: "Ingresa un nombre para tu mazo.",
     submitButton: "Crear mazo",
+    createFailedTitle: "No se pudo crear el mazo",
+    createFailedBody: "Algo salió mal. Inténtalo de nuevo.",
   },
   importDeck: {
     screenTitle: "Importar mazo",
@@ -487,6 +499,8 @@ const es = {
     deleteCardTitle: "¿Eliminar tarjeta?",
     deleteCardBody: "Esta tarjeta se eliminará de este mazo.",
     deleteAction: "Eliminar",
+    deleteCardFailedTitle: "No se pudo eliminar la tarjeta",
+    deleteCardFailedBody: "Algo salió mal. Inténtalo de nuevo.",
     setDifficultyTitle: "Establecer dificultad",
     setDifficultyBody: "¿Aplicar a todas las tarjetas de este mazo?",
     updatedAllTo: "Se actualizaron todas las tarjetas a {{difficulty}}",
@@ -504,6 +518,8 @@ const es = {
     backRequiredError: "Ingresa el reverso de la tarjeta.",
     difficultyLabel: "Dificultad",
     saveButton: "Guardar tarjeta",
+    createFailedTitle: "No se pudo agregar la tarjeta",
+    createFailedBody: "Algo salió mal. Inténtalo de nuevo.",
   },
   editCard: {
     loading: "Cargando…",
@@ -518,6 +534,10 @@ const es = {
     difficultyLabel: "Dificultad",
     saveButton: "Guardar tarjeta",
     deleteButton: "Eliminar tarjeta",
+    saveFailedTitle: "No se pudo guardar la tarjeta",
+    saveFailedBody: "Algo salió mal. Inténtalo de nuevo.",
+    deleteFailedTitle: "No se pudo eliminar la tarjeta",
+    deleteFailedBody: "Algo salió mal. Inténtalo de nuevo.",
   },
   export: {
     screenTitle: "Exportar mazo",

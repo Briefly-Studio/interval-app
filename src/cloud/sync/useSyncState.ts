@@ -101,6 +101,7 @@ export function useSyncState(): UseSyncState {
       diagnosticCode: state.diagnosticCode,
       pendingDirtyCount: state.pendingDirtyCount,
       isOnline: state.isOnline,
+      skippedPullRecordCount: state.skippedPullRecordCount,
       retrySync,
     }),
     [
@@ -110,6 +111,7 @@ export function useSyncState(): UseSyncState {
       state.diagnosticCode,
       state.pendingDirtyCount,
       state.isOnline,
+      state.skippedPullRecordCount,
       retrySync,
     ]
   );

@@ -10,6 +10,7 @@ export const SYNC_STATUS_KEYS: Record<SyncStatus, TranslationKey> = {
   unknown: "sync.status.unknown",
   syncing: "sync.status.syncing",
   synced: "sync.status.synced",
+  syncedWithWarnings: "sync.status.syncedWithWarnings",
   offline: "sync.status.offline",
   needsAttention: "sync.status.needsAttention",
 };

@@ -18,10 +18,12 @@ import {
   markSyncOffline,
   markSyncStarted,
   markSyncSucceeded,
+  markSyncSucceededWithWarnings,
   resetSyncState,
   setPendingDirtyCount,
 } from "./syncState";
 import { emitSyncComplete } from "./syncSignal";
+import { validateChange, type RejectedChange } from "./validateChange";
 
 const toTime = (value: string | undefined) => {
   const t = value ? Date.parse(value) : NaN;
@@ -29,6 +31,15 @@ const toTime = (value: string | undefined) => {
 };
 
 const toRev = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+
+// A pull response's `cursor` is optional/empty-able in practice (see invariant #11 — the client
+// only ever persists a non-empty value) but when present must be a string. Checked separately
+// from, and before, per-record validation (partitionChanges/validateChange.ts) — an invalid
+// cursor type calls the whole response envelope into question, not just one record, so it is
+// treated as a hard pull failure rather than something to individually skip.
+function isValidPullCursor(cursor: unknown): cursor is string | undefined {
+  return cursor === undefined || cursor === null || typeof cursor === "string";
+}
 
 // The core conflict rule for every entity type: an incoming change is applied only if its
 // revision is strictly newer, or (equal revision) its updatedAt is not older. A strictly lower
@@ -44,8 +55,38 @@ function incomingWins(existing: { rev?: number; updatedAt: string } | undefined,
   return toTime(incomingTs) >= toTime(existing.updatedAt);
 }
 
-async function applyChanges(scope: WorkspaceScope, changes: Change[]): Promise<void> {
-  if (changes.length === 0) return;
+// Validates every raw pulled item before any of it touches local storage. A malformed item is
+// skipped (never applied, never written) rather than allowed to throw mid-batch — one corrupted
+// record must never block every other valid record in the same page, and must never permanently
+// stick the account's sync (see runSync: the cursor still advances past a page that contained
+// only skipped items, exactly as it would if that page had been empty). The tradeoff this
+// accepts: a skipped record's change is not reflected locally until/unless the server later
+// resends it in valid form — sync availability is preserved at the cost of that one change.
+function partitionChanges(rawChanges: unknown[]): { changes: Change[]; rejected: RejectedChange[] } {
+  const changes: Change[] = [];
+  const rejected: RejectedChange[] = [];
+
+  for (const raw of rawChanges) {
+    const result = validateChange(raw);
+    if (result.ok) {
+      changes.push(result.change);
+    } else {
+      rejected.push(result.rejected);
+      // Concise, safe diagnostic only — entity type, change id, and a fixed reason string.
+      // Never the record itself: no card front/back, no deck title, no tokens, no other
+      // personal data ever reaches this log line.
+      console.warn("[sync] skipping malformed pulled record:", result.rejected);
+    }
+  }
+
+  return { changes, rejected };
+}
+
+async function applyChanges(scope: WorkspaceScope, rawChanges: unknown[]): Promise<RejectedChange[]> {
+  if (rawChanges.length === 0) return [];
+
+  const { changes, rejected } = partitionChanges(rawChanges);
+  if (changes.length === 0) return rejected;
 
   const now = new Date().toISOString();
   // Sorting by ts first is still useful so that, within one page, multiple changes to the SAME
@@ -162,6 +203,8 @@ async function applyChanges(scope: WorkspaceScope, changes: Change[]): Promise<v
 
     await setSessions(scope, Array.from(byId.values()));
   }
+
+  return rejected;
 }
 
 async function collectDirty(scope: WorkspaceScope): Promise<Change[]> {
@@ -349,8 +392,29 @@ async function runSync(): Promise<void> {
     return;
   }
 
-  // 4) APPLY + persist cursor
-  await applyChanges(scope, pullJson.changes ?? []);
+  // 4) Validate the response ENVELOPE before touching local storage or the cursor at all.
+  // pullJson is only type-asserted, not validated, by http.ts's `as PullResponse` cast, so a
+  // missing/non-array `changes` or a non-string `cursor` must be checked here explicitly. This is
+  // a different, more severe case than one malformed record inside an otherwise-valid `changes`
+  // array (see partitionChanges/validateChange.ts, which still applies every valid sibling and
+  // only skips the bad one) — here the envelope itself can't be trusted, so nothing in this page
+  // is applied, the cursor is never persisted (the previous cursor is left exactly as it was),
+  // and this is reported as a real failure, never as an empty page and never as "Synced" or
+  // "Synced, with warnings". Only a concise, fixed schema-error reason is logged — never any
+  // field from pullJson itself, which is exactly the untrusted data in question.
+  if (!Array.isArray(pullJson.changes) || !isValidPullCursor(pullJson.cursor)) {
+    console.warn("[sync] malformed pull response envelope — rejecting this page");
+    markSyncNeedsAttention("pull-response-malformed");
+    return;
+  }
+
+  // 5) APPLY + persist cursor
+  const rejectedPullRecords = await applyChanges(scope, pullJson.changes);
+  // The cursor is persisted after applying only the valid subset of this page — this is exactly
+  // what lets sync advance past a page containing a malformed record instead of re-fetching and
+  // re-rejecting that same record on every future attempt (see validateChange.ts for the
+  // reject-don't-coerce rationale). The valid changes in the same page are not held back waiting
+  // for the invalid one to somehow become valid.
   if (pullJson.cursor) await setSyncCursor(scope, pullJson.cursor);
 
   // Recomputed by rescanning storage (same scan collectDirty always does) rather than derived
@@ -366,8 +430,17 @@ async function runSync(): Promise<void> {
   // (there is no automatic retry loop here — only real events: app launch, workspace change,
   // reconnect, or a manual retry — so this cannot spiral into a retry storm). Only a fixed,
   // sanitized diagnostic code is recorded — never which records, why, or any response content.
+  //
+  // A push rejection takes priority over pull-side skipped records when both occur in the same
+  // run: it means this device's own edits are still stuck dirty and need attention, which is a
+  // more actionable problem than a handful of skipped remote records. When push is otherwise
+  // clean but some pulled records were skipped as malformed, that is reported as a distinct,
+  // calmer "synced with warnings" outcome rather than either silently claiming a full "Synced" or
+  // escalating it to the same needsAttention state as an actual rejection.
   if (hasRejectedRecords) {
     markSyncNeedsAttention("push-records-rejected");
+  } else if (rejectedPullRecords.length > 0) {
+    markSyncSucceededWithWarnings(rejectedPullRecords.length);
   } else {
     markSyncSucceeded();
   }

@@ -107,9 +107,13 @@ const en = {
     renameAction: "Rename",
     deleteDeckTitle: "Delete deck?",
     deleteDeckBody: "“{{title}}” will be removed from this device.",
+    deleteDeckFailedTitle: "Couldn't delete deck",
+    deleteDeckFailedBody: "Something went wrong. Please try again.",
     renameDeckTitle: "Rename deck",
     renameNotAvailableTitle: "Rename not available",
     renameNotAvailableBody: "Rename is currently supported on iOS only.",
+    renameDeckFailedTitle: "Couldn't rename deck",
+    renameDeckFailedBody: "Something went wrong. Please try again.",
   },
   auth: {
     welcomeBack: "Welcome back, {{name}}.",
@@ -215,6 +219,7 @@ const en = {
       unknown: "Not synced yet",
       syncing: "Syncing changes…",
       synced: "Up to date",
+      syncedWithWarnings: "Synced, with warnings",
       offline: "Offline — changes will sync later",
       needsAttention: "Sync needs attention",
     },
@@ -228,7 +233,15 @@ const en = {
         one: "{{count}} change waiting to sync",
         other: "{{count}} changes waiting to sync",
       },
+      // Shown only when status is "syncedWithWarnings" — your own changes are fully synced;
+      // this many incoming cloud changes were skipped because they didn't look right, so this
+      // device's local copy may not reflect them.
+      skippedPullRecords: {
+        one: "Sync completed, but {{count}} cloud change couldn't be applied.",
+        other: "Sync completed, but {{count}} cloud changes couldn't be applied.",
+      },
     },
+    conflictNote: "Interval keeps the most recent edit per item across your devices. If the same card or deck is edited on two devices while offline, only one edit is kept — the other isn't recovered.",
     // Structured, translatable counterpart to src/cloud/sync/formatSyncTime.ts's SyncTimeAgo
     // return shape — that file deliberately has no React/i18n import, so it returns a unit +
     // count instead of a final string, and callers resolve the actual wording from here.
@@ -423,6 +436,8 @@ const en = {
     namePlaceholder: "e.g. AWS SysOps",
     nameRequiredError: "Enter a name for your deck.",
     submitButton: "Create deck",
+    createFailedTitle: "Couldn't create deck",
+    createFailedBody: "Something went wrong. Please try again.",
   },
   importDeck: {
     screenTitle: "Import deck",
@@ -492,6 +507,8 @@ const en = {
     deleteCardTitle: "Delete card?",
     deleteCardBody: "This card will be removed from this deck.",
     deleteAction: "Delete",
+    deleteCardFailedTitle: "Couldn't delete card",
+    deleteCardFailedBody: "Something went wrong. Please try again.",
     setDifficultyTitle: "Set difficulty",
     setDifficultyBody: "Apply to all cards in this deck?",
     updatedAllTo: "Updated all cards to {{difficulty}}",
@@ -509,6 +526,8 @@ const en = {
     backRequiredError: "Enter the back of the card.",
     difficultyLabel: "Difficulty",
     saveButton: "Save card",
+    createFailedTitle: "Couldn't add card",
+    createFailedBody: "Something went wrong. Please try again.",
   },
   editCard: {
     loading: "Loading…",
@@ -523,6 +542,10 @@ const en = {
     difficultyLabel: "Difficulty",
     saveButton: "Save card",
     deleteButton: "Delete card",
+    saveFailedTitle: "Couldn't save card",
+    saveFailedBody: "Something went wrong. Please try again.",
+    deleteFailedTitle: "Couldn't delete card",
+    deleteFailedBody: "Something went wrong. Please try again.",
   },
   export: {
     screenTitle: "Export deck",

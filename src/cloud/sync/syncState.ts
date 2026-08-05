@@ -7,7 +7,7 @@
 // ./useSyncState.ts, the same split this codebase already uses for i18n
 // (translate.ts vs index.ts).
 
-export type SyncStatus = "unknown" | "syncing" | "synced" | "offline" | "needsAttention";
+export type SyncStatus = "unknown" | "syncing" | "synced" | "syncedWithWarnings" | "offline" | "needsAttention";
 
 export type SyncState = {
   status: SyncStatus;
@@ -16,6 +16,11 @@ export type SyncState = {
   diagnosticCode?: string;
   pendingDirtyCount: number;
   isOnline: boolean;
+  // Only meaningful when status === "syncedWithWarnings": how many pulled remote changes were
+  // skipped (not applied, not written locally) during the most recent sync attempt because they
+  // failed shape validation — see src/cloud/sync/validateChange.ts. Never contains which records
+  // or their content, only a count.
+  skippedPullRecordCount?: number;
 };
 
 // Pre-first-evidence: the app must not claim "synced" before any sync attempt has actually
@@ -64,12 +69,40 @@ export function onSyncStateChanged(cb: (state: SyncState) => void): () => void {
 
 /** A sync attempt (push or pull actively running, including a retry) has begun. */
 export function markSyncStarted(): void {
-  patchState({ status: "syncing", lastAttemptAt: new Date().toISOString(), diagnosticCode: undefined });
+  patchState({
+    status: "syncing",
+    lastAttemptAt: new Date().toISOString(),
+    diagnosticCode: undefined,
+    skippedPullRecordCount: undefined,
+  });
 }
 
 /** The attempt completed successfully — matches today's emitSyncComplete() success path. */
 export function markSyncSucceeded(): void {
-  patchState({ status: "synced", lastSuccessfulSyncAt: new Date().toISOString(), diagnosticCode: undefined });
+  patchState({
+    status: "synced",
+    lastSuccessfulSyncAt: new Date().toISOString(),
+    diagnosticCode: undefined,
+    skippedPullRecordCount: undefined,
+  });
+}
+
+/**
+ * The attempt completed and this device's own changes were fully pushed/acknowledged, but one or
+ * more incoming remote changes were skipped because they failed validation (see
+ * validateChange.ts) rather than being applied. This is deliberately a distinct, calmer status
+ * from `needsAttention` — nothing here is broken or requires the user to do anything, and it is
+ * deliberately distinct from a plain `synced` — the sync did not fully reconcile every remote
+ * change, and silently reporting "Synced" would overstate that. `skippedCount` must be a plain
+ * count only — never the records themselves.
+ */
+export function markSyncSucceededWithWarnings(skippedCount: number): void {
+  patchState({
+    status: "syncedWithWarnings",
+    lastSuccessfulSyncAt: new Date().toISOString(),
+    diagnosticCode: undefined,
+    skippedPullRecordCount: skippedCount,
+  });
 }
 
 /**
