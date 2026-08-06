@@ -103,7 +103,7 @@ export default function ExportDeckScreen() {
     <Screen>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} disabled={busy} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("export.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("export.screenTitle")}</Text>
       </View>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("export.description")}</Text>
 

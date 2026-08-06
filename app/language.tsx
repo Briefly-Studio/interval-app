@@ -29,7 +29,7 @@ export default function LanguageScreen() {
     <Screen>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("settings.language")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("settings.language")}</Text>
       </View>
 
       <Card style={styles.rowGroup}>

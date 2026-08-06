@@ -33,7 +33,7 @@ export default function PrivacyNoticeScreen() {
     <Screen scroll>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("privacyNotice.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("privacyNotice.screenTitle")}</Text>
       </View>
 
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("privacyNotice.intro")}</Text>

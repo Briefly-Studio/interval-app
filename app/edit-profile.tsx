@@ -120,7 +120,7 @@ export default function EditProfileScreen() {
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("settings.editProfile")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("settings.editProfile")}</Text>
       </View>
 
       <Card style={[styles.formCard, { gap: spacing.md }]}>

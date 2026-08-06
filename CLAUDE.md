@@ -24,6 +24,9 @@ V3 beta is iOS-first. Android is buildable and expected to be core-flow compatib
 received the same testing depth. Authenticated web support is explicitly out of scope for this
 beta — see `docs/platform-scope.md` for the full platform-support decision and rationale.
 
+`v3.0-dev` is frozen at the approved V3 Release Candidate (tagged `v3.0-rc1`); active development
+continues on `v3.1-dev` — see `docs/branch-and-release-policy.md` for the full policy.
+
 ### Legacy Briefly identifiers
 
 These remain `briefly.*`/Briefly-named on purpose. None are user-visible, and renaming any of
@@ -190,6 +193,29 @@ Never accept the user ID from the request body or query parameters.
   Briefly naming remains elsewhere (storage keys, filenames, comments).
 - AWS infrastructure is not yet managed through Infrastructure as Code.
 - Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.
+
+## Accessibility Guardrails
+
+Full detail lives in `docs/accessibility-foundation.md` — read it before touching a study screen,
+settings, or any new interactive control. Short version for every future change:
+
+1. Icon-only controls require a localized `accessibilityLabel` describing purpose ("Delete card"),
+   never a raw icon name or "button."
+2. Never convey information by color alone — pair it with text or an icon+text combination.
+3. Never require a gesture with no button/control equivalent.
+4. New animation must respect Reduce Motion: check both the OS signal
+   (`AccessibilityInfo.isReduceMotionEnabled()`) and
+   `getAccessibilityPreferences().reduceMotionOverride` from
+   `src/accessibility/accessibilityPreferences.ts` — see `src/ui/BrandStartup.tsx` for the
+   reference pattern.
+5. Never disable font scaling (no `allowFontScaling={false}`) and avoid
+   `maximumFontSizeMultiplier` unless there's a specific, documented reason.
+6. Any text-to-speech goes through `src/accessibility/speech.ts`/`useSpeech.ts` — never call
+   `expo-speech` directly elsewhere. Speech is always explicit-action-only (never auto-plays) and
+   study content is never logged.
+7. New English strings — including accessibility labels/hints — need a Spanish counterpart.
+8. Accessibility is a foundation here, not a certification — do not claim WCAG/ADA/Section 508/
+   platform certification in code comments, commit messages, or user-facing copy.
 
 ## Engineering Rules
 

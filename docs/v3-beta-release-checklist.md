@@ -130,13 +130,51 @@ pushed to `origin/v3.0-dev`) plus founder simulator/device QA reported after tha
 
 ## Accessibility
 
-- [ ] VoiceOver smoke test (iOS)
+See `docs/accessibility-foundation.md` for the full accessibility foundation this section
+verifies. Items below are founder-confirmed via focused iOS Simulator QA where marked `[x]`; every
+other item is still genuinely pending a real device/assistive-technology pass — a code-level
+foundation is not the same claim as a tested one, and this list does not blur that line.
+
+**Founder-confirmed (iOS Simulator, this round):**
+
+- [x] Accessibility settings screen renders correctly and looks coherent/production-ready
+- [x] Speech enabled/disabled control works
+- [x] Speech rate controls render and behave correctly
+- [x] Text-to-speech: question is read aloud correctly (Review and Quiz)
+- [x] Text-to-speech: answer is read aloud correctly (Review, after reveal)
+- [x] Quiz reads the question only, by design — answer choices remain individually available
+      through normal interaction and are not automatically spoken as one block
+- [x] Text-to-speech: starting new speech interrupts speech already playing, without overlap
+- [x] Text-to-speech: repeated/rapid playback does not queue competing speech
+- [x] Text-to-speech: leaving the card, deck, Review screen, or Quiz screen stops speech
+- [x] Text-to-speech in English
+- [x] Text-to-speech in Spanish
+- [x] No speech-related crash observed
+- [x] iOS system Reduce Motion enabled → Interval skips the startup animation
+- [x] Interval's in-app Reduce Motion override alone → launch goes from the native loading screen
+      to a static Interval logo and then into the app, with no animated sequence in between (see
+      docs/accessibility-foundation.md's "Reduced motion: two paths" note for why this differs
+      from the system-level path — it is expected, not a bug)
+- [x] No stuck startup overlay, unwanted animation, or launch failure observed
+- [x] Existing Interval behavior (core deck/card/study/sync/appearance flows) remains healthy
+      alongside the accessibility additions
+
+**Still pending — do not treat as passed:**
+
+- [ ] VoiceOver smoke test (iOS) — attempted but not successfully completed this round; see the
+      VoiceOver checklist in the batch report for the full screen-by-screen list
 - [ ] TalkBack smoke test (Android)
-- [ ] Dynamic text / basic scaling check
-- [ ] Contrast review (Light/Dark/Warm)
-- [ ] Reduced-motion behavior confirmed on-device
+- [ ] Android accessibility generally (consistent with Android's existing "buildable, manual QA
+      pending" status — see docs/platform-scope.md)
+- [ ] Large system text at the largest Dynamic Type sizes — not fully completed this round
+- [ ] Formal contrast audit
+- [ ] Color-independent study state confirmed on-device (icon + text already present in code;
+      not yet device-verified)
+- [ ] No study action requires a gesture with no button/control equivalent — confirmed by code,
+      not yet device-verified
 - [~] Full accessibility certification is explicitly out of scope for this beta — see
-      docs/platform-scope.md. A smoke test is expected; formal certification is not.
+      docs/accessibility-foundation.md and docs/platform-scope.md. A smoke test is expected;
+      formal certification is not, and none is claimed here.
 
 ## Release decision
 
@@ -174,3 +212,7 @@ checklist, and not things a future contributor should "discover" and treat as ne
    no Android-specific code removed), but "should work" is not the same claim as "verified."
 7. **No automated test suite exists.** Every checklist item above requires a real manual pass;
    none of this is enforced by CI.
+8. **Accessibility is a foundation, not a certification.** Screen-reader semantics, text-to-speech,
+   reduced-motion, and large-text support are implemented and code-verified (see
+   `docs/accessibility-foundation.md`), but no VoiceOver/TalkBack device testing, no formal
+   contrast audit, and no WCAG/ADA/Section 508/platform certification has been performed.

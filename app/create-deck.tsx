@@ -63,7 +63,7 @@ export default function CreateDeck() {
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("createDeck.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("createDeck.screenTitle")}</Text>
       </View>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("createDeck.subtitle")}</Text>
 

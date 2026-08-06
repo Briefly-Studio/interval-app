@@ -86,7 +86,7 @@ export default function SignUpScreen() {
 
   return (
     <Screen scroll>
-      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("auth.signUp.title")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("auth.signUp.title")}</Text>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("auth.signUp.subtitle")}</Text>
 
       <Card style={{ gap: spacing.md }}>

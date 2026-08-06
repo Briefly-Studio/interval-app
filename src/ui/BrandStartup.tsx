@@ -13,6 +13,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { getAccessibilityPreferences } from "../accessibility/accessibilityPreferences";
 import { startupBridgeFor, startupTreatmentFor, useTheme, type StartupTreatment } from "@/src/theme";
 
 // Approved app-icon-background token (#0F7A75) — matches app.json's expo-splash-screen
@@ -486,7 +487,7 @@ export function BrandStartup({ onReady, onFinished }: BrandStartupProps) {
     }, 500);
     const reduceMotionBackstop = setTimeout(() => {
       if (reduceMotionRef.current === null) {
-        reduceMotionRef.current = false;
+        reduceMotionRef.current = getAccessibilityPreferences().reduceMotionOverride;
         maybeStart();
       }
     }, 300);
@@ -497,7 +498,12 @@ export function BrandStartup({ onReady, onFinished }: BrandStartupProps) {
       .then((reduced) => {
         if (cancelled) return;
         if (reduceMotionRef.current === null) {
-          reduceMotionRef.current = reduced;
+          // Interval's own in-app "reduce motion" override (see Settings → Accessibility) is
+          // combined with the OS-level signal here, never in place of it — either one alone is
+          // enough to request the reduced treatment. See accessibilityPreferences.ts's own doc
+          // comment for why this exists as an additional opt-in rather than replacing the system
+          // preference as the default.
+          reduceMotionRef.current = reduced || getAccessibilityPreferences().reduceMotionOverride;
           maybeStart();
         }
       });

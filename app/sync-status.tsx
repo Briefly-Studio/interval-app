@@ -52,7 +52,7 @@ export default function SyncStatusScreen() {
     <Screen scroll>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("sync.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("sync.screenTitle")}</Text>
       </View>
 
       <Card style={[styles.statusCard, { gap: spacing.md }]}>

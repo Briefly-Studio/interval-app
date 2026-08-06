@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, StyleSheet, Text, View } from "react-native";
 
+import { getAccessibilityPreferences } from "../src/accessibility/accessibilityPreferences";
 import type { UserIdentity } from "../src/auth/identity";
 import { defaultSignInTransitionDeps, runSignInTransition } from "../src/auth/signInTransition";
 import {
@@ -27,9 +28,13 @@ export default function SignInTransitionScreen() {
       .catch(() => false)
       .then((reduceMotion) => {
         if (cancelled) return;
+        // Combined with Interval's own in-app reduce-motion override (Settings → Accessibility)
+        // — either signal alone is enough to skip the fade. See BrandStartup.tsx for the same
+        // combination applied to the startup animation.
+        const reduced = reduceMotion || getAccessibilityPreferences().reduceMotionOverride;
         Animated.timing(opacity, {
           toValue: 1,
-          duration: reduceMotion ? 0 : 220,
+          duration: reduced ? 0 : 220,
           useNativeDriver: true,
         }).start();
       });

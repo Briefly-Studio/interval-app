@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Platform, StyleSheet, Text, View } from "react-native";
 
+import { initAccessibilityPreferences } from "../src/accessibility/accessibilityPreferences";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import { getSyncDiagnosticCode } from "../src/cloud/sync/http";
 import { SyncService } from "../src/cloud/sync/SyncService";
@@ -116,6 +117,12 @@ export default function Layout() {
   // src/cloud/sync/useSyncState.ts for what this actually sets up.
   useEffect(() => {
     initSyncState();
+  }, []);
+
+  // Same fire-and-forget, call-once pattern — the in-memory defaults (speech on, standard rate,
+  // no motion override) are already correct before this resolves, so nothing needs to gate on it.
+  useEffect(() => {
+    initAccessibilityPreferences();
   }, []);
 
   // File-open (deep-link) handling is a native-only concept (file:// URIs from the OS's "Open

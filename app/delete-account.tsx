@@ -78,7 +78,7 @@ export default function DeleteAccountScreen() {
   const header = (
     <View style={[styles.header, { gap: spacing.sm }]}>
       <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} disabled={submitting} />
-      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("deleteAccount.title")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("deleteAccount.title")}</Text>
     </View>
   );
 

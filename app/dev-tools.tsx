@@ -42,7 +42,7 @@ export default function DevToolsScreen() {
       <Screen>
         <View style={[styles.header, { gap: spacing.sm }]}>
           <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-          <Text style={[typography.title, { color: colors.textPrimary }]}>Developer tools</Text>
+          <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">Developer tools</Text>
         </View>
         <Text style={[typography.secondary, { color: colors.textSecondary }]}>
           This screen is only available in development.
@@ -55,7 +55,7 @@ export default function DevToolsScreen() {
     <Screen>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>Developer tools</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">Developer tools</Text>
       </View>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>For debugging only.</Text>
 

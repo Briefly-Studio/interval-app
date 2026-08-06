@@ -26,7 +26,7 @@ export default function BetaNoticeScreen() {
     <Screen scroll>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("betaNotice.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("betaNotice.screenTitle")}</Text>
       </View>
 
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("betaNotice.intro")}</Text>

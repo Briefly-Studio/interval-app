@@ -115,7 +115,7 @@ export default function ChangePasswordScreen() {
         onPress={() => router.back()}
         disabled={submitting}
       />
-      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("changePassword.title")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("changePassword.title")}</Text>
     </View>
   );
 

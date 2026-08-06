@@ -104,7 +104,7 @@ export default function DeckHistoryScreen() {
     <Screen>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("history.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("history.screenTitle")}</Text>
         <Button
           label={t("history.clearButton")}
           variant="danger"

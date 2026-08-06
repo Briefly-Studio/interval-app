@@ -19,7 +19,7 @@ export default function ThemeLabRoute() {
       <Screen>
         <View style={styles.header}>
           <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
-          <Text style={typography.title}>Theme Lab</Text>
+          <Text style={typography.title} accessibilityRole="header">Theme Lab</Text>
         </View>
         <Text style={typography.secondary}>This screen is only available in development.</Text>
       </Screen>
@@ -37,7 +37,7 @@ export default function ThemeLabRoute() {
     <SafeAreaView style={styles.flex} edges={["top"]}>
       <View style={styles.header}>
         <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
-        <Text style={typography.title}>Theme Lab</Text>
+        <Text style={typography.title} accessibilityRole="header">Theme Lab</Text>
       </View>
       <ThemeLabScreen />
     </SafeAreaView>

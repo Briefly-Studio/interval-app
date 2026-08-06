@@ -47,7 +47,7 @@ export default function SignInScreen() {
   return (
     <Screen scroll>
       <BrandMark />
-      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("auth.signIn.title")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("auth.signIn.title")}</Text>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("auth.signIn.subtitle")}</Text>
 
       <Card style={{ gap: spacing.md }}>

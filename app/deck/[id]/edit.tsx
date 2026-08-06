@@ -106,7 +106,7 @@ export default function EditDeckScreen() {
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("editDeck.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("editDeck.screenTitle")}</Text>
       </View>
 
       <Card>

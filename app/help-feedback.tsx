@@ -75,7 +75,7 @@ export default function HelpFeedbackScreen() {
     <Screen scroll>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("helpFeedback.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("helpFeedback.screenTitle")}</Text>
       </View>
 
       <View style={[styles.section, { gap: spacing.sm }]}>

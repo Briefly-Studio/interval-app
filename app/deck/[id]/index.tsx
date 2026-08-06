@@ -226,7 +226,11 @@ export default function DeckDetails() {
       <Screen>
         <View style={[styles.header, { gap: spacing.sm }]}>
           <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={goBackHome} />
-          <Text style={[typography.title, styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+          <Text
+            style={[typography.title, styles.headerTitle, { color: colors.textPrimary }]}
+            numberOfLines={1}
+            accessibilityRole="header"
+          >
             {deck.title}
           </Text>
         </View>
@@ -252,7 +256,11 @@ export default function DeckDetails() {
     <Screen>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={goBackHome} />
-        <Text style={[typography.title, styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+        <Text
+          style={[typography.title, styles.headerTitle, { color: colors.textPrimary }]}
+          numberOfLines={1}
+          accessibilityRole="header"
+        >
           {deck.title}
         </Text>
         <IconButton

@@ -223,7 +223,9 @@ export default function DecksHome() {
       </HomeHeader>
 
       <View style={[styles.greetingBlock, { gap: spacing.xs }]}>
-        <Text style={[typography.heading, { color: colors.textPrimary }]}>{greeting.headline}</Text>
+        <Text style={[typography.heading, { color: colors.textPrimary }]} accessibilityRole="header">
+          {greeting.headline}
+        </Text>
         {greeting.supporting ? (
           <Text style={[typography.secondary, { color: colors.textSecondary }]}>{greeting.supporting}</Text>
         ) : null}

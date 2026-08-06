@@ -339,7 +339,7 @@ export default function RecentlyDeletedScreen() {
     <Screen>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("recentlyDeleted.title")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("recentlyDeleted.title")}</Text>
       </View>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>
         {showExpired ? t("recentlyDeleted.showingAllNotice") : t("recentlyDeleted.hiddenExpiredNotice")}

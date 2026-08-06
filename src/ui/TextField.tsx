@@ -54,7 +54,15 @@ export function TextField({ label, error, isPassword, ...inputProps }: TextField
           />
         )}
       </View>
-      {error ? <Text style={[typography.caption, { color: colors.danger }]}>{error}</Text> : null}
+      {error ? (
+        <Text
+          style={[typography.caption, { color: colors.danger }]}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+        >
+          {error}
+        </Text>
+      ) : null}
     </View>
   );
 }

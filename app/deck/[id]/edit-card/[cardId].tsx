@@ -151,7 +151,7 @@ export default function EditCardScreen() {
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("editCard.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("editCard.screenTitle")}</Text>
       </View>
 
       <Card style={[styles.formCard, { gap: spacing.md }]}>

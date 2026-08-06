@@ -47,7 +47,7 @@ export default function ConfirmSignUpScreen() {
 
   return (
     <Screen scroll>
-      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("auth.confirmSignUp.title")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("auth.confirmSignUp.title")}</Text>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>
         {initialEmail
           ? t("auth.confirmSignUp.subtitleWithEmail", { email: initialEmail })

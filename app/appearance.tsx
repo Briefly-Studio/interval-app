@@ -49,7 +49,7 @@ export default function AppearanceScreen() {
     <Screen scroll>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("appearance.title")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("appearance.title")}</Text>
       </View>
 
       <View style={[styles.optionList, { gap: spacing.md }]}>

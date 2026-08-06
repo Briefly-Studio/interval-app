@@ -107,7 +107,7 @@ export default function QuizResults() {
   return (
     <Screen>
       <View style={[styles.center, { gap: spacing.md }]}>
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("quizResults.title")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("quizResults.title")}</Text>
         <Text style={[styles.bigScore, { color: colors.textPrimary }]}>
           {correct} / {total}
         </Text>

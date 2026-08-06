@@ -143,7 +143,7 @@ export default function SettingsScreen() {
   const header = (
     <View style={[styles.header, { gap: spacing.sm }]}>
       <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-      <Text style={[typography.title, { color: colors.textPrimary }]}>{t("settings.title")}</Text>
+      <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("settings.title")}</Text>
     </View>
   );
 
@@ -226,6 +226,16 @@ export default function SettingsScreen() {
             label={t("settings.appearance")}
             subtitle={appearanceSubtitle}
             onPress={() => router.push({ pathname: "/appearance" as any })}
+          />
+        </Card>
+      </View>
+
+      <View style={[styles.section, { gap: spacing.sm }]}>
+        <Text style={[typography.label, { color: colors.textSecondary }]}>{t("settings.sections.accessibility")}</Text>
+        <Card style={styles.rowGroup}>
+          <SettingsRow
+            label={t("settings.accessibility")}
+            onPress={() => router.push({ pathname: "/accessibility-settings" as any })}
           />
         </Card>
       </View>

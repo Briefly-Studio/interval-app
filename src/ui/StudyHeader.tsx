@@ -21,7 +21,11 @@ export function StudyHeader({ title, progressLabel, onClose, closeLabel }: Study
   return (
     <View style={[styles.row, { gap: spacing.sm }]}>
       <IconButton name="close" accessibilityLabel={closeLabel ?? t("common.close")} onPress={onClose} />
-      <Text style={[typography.subheading, styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
+      <Text
+        style={[typography.subheading, styles.title, { color: colors.textPrimary }]}
+        numberOfLines={1}
+        accessibilityRole="header"
+      >
         {title}
       </Text>
       {progressLabel ? <Text style={[typography.caption, { color: colors.textSecondary }]}>{progressLabel}</Text> : null}

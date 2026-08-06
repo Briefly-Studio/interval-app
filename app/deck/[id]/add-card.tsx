@@ -82,7 +82,7 @@ export default function AddCardScreen() {
           onPress={() => router.back()}
           disabled={submitting}
         />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("addCard.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("addCard.screenTitle")}</Text>
       </View>
 
       <Card style={[styles.formCard, { gap: spacing.md }]}>

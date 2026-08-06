@@ -98,7 +98,7 @@ export default function ReviewResults() {
   return (
     <Screen>
       <View style={[styles.center, { gap: spacing.lg }]}>
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("reviewResults.title")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("reviewResults.title")}</Text>
 
         <Card style={styles.summaryCard}>
           <View style={[styles.metricsRow, { gap: spacing.xxl }]}>

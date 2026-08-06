@@ -83,7 +83,7 @@ export default function ImportDeckScreen() {
           onPress={() => router.back()}
           disabled={busy}
         />
-        <Text style={[typography.title, { color: colors.textPrimary }]}>{t("importDeck.screenTitle")}</Text>
+        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("importDeck.screenTitle")}</Text>
       </View>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("importDeck.subtitle")}</Text>
       <Text style={[typography.caption, { color: colors.textSecondary }]}>{t("importDeck.legacyNote")}</Text>

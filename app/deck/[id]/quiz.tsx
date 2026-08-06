@@ -2,6 +2,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
+import { speechLanguageTag } from "../../../src/accessibility/speech";
+import { useSpeech } from "../../../src/accessibility/useSpeech";
 import { AuthService } from "../../../src/auth/AuthService";
 import { smartShuffle } from "../../../src/domain/smartShuffle";
 import { useTranslation } from "../../../src/i18n";
@@ -15,6 +17,7 @@ import { Card as Surface } from "../../../src/ui/Card";
 import { EmptyState } from "../../../src/ui/EmptyState";
 import { ProgressBar } from "../../../src/ui/ProgressBar";
 import { Screen } from "../../../src/ui/Screen";
+import { SpeakButton } from "../../../src/ui/SpeakButton";
 import { StudyHeader } from "../../../src/ui/StudyHeader";
 import { useTheme } from "@/src/theme";
 
@@ -34,8 +37,9 @@ function shuffle<T>(arr: T[]): T[] {
 
 export default function QuizScreen() {
   const router = useRouter();
-  const { t, plural } = useTranslation();
+  const { t, plural, language } = useTranslation();
   const { colors, spacing, typography } = useTheme();
+  const { speak, stop, isSpeaking, speechEnabled } = useSpeech(speechLanguageTag(language));
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -111,6 +115,9 @@ export default function QuizScreen() {
     setSelectedId(null);
     setWasCorrect(null);
     advancingRef.current = false;
+    // A new question is now on screen — any speech for the previous one must stop rather than
+    // keep reading over it. (Unmount/navigating away is handled separately, inside useSpeech.)
+    stop();
   }, [loaded, index]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const progress = useMemo(() => {
@@ -249,7 +256,17 @@ export default function QuizScreen() {
       <ProgressBar current={index} total={cards.length} />
 
       <Surface style={[styles.questionCard, { gap: spacing.sm }]}>
-        <Text style={[typography.label, { color: colors.textPrimary }]}>{t("quiz.questionLabel")}</Text>
+        <View style={styles.questionHeaderRow}>
+          <Text style={[typography.label, { color: colors.textPrimary }]}>{t("quiz.questionLabel")}</Text>
+          {speechEnabled && (
+            <SpeakButton
+              isSpeaking={isSpeaking}
+              onPress={() => (isSpeaking ? stop() : speak(current.front))}
+              playLabel={t("quiz.speakQuestionLabel")}
+              stopLabel={t("quiz.stopSpeechLabel")}
+            />
+          )}
+        </View>
         <Text style={[typography.title, styles.questionText, { color: colors.textPrimary }]}>{current.front}</Text>
       </Surface>
 
@@ -308,6 +325,7 @@ export default function QuizScreen() {
 const styles = StyleSheet.create({
   emptyFill: { flex: 1, justifyContent: "center" },
   questionCard: {},
+  questionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   questionText: { fontSize: 22 },
   optionsList: {},
   feedback: { textAlign: "center" },

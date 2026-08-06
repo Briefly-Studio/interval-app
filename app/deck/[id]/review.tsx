@@ -1,7 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Alert, StyleSheet, Text, View } from "react-native";
 
+import { speechLanguageTag } from "../../../src/accessibility/speech";
+import { useSpeech } from "../../../src/accessibility/useSpeech";
 import { AuthService } from "../../../src/auth/AuthService";
 import { smartShuffle } from "../../../src/domain/smartShuffle";
 import { useTranslation } from "../../../src/i18n";
@@ -14,13 +16,15 @@ import { EmptyState } from "../../../src/ui/EmptyState";
 import { FlashcardSurface } from "../../../src/ui/FlashcardSurface";
 import { ProgressBar } from "../../../src/ui/ProgressBar";
 import { Screen } from "../../../src/ui/Screen";
+import { SpeakButton } from "../../../src/ui/SpeakButton";
 import { StudyHeader } from "../../../src/ui/StudyHeader";
 import { useTheme } from "@/src/theme";
 
 export default function ReviewScreen() {
   const router = useRouter();
-  const { t, plural } = useTranslation();
-  const { colors, typography } = useTheme();
+  const { t, plural, language } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
+  const { speak, stop, isSpeaking, speechEnabled } = useSpeech(speechLanguageTag(language));
   const params = useLocalSearchParams();
   const idParam = params.id;
 
@@ -78,6 +82,14 @@ export default function ReviewScreen() {
     advancingRef.current = false;
   }, [index]);
 
+  // Speech must always track what's currently on screen — moving to a new card, or flipping the
+  // current one, stops any in-flight speech rather than letting it keep reading stale content.
+  // (Unmount/navigating away is handled separately, inside useSpeech itself.)
+  useEffect(() => {
+    stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, flipped]);
+
   const progressText = useMemo(() => {
     if (!loaded) return "";
     if (cards.length === 0) return "0 / 0";
@@ -87,6 +99,25 @@ export default function ReviewScreen() {
   const isLast = isLastCard;
 
   const goBack = () => router.back();
+
+  // Flipping to reveal the answer changes the FlashcardSurface's accessibilityLabel on the same
+  // element the user just activated — VoiceOver/TalkBack don't reliably re-announce a changed
+  // label on an already-focused control by themselves, so this makes the reveal explicit rather
+  // than silent. Flipping back to the question is not announced — only the reveal direction is a
+  // genuinely new disclosure worth calling out (see accessibility-foundation.md's "selective, not
+  // noisy" announcement principle).
+  const toggleFlip = () => {
+    setFlipped((v) => {
+      const next = !v;
+      if (next) AccessibilityInfo.announceForAccessibility(t("review.cardBackLabel"));
+      return next;
+    });
+  };
+
+  const revealAnswer = () => {
+    setFlipped(true);
+    AccessibilityInfo.announceForAccessibility(t("review.cardBackLabel"));
+  };
 
   const finishSession = (attempted: number) => {
     router.replace({
@@ -172,12 +203,23 @@ export default function ReviewScreen() {
       <FlashcardSurface
         label={flipped ? t("review.cardBackLabel") : t("review.cardFrontLabel")}
         content={flipped ? current.back : current.front}
-        onPress={() => setFlipped((v) => !v)}
+        onPress={toggleFlip}
         hint={t("review.flipHint")}
       />
 
+      {speechEnabled && (
+        <View style={[styles.speakRow, { marginTop: -spacing.sm }]}>
+          <SpeakButton
+            isSpeaking={isSpeaking}
+            onPress={() => (isSpeaking ? stop() : speak(flipped ? current.back : current.front))}
+            playLabel={flipped ? t("review.speakAnswerLabel") : t("review.speakQuestionLabel")}
+            stopLabel={t("review.stopSpeechLabel")}
+          />
+        </View>
+      )}
+
       {!flipped && (
-        <Button label={t("review.showAnswerButton")} variant="secondary" fullWidth onPress={() => setFlipped(true)} />
+        <Button label={t("review.showAnswerButton")} variant="secondary" fullWidth onPress={revealAnswer} />
       )}
 
       <Button
@@ -196,4 +238,5 @@ export default function ReviewScreen() {
 
 const styles = StyleSheet.create({
   emptyFill: { flex: 1, justifyContent: "center" },
+  speakRow: { flexDirection: "row", justifyContent: "flex-end" },
 });
