@@ -356,15 +356,30 @@ const en = {
         body:
           "Interval is pre-release beta software. Features may change, and you may occasionally encounter defects or unexpected behavior.",
       },
+      platforms: {
+        title: "Platform support",
+        body:
+          "iOS is Interval's primary, most-tested platform right now. Android is buildable and the core features are expected to work, but it hasn't had the same depth of testing yet. Signed-in web access isn't available in this beta.",
+      },
       dataSafety: {
-        title: "Your data is protected",
+        title: "Managing and protecting your data",
         body:
           "Deleted decks and cards appear in Recently Deleted, where you can restore them. Older items may be hidden by default — use Show Expired to reveal them. You can also check your sync status at any time from Settings.",
+      },
+      knownLimitations: {
+        title: "A few things to know",
+        body:
+          "If you edit the same card or deck on two different devices while offline, the most recent change wins when they sync — there's no merge, so it's best to let a device finish syncing before editing the same thing elsewhere. If Interval closes unexpectedly in the middle of a review or quiz, that session's progress isn't saved.",
+      },
+      accessibility: {
+        title: "Accessibility",
+        body:
+          "Interval includes on-device text-to-speech and reduced-motion support, available from Settings → Accessibility. Interval is designed to work with VoiceOver and TalkBack, but full assistive-technology testing has not yet been completed. No accessibility certification is being claimed at this stage.",
       },
       exports: {
         title: "Keep your own copies",
         body:
-          "You can export any deck individually as a copy of that deck's content. This isn't a full account backup, so we recommend exporting anything important to you.",
+          "You can export any deck individually as an .interval file, ready to share or move to another device. Older .briefly files you may already have are still supported for import. Exporting isn't a full account backup, so we recommend exporting anything important to you.",
       },
       feedback: {
         title: "Your feedback matters",
@@ -400,16 +415,17 @@ const en = {
       },
       noSelling: {
         title: "We don't sell your data",
-        body: "Interval does not intentionally sell your study data to third parties.",
+        body: "Interval does not sell your study data.",
       },
       betaState: {
         title: "Beta software",
         body:
           "Interval is beta software and may contain defects. We recommend keeping your own exported copies of anything important to you — per-deck export is available from within the app.",
       },
-      ai: {
-        title: "AI features",
-        body: "AI-powered features are not yet active in Interval.",
+      futureFeatures: {
+        title: "AI, Library, and Canvas features",
+        body:
+          "AI-powered features, a document/audio Library, and any Canvas connection are not yet active in Interval. If they're added in a future update, this notice will be updated to explain what data they use and how.",
       },
       contact: {
         title: "Questions or concerns",

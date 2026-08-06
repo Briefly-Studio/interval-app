@@ -25,14 +25,67 @@ a compliance statement.
 6. Announcements are selective. Not every state change is announced — only ones a screen-reader
    user could otherwise miss (see §7).
 
-## 2. Supported assistive behaviors
+## 2. Assistive behaviors: implementation status vs. verification status
 
-- VoiceOver (iOS) and TalkBack (Android) semantic navigation across every production screen.
+This section deliberately separates three different kinds of claim, so that "the code does the
+right thing" is never read as "a screen reader user has confirmed this works." They are not the
+same claim, and collapsing them was itself a finding this batch corrected — see §9's "no VoiceOver/
+TalkBack device testing" limitation, which this section now makes structurally harder to overlook.
+
+### Implemented / code-supported
+
+These are static-evidence claims: the correct role, label, state, or behavior is present in code
+(verified by reading), independent of whether a real screen reader has exercised it yet.
+
+- VoiceOver (iOS) and TalkBack (Android) semantic navigation is designed for across every
+  production screen — correct `accessibilityRole`/`accessibilityLabel`/`accessibilityState` usage
+  per §3's standard.
 - Dynamic Type / system font scaling (never disabled anywhere in the app).
 - System Reduce Motion, honored by every animated surface Interval has (startup, sign-in
   transition) — plus an additional in-app override (§5).
 - On-device text-to-speech for review and quiz questions/answers (§4).
 - Color-independent status, selection, and correctness indicators throughout.
+
+### Runtime-confirmed by founder QA (iOS Simulator)
+
+These specific behaviors have been manually exercised and confirmed working, not just
+code-reviewed — see §5's "Reduced motion: two paths, both intentional" for the full detail behind
+the reduced-motion entries below:
+
+- Accessibility settings screen renders correctly.
+- Speech enabled/disabled toggle works.
+- Slower/Standard/Faster speech rates work.
+- Review reads the question, then the answer after reveal.
+- Quiz reads the question only, by design — answer choices are not auto-spoken as one block.
+- English and Spanish speech both work, without overlapping or queuing on repeated playback.
+- Leaving the card, deck, Review screen, or Quiz screen stops speech.
+- No speech-related crash was observed.
+- System Reduce Motion skips the startup animation.
+- Interval's in-app Reduce Motion override shows native loading, then a static logo bridge, then
+  the app, without animated motion.
+- No stuck startup overlay or launch failure was observed.
+
+This QA pass was run on iOS Simulator, not a physical device, and did not use VoiceOver or
+TalkBack — it confirms the features work as designed, not that they work correctly under an actual
+screen reader.
+
+### Pending VoiceOver/TalkBack device verification
+
+**Not yet performed, and must not be described as passed, supported-and-verified, or certified
+anywhere in this app's copy or documentation:**
+
+- A VoiceOver smoke test on a physical iOS device.
+- A TalkBack smoke test on a physical Android device.
+- Android accessibility QA more broadly (see `docs/platform-scope.md`'s existing "Android
+  buildable, manual QA pending" status, which this includes).
+- Testing at the largest Dynamic Type sizes.
+- A formal contrast audit.
+- Any accessibility certification (WCAG, ADA, Section 508, or platform-specific).
+
+User-facing copy describes this accurately as "designed to work with VoiceOver and TalkBack, but
+full assistive-technology testing has not yet been completed" (see `src/i18n/locales/en.ts`'s
+`betaNotice.sections.accessibility.body`) — not "supported," which would overstate what has
+actually been verified.
 
 ## 3. Screen-reader semantic standard
 
@@ -225,9 +278,38 @@ Before shipping any new screen or interactive control:
 
 ## 11. Future document/AI accessibility requirements
 
-No document upload or AI features exist in this batch — this section exists so a future batch
-that adds them inherits an accessible foundation instead of retrofitting one. When that work
-happens, it must support:
+No document upload, Library, or AI features exist in this batch — this section exists so a future
+batch that adds them (see `docs/library-and-source-architecture.md`) inherits an accessible
+foundation instead of retrofitting one. When that work happens, it must support:
+
+**Library:**
+
+- **Accessible file-picker controls** — `expo-document-picker` (already used by `app/import.tsx`)
+  already integrates with the OS's own accessible file picker UI; a future document-upload flow
+  should keep using the OS picker rather than a custom in-app file browser, which would need to
+  reimplement accessibility from scratch.
+- **File type, size, and status are announced** — a Library source row's accessibility label
+  should include its type, size, and processing status as text, not rely on an icon or color
+  swatch alone to convey them.
+- **Alphabetical and type-based sorting/filtering are accessible** — the sort/filter controls
+  described in `docs/library-and-source-architecture.md` §2 need real roles/labels/state
+  (`accessibilityRole="radio"`/`"radiogroup"` for exclusive choices, matching the pattern already
+  used by `app/appearance.tsx` and `app/language.tsx`), not a purely visual segmented control.
+- **Collection controls are labeled** — creating, renaming, and assigning a source to a
+  collection all need real, localized labels, same standard as every other control in this app.
+- **Upload progress is exposed accessibly** — reuse the existing `accessibilityRole="progressbar"`
+  pattern from `src/ui/ProgressBar.tsx` (role + `accessibilityValue`), not a purely visual bar.
+- **Processing errors are announced** — a source that fails processing should surface that via an
+  accessible, discoverable state (see §17's `accessibilityLiveRegion`/`accessibilityRole="alert"`
+  pattern already applied to form validation errors in `src/ui/TextField.tsx`), not just a color
+  change.
+- **No color-only status anywhere in the Library** — every processing/collection/type status
+  needs a textual or iconic pairing, same principle as §16's existing color-independence
+  standard.
+- **Large-text resilience** — Library rows (title, metadata, status) must tolerate Dynamic Type
+  scaling without clipping essential information, same standard as §15.
+
+**AI Review & Approve:**
 
 - **Reading imported notes aloud** — reuse `src/accessibility/speech.ts`/`useSpeech.ts` rather
   than building a second speech path; imported note content is still study content under §4's
@@ -235,25 +317,28 @@ happens, it must support:
 - **Reading AI-generated flashcards aloud** — same reuse; AI-generated content should be
   announced as such (see "source/provenance announcements" below) before being read, so a user
   isn't misled about what they're hearing.
-- **Accessible file-picker controls** — `expo-document-picker` (already used by `app/import.tsx`)
-  already integrates with the OS's own accessible file picker UI; a future document-upload flow
-  should keep using the OS picker rather than a custom in-app file browser, which would need to
-  reimplement accessibility from scratch.
 - **Accessible Review & Approve screens** — any future "review AI output before saving" screen
   must follow §3's semantic standard from day one: real headers, real labels on approve/reject/
   edit controls, and correctness/status never conveyed by color alone (the same standard
   `src/ui/AnswerOption.tsx` already meets today).
-- **Generated-content headings** — AI- or import-generated screens need real
-  `accessibilityRole="header"` landmarks the same as every other screen (§3), so screen-reader
-  users can navigate generated content structurally, not just linearly.
+- **Draft sections use real headings** — each generated item/section in a Review & Approve screen
+  needs its own `accessibilityRole="header"` landmark (§3), so screen-reader users can navigate
+  generated content structurally, not just linearly.
+- **Generated items are individually navigable** — a batch of AI-generated cards/questions must
+  be exposed as individually focusable, individually labeled elements, never collapsed into one
+  block of read-out text (same principle already applied to Quiz's answer choices — see §4).
+- **Approve/reject/edit controls are labeled** — every action on a generated draft needs a real,
+  localized, purpose-describing label (§3's standard), not an icon alone.
 - **Source/provenance announcements** — where content is imported or AI-generated rather than
   user-authored, that provenance should be exposed to assistive technology (e.g. as part of a
   card's accessibility label or a heading), not conveyed only through visual styling (an icon or
   badge color).
-- **Accessible progress indicators during parsing/generation** — reuse the existing
-  `accessibilityRole="progressbar"` pattern already established in `src/ui/ProgressBar.tsx`
-  (role + `accessibilityValue`), rather than a purely visual spinner with no accessible progress
-  semantics.
+- **Generation progress is accessible** — same `accessibilityRole="progressbar"` pattern as
+  upload progress above, not a purely visual spinner.
+- **Errors do not trap focus** — a generation or validation failure must leave the user able to
+  navigate away or retry, never stuck on an inaccessible error state with no way out.
+- **Generated content can be read aloud** — reuses the same speech architecture as everywhere
+  else in this app (§4), not a separate implementation.
 
 No speculative components were built for any of this in the current batch — this section is
 documentation only, per the mission's explicit scope.
@@ -316,6 +401,9 @@ These apply to both flows above, whenever they're built:
 - The transcript is navigable by headings (topic segments become real
   `accessibilityRole="header"` landmarks — see §11's "generated-content headings" requirement,
   which applies here too).
+- The microphone-permission explanation itself (see the trust and safety requirements below) must
+  be presented as real, screen-reader-readable text — not an image or a permission prompt whose
+  context is only conveyed visually.
 - Generated drafts (summaries, cards, quizzes) are readable aloud — reuse
   `src/accessibility/speech.ts`/`useSpeech.ts` rather than a second speech implementation, per
   §11.
@@ -344,3 +432,28 @@ These apply to both flows above, whenever they're built:
   under §4's existing "never logged" rule; this extends that rule rather than creating a new one.
 - No background recording without explicit action — recording must not continue, or restart,
   without the user actively choosing it each time.
+
+## Canvas Companion — Future Accessibility Requirements
+
+Nothing in this section is implemented. No Canvas integration exists in this batch or is planned
+for the current one — see `docs/canvas-companion-spec.md` for the full (also unimplemented)
+specification. Documented now so that whenever this work happens, it inherits the same
+accessibility discipline as everything else in this app.
+
+- **Upcoming-assignment lists are navigable by headings** — each course or time-grouping (e.g.
+  "This week," "Next week") should be a real `accessibilityRole="header"` landmark (§3), the same
+  standard already applied to every other screen in this app.
+- **Due dates are conveyed in readable language** — "Due in 3 days" or "Due August 28," not a
+  bare date format or, worse, a color-only urgency indicator with no text equivalent.
+- **Urgency is never represented only by color** — an assignment due soon needs a textual cue
+  ("Due tomorrow," "Overdue") alongside any color treatment, same color-independence principle as
+  §16.
+- **Notification copy is concise** — screen-reader users hear the full notification text read
+  aloud; verbose or jargon-heavy reminder copy is an accessibility cost, not just a tone
+  preference (see `docs/canvas-companion-spec.md`'s tone requirements, which already call for
+  calm, plain language for this same reason among others).
+- **Course context is included** — a reminder or assignment row should include which course it
+  belongs to in its accessible text, not rely on visual grouping alone to convey that.
+- **Reminder actions are accessible** — "View assignment," "Snooze," "Mark handled," and similar
+  actions each need their own real, localized, purpose-describing label (§3's standard), not a
+  bare icon.

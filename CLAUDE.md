@@ -65,6 +65,27 @@ do not rename them for branding alone.
   changing the string would misdirect real support requests unless a new domain/mailbox is
   actually provisioned first. Not touched.
 
+## Documentation Hierarchy
+
+For anything not covered directly in this file, these are the authoritative documents, in order:
+
+1. `CLAUDE.md` (this file) — repository guardrails and implementation rules.
+2. `docs/branch-and-release-policy.md` — branch/release/environment policy.
+3. `docs/platform-scope.md` — currently supported platforms and beta boundaries.
+4. `docs/accessibility-foundation.md` — accessibility requirements, current and future.
+5. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
+   sharing, and AI draft architecture. **Specification only — not implemented.**
+6. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
+   **Specification only — not implemented.**
+7. `docs/sync-invariants.md` — current offline-first sync invariants.
+8. `docs/v3-beta-release-checklist.md` — current verification/QA state.
+
+Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
+must never be treated as, or edited to look like, current specifications — see each file's own
+dating for why. Current-facing documentation and in-app copy use Interval branding throughout,
+except where legacy `.briefly` compatibility is being explicitly explained (see "Legacy Briefly
+identifiers" above).
+
 ## Core Product Rule
 
 The app must remain useful without an account.

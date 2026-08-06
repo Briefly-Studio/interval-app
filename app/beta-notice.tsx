@@ -12,7 +12,10 @@ import { Screen } from "../src/ui/Screen";
 // app/sync-status.tsx. Purely presentational: no data fetching, no user input beyond navigation.
 const SECTION_KEYS = [
   "status",
+  "platforms",
   "dataSafety",
+  "knownLimitations",
+  "accessibility",
   "exports",
   "feedback",
 ] as const;

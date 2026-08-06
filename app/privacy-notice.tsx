@@ -20,7 +20,7 @@ const SECTION_KEYS = [
   "isolation",
   "noSelling",
   "betaState",
-  "ai",
+  "futureFeatures",
   "contact",
 ] as const;
 

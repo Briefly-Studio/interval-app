@@ -349,15 +349,30 @@ const es = {
         body:
           "Interval es software beta preliminar. Las funciones pueden cambiar y es posible que encuentres defectos o comportamientos inesperados de vez en cuando.",
       },
+      platforms: {
+        title: "Compatibilidad de plataformas",
+        body:
+          "iOS es la plataforma principal y más probada de Interval por ahora. Android se puede compilar y se espera que las funciones principales funcionen, pero aún no ha recibido el mismo nivel de pruebas. El acceso web con inicio de sesión no está disponible en esta beta.",
+      },
       dataSafety: {
-        title: "Tus datos están protegidos",
+        title: "Administración y protección de tus datos",
         body:
           "Los mazos y tarjetas eliminados aparecen en Eliminado recientemente, donde puedes restaurarlos. Los elementos más antiguos pueden estar ocultos de forma predeterminada — usa Mostrar vencidos para verlos. También puedes revisar el estado de sincronización en cualquier momento desde Configuración.",
+      },
+      knownLimitations: {
+        title: "Algunas cosas que debes saber",
+        body:
+          "Si editas la misma tarjeta o mazo en dos dispositivos diferentes sin conexión, el cambio más reciente prevalece al sincronizar — no hay combinación de cambios, así que es mejor dejar que un dispositivo termine de sincronizar antes de editar lo mismo en otro. Si Interval se cierra inesperadamente en medio de un repaso o una prueba, el progreso de esa sesión no se guarda.",
+      },
+      accessibility: {
+        title: "Accesibilidad",
+        body:
+          "Interval incluye texto a voz en el dispositivo y compatibilidad con movimiento reducido, disponibles en Configuración → Accesibilidad. Interval está diseñada para funcionar con VoiceOver y TalkBack, pero aún no se han completado las pruebas con tecnologías de asistencia. En esta etapa no se afirma ninguna certificación de accesibilidad.",
       },
       exports: {
         title: "Conserva tus propias copias",
         body:
-          "Puedes exportar cualquier mazo individualmente como una copia de su contenido. Esto no es una copia de seguridad completa de la cuenta, así que te recomendamos exportar todo lo que sea importante para ti.",
+          "Puedes exportar cualquier mazo individualmente como un archivo .interval, listo para compartir o mover a otro dispositivo. Los archivos .briefly antiguos que ya tengas siguen siendo compatibles para importar. Exportar no es una copia de seguridad completa de la cuenta, así que te recomendamos exportar todo lo que sea importante para ti.",
       },
       feedback: {
         title: "Tus comentarios importan",
@@ -393,16 +408,17 @@ const es = {
       },
       noSelling: {
         title: "No vendemos tus datos",
-        body: "Interval no vende intencionalmente tus datos de estudio a terceros.",
+        body: "Interval no vende tus datos de estudio.",
       },
       betaState: {
         title: "Software beta",
         body:
           "Interval es software beta y puede contener defectos. Te recomendamos conservar tus propias copias exportadas de todo lo que sea importante para ti — la exportación por mazo está disponible dentro de la app.",
       },
-      ai: {
-        title: "Funciones de IA",
-        body: "Las funciones impulsadas por IA aún no están activas en Interval.",
+      futureFeatures: {
+        title: "Funciones de IA, Biblioteca y Canvas",
+        body:
+          "Las funciones impulsadas por IA, una Biblioteca de documentos/audio y cualquier conexión con Canvas aún no están activas en Interval. Si se agregan en una futura actualización, este aviso se actualizará para explicar qué datos usan y cómo.",
       },
       contact: {
         title: "Preguntas o inquietudes",

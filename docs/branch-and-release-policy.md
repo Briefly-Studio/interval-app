@@ -46,3 +46,12 @@ Do not treat this repository, its documentation, or any future reference to "sta
 "production" as evidence that separate environments already exist. As of this document, Interval
 has the single AWS environment described in `CLAUDE.md`'s "AWS Resources" section, and nothing
 else.
+
+Development continues privately for now — there is no external tester population against the
+current backend. This matters specifically for anything that would create new persistent
+third-party data: source upload (see `docs/library-and-source-architecture.md`), AI generation,
+and Canvas integration (see `docs/canvas-companion-spec.md`) must not launch against the single,
+unseparated environment described above. Each of those is documented as a future specification
+precisely so that "environment separation exists" can be a real, checkable prerequisite before
+any of them go live with real users, rather than something assumed to already be true by the time
+it's needed.

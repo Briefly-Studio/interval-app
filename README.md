@@ -5,7 +5,10 @@
 > says Interval throughout, legacy `.briefly` deck files remain fully importable, and a few
 > internal-only identifiers (storage keys, filenames, comments) still reference the old name
 > intentionally — see `CLAUDE.md`'s "Legacy Briefly identifiers" section before renaming any of
-> them.
+> them. See `CLAUDE.md`'s "Documentation Hierarchy" section for the full, current list of
+> authoritative docs, including future-facing specifications
+> (`docs/library-and-source-architecture.md`, `docs/canvas-companion-spec.md`) that describe
+> planned, **not yet implemented**, product direction.
 
 # Interval — Flashcards + Review + Quiz (Expo Router + AsyncStorage)
 
