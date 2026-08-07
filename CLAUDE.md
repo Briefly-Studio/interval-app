@@ -138,6 +138,26 @@ via the platform-safe wrapper at `src/storage/secureStore.ts` — SecureStore ha
 implementation, so on web every call through that wrapper resolves to a safe no-op rather than
 throwing. See `docs/platform-scope.md`.
 
+### Library (local metadata foundation only)
+
+`app/library/**` implements a **local-only** Library UI foundation — see
+`docs/library-ui-foundation.md` for full detail and `docs/library-and-source-architecture.md`'s
+"Implementation status" section for what is and is not implemented. Guardrails when touching this
+area:
+
+- `LibrarySourceRecord` (`src/models/librarySource.ts`) is metadata only. Never add a field that
+  could hold a file URI, binary content, extracted text, or AI-generated content without an
+  explicit founder decision — that is real product-architecture work, not a small addition.
+- Storage keys are `interval.librarySources.v1` / `interval.sourceCollections.v1`
+  (`src/storage/libraryKeys.ts`), scoped through the existing `scopedKey(WorkspaceScope, ...)`
+  mechanism — same guest-vs-`user:<sub>` local partitioning as decks/cards. Do not bypass this
+  scoping or introduce a device-wide Library store.
+- There is no cloud Library record, no `ownerId`, and no Cognito authorization check anywhere in
+  this code. Do not add one without following `docs/library-and-source-architecture.md` §18's
+  account/guest boundary.
+- Do not wire Library storage into `src/cloud/sync/**` — no Library sync protocol exists or is
+  approved yet (see `docs/library-and-source-architecture.md` §12).
+
 ## AWS Resources
 
 Region:

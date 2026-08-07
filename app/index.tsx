@@ -238,6 +238,11 @@ export default function DecksHome() {
       </View>
 
       <View style={[styles.secondaryRow, { gap: spacing.sm }]}>
+        <SecondaryAction
+          icon="library-outline"
+          label={t("home.libraryButton")}
+          onPress={() => router.push({ pathname: "/library" as any })}
+        />
         <SecondaryAction icon="download-outline" label={t("settings.importDeck")} onPress={() => router.push("/import")} />
         <SecondaryAction
           icon="trash-outline"
@@ -296,7 +301,7 @@ const styles = StyleSheet.create({
   syncRow: { flexDirection: "row", alignItems: "center" },
   syncLabel: {},
 
-  secondaryRow: { flexDirection: "row" },
+  secondaryRow: { flexDirection: "row", flexWrap: "wrap" },
 
   emptyFill: { flex: 1, justifyContent: "center" },
 

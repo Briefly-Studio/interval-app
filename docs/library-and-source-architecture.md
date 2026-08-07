@@ -1,14 +1,45 @@
 # Library and Source Architecture
 
-**Status: specification only. Nothing described in this document is implemented.** No Library
-route, no upload code, no extraction pipeline, no AI generation, and no sharing beyond the
-existing `.interval`/legacy `.briefly` deck file export/import exists in the app today. This
-document exists to remove architectural ambiguity *before* implementation begins, per the
-founder's product direction — not to describe current behavior.
+**Status: mostly still specification only.** The Library Local UI Foundation batch has implemented
+a local-metadata-only Library route, navigation, and CRUD UI (see "Implementation status" below and
+`docs/library-ui-foundation.md` for the full detail) — but no upload code, no extraction pipeline,
+no AI generation, no cloud Library record, and no sharing beyond the existing `.interval`/legacy
+`.briefly` deck file export/import exists in the app today. This document exists to remove
+architectural ambiguity *before* that further implementation begins, per the founder's product
+direction — the sections below still describe future/target architecture, not current behavior,
+except where "Implementation status" says otherwise.
 
 Where this document says "must" or "should," it is a requirement for whenever this is built, not
 a claim about what exists now. See `docs/branch-and-release-policy.md` for why none of this can
 launch against the current single, unseparated backend environment.
+
+## Implementation status
+
+Added by the Library Local UI Foundation batch — see `docs/library-ui-foundation.md` for full
+detail (routes, data model, storage keys, accessibility, known limitations, founder QA checklist).
+
+**Implemented now (local-only):**
+
+- Local Library source metadata model and local collections
+- Library navigation (a dedicated route reachable from Home and Settings — no tab bar)
+- Local search, sort, and composable filtering
+- Metadata-only source creation and editing (no file picker, no binary of any kind)
+- Source detail, archive, restore, and soft-delete/restore lifecycle
+- Collection create/rename/delete (deleting a collection never deletes its sources)
+- Accessibility and English/Spanish localization for all of the above
+
+**Not implemented (still future work, per this document's other sections):**
+
+- Actual file/audio intake (no upload, no file picker)
+- Cloud Library records and authenticated source ownership
+- Guest-to-account source adoption (§18)
+- Library sync across devices
+- Extraction, OCR, or transcription
+- AI generation of any kind
+- Canvas integration
+- Notifications
+- Hosted/in-platform sharing (§5)
+- Environment separation (§15 Phase 3)
 
 ## 1. What the Library is
 

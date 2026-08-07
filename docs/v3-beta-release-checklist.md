@@ -176,6 +176,116 @@ foundation is not the same claim as a tested one, and this list does not blur th
       docs/accessibility-foundation.md and docs/platform-scope.md. A smoke test is expected;
       formal certification is not, and none is claimed here.
 
+## Library Foundation (local metadata only)
+
+See `docs/library-ui-foundation.md` for full detail. This section covers only the local-metadata
+UI foundation; it does not cover, and this beta does not yet include, any real file intake, cloud
+Library, AI generation, or Canvas integration (see `docs/library-and-source-architecture.md`'s
+"Implementation status" section).
+
+### Founder-confirmed working (final — third iOS Simulator pass)
+
+Only what the founder explicitly exercised and confirmed is marked `[x]` here. Nothing broader
+(lifecycle detail, workspace isolation, restart persistence, language/theme variations not
+explicitly named, or device-level accessibility) is marked passed merely because it's adjacent to
+something that was confirmed — see "Remaining intentionally pending" below and the granular
+checklists further down for what that excludes.
+
+- [x] Library route opens
+- [x] Library navigation is understandable (Home entry, Settings entry, guest and signed-in access)
+- [x] Empty Library state renders and reads correctly
+- [x] Collections route opens
+- [x] Collection creation works
+- [x] Collection search works
+- [x] Metadata-only source creation works
+- [x] Source editing works
+- [x] Source detail screen renders and is understandable
+- [x] Source cards visibly communicate that they are actionable
+- [x] Source Details actions are discoverable
+- [x] Manage Collections works
+- [x] An existing source can be reassigned to a newly-created collection
+- [x] Source search works and is discoverable
+- [x] Sorting and composable filtering work
+- [x] Active/Archived organization is understandable
+- [x] Archive/restore works
+- [x] Recently Deleted works
+- [x] Recently Deleted title layout is fixed (fits without clipping)
+- [x] Recently Deleted remains accessible even when no active sources remain
+- [x] "Delete from Library" wording is understandable
+- [x] Dev Tools scrolling works
+- [x] Add/Edit Source scrolling works
+- [x] The global `Screen` scrolling change produced no observed regressions elsewhere in the app
+- [x] Dev-only Library fixture seeding works
+- [x] Product direction reads as valuable and visually consistent with Interval
+
+This consolidates and closes out three rounds of founder iOS Simulator testing. The first pass
+found the underlying behavior sound but surfaced layout/discoverability defects (scrolling,
+Recently Deleted's title, main-screen hierarchy, search visibility, source-card affordance, action
+discoverability, collection reassignment). The second pass confirmed those fixes and surfaced three
+narrower issues (collection search, "Delete metadata" wording, recovery navigation hidden on an
+empty active list). This third pass confirms all three of those are resolved, alongside a full
+final smoke test — see `docs/library-ui-foundation.md`'s "Founder QA remediation" sections (first
+and second pass) for the technical detail behind each fix.
+
+**Navigation**
+- [ ] Library reachable from Home while signed out (guest)
+- [ ] Library reachable from Home while signed in
+- [ ] Library reachable from Settings while signed in
+- [ ] Existing Home/deck navigation, back behavior, and startup behavior unaffected
+
+**Data safety / workspace scoping**
+- [ ] Restart persistence (force-quit and relaunch; Library metadata intact)
+- [ ] Sign out while the Library screen is open/focused — the list must update to the signed-out
+      (guest) workspace, not keep showing the previous account's sources (this stabilization pass
+      added a workspace-change subscription to the Library screen specifically for this case —
+      still needs a real device pass, not just a code review)
+- [ ] Sign in / switch accounts where practical — confirm Library metadata is scoped per local
+      account, same as decks, and one account's sources never appear under another's
+- [ ] Decks, cards, sessions, and account state are unaffected by any Library action
+
+**Empty and seed states**
+- [ ] Empty state — English, Spanish, Light/Dark/Warm, larger text (Dynamic Type)
+- [ ] Dev-only Library fixture seed — confirmed development-only, confirmed exercises long titles,
+      an archived item, multiple types, and multiple collections
+- [ ] Dev-only Library fixture reset — requires confirmation, confirmed isolated from decks/cards/
+      sessions/account/appearance/language/accessibility preferences, confirmed scoped to the
+      current workspace only
+
+**Source creation and editing**
+- [ ] Add source details — each prioritized type (PDF, Word, Text, Image, Audio)
+- [ ] Add source details — required-title validation, long-title layout, Spanish copy
+- [ ] Numeric fields (file size, page/slide/sheet count, duration) — invalid text, negative
+      values, and zero are all handled without crashing or corrupting the saved value
+- [ ] Edit source details, including collection assignment
+- [ ] Edit source details — switching source type after entering a type-specific value (e.g. page
+      count) does not leave a stale, incompatible value on the saved record
+- [ ] No file picker, upload, sync, or AI action appears anywhere in these flows
+
+**Organization**
+- [ ] Search — title, filename, tag, course, semester; case-insensitive; Spanish text
+- [ ] Every sort option (Recently used, Recently added, Alphabetical, Newest, Oldest)
+- [ ] Composed filters (e.g. type + collection together)
+- [ ] Clearing one filter and clearing all filters
+- [ ] A filter pointing at a collection deleted from another screen resets itself rather than
+      silently showing a stuck, unexplained empty result
+
+**Lifecycle**
+- [ ] Archive an active source, then restore it
+- [ ] Delete a source ("Delete from Library"), then restore it from Library Recently Deleted
+- [ ] Delete an already-archived source, then restore it from Library Recently Deleted — it should
+      return to Archived, not jump straight to Active
+- [ ] Deletion confirmation copy is accurate and plain-language: local details only, no external
+      file, no cloud claim
+
+**Collections**
+- [ ] Create, rename (including duplicate-name handling), and delete a collection
+- [ ] Deleting a collection preserves its sources (they become unassigned, not deleted)
+- [ ] A deleted collection no longer appears in the Add/Edit source collection picker
+
+**Accessibility**
+- [~] VoiceOver/TalkBack not yet tested on any Library screen — acknowledged limitation, same
+      standard as the rest of this beta's Accessibility section above.
+
 ## Release decision
 
 - [ ] Known risks reviewed and accepted by the founder (see "Known accepted beta limitations")

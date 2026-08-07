@@ -14,7 +14,24 @@ type ScreenProps = {
 // for forms. Purely presentational — carries no navigation or data logic.
 export function Screen({ children, scroll = false, contentStyle }: ScreenProps) {
   const { colors, spacing } = useTheme();
-  const content = <View style={[styles.content, { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.lg }, contentStyle]}>{children}</View>;
+  // `flex: 1` on this View is correct (and required) for the non-scroll case — it's what lets a
+  // FlatList-containing screen fill remaining space. Inside a ScrollView it's the opposite of
+  // correct: it constrains the content to the ScrollView's own (viewport-sized) available space
+  // instead of letting it grow to its natural, possibly-taller-than-the-screen content height —
+  // the exact bug that made longer forms (e.g. Add/Edit Source Details) unable to scroll to their
+  // lower fields and Save button. Only applied when `scroll` is false.
+  const content = (
+    <View
+      style={[
+        styles.content,
+        !scroll && styles.contentFill,
+        { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xl, gap: spacing.lg },
+        contentStyle,
+      ]}
+    >
+      {children}
+    </View>
+  );
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.canvas }]}>
@@ -41,5 +58,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex: { flex: 1 },
   scrollContent: { flexGrow: 1 },
-  content: { flex: 1 },
+  content: {},
+  contentFill: { flex: 1 },
 });

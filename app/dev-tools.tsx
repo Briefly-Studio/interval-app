@@ -6,6 +6,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import { SyncService } from "../src/cloud/sync/SyncService";
+import { resetDevLibraryFixtures, seedDevLibraryFixtures } from "../src/domain/librarySeed";
 import { useTranslation } from "../src/i18n";
 import { ForceResyncUnsyncedChangesError, forceFullResyncPrep, resetLocalData } from "../src/storage/devReset";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
@@ -52,7 +53,7 @@ export default function DevToolsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen scroll>
       <View style={[styles.header, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
         <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">Developer tools</Text>
@@ -119,6 +120,48 @@ export default function DevToolsScreen() {
                     const activeScope = await AuthService.getActiveScope();
                     await resetLocalData(activeScope);
                     Alert.alert("Reset done");
+                  },
+                },
+              ]
+            );
+          }}
+        />
+      </Card>
+
+      <Card style={[styles.toolCard, { gap: spacing.sm }]}>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]}>Library Fixtures</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+          Adds generic sample Library sources and collections for the current workspace, for testing
+          sorting/filtering/collections/empty states. Development build only — no real files are ever
+          created; this only writes local metadata.
+        </Text>
+        <Button
+          label="Add Sample Library Data"
+          variant="secondary"
+          fullWidth
+          onPress={async () => {
+            const activeScope = await AuthService.getActiveScope();
+            await seedDevLibraryFixtures(activeScope);
+            Alert.alert("Sample Library data added");
+          }}
+        />
+        <Button
+          label="Reset Library Data"
+          variant="danger"
+          fullWidth
+          onPress={() => {
+            Alert.alert(
+              "Reset Library data?",
+              "This removes locally stored Library sources and collections for the current workspace on this device. Decks, cards, sessions, and your account are not affected. This cannot be undone.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Reset Library data",
+                  style: "destructive",
+                  onPress: async () => {
+                    const activeScope = await AuthService.getActiveScope();
+                    await resetDevLibraryFixtures(activeScope);
+                    Alert.alert("Library data reset");
                   },
                 },
               ]

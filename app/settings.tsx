@@ -241,6 +241,16 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.section, { gap: spacing.sm }]}>
+        <Text style={[typography.label, { color: colors.textSecondary }]}>{t("settings.sections.library")}</Text>
+        <Card style={styles.rowGroup}>
+          <SettingsRow
+            label={t("settings.openLibrary")}
+            onPress={() => router.push({ pathname: "/library" as any })}
+          />
+        </Card>
+      </View>
+
+      <View style={[styles.section, { gap: spacing.sm }]}>
         <Text style={[typography.label, { color: colors.textSecondary }]}>{t("settings.sections.data")}</Text>
         <Card style={styles.rowGroup}>
           <SettingsRow
