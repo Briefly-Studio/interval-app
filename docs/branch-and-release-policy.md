@@ -45,7 +45,31 @@ before any third-party or persistent-data QA that would need it — it is **not 
 Do not treat this repository, its documentation, or any future reference to "staging" or
 "production" as evidence that separate environments already exist. As of this document, Interval
 has the single AWS environment described in `CLAUDE.md`'s "AWS Resources" section, and nothing
-else.
+else. See `docs/environment-separation-plan.md` for the full future architecture.
+
+### Git branches are not AWS environments
+
+These are two different, independent concepts, and this document deliberately keeps them separate:
+
+- **A Git branch** (e.g. `v3.1-dev`) is a line of source-code history. It determines what code
+  exists, not what it talks to.
+- **An AWS environment** (Development / Staging / Production, per `docs/environment-separation-
+  plan.md`) is a set of deployed infrastructure — its own API Gateway, Lambda functions, DynamoDB
+  tables, and (recommended) Cognito pool. It determines what data a running build of the app
+  actually reads and writes.
+
+A single Git branch's code can be built and pointed at any AWS environment, and the *same* backend
+environment can, in principle, be talked to by builds from more than one branch — which backend a
+given build uses is a client configuration choice (see `docs/environment-separation-plan.md`'s
+client configuration contract), not a property of which branch produced it.
+
+**Do not create long-lived `dev`/`staging`/`prod` Git branches merely because AWS environments of
+those names exist**, unless a future release strategy explicitly requires it. Code is promoted
+across AWS environments by deploying the same reviewed commit with different environment
+configuration (see `docs/environment-separation-plan.md`'s promotion model) — not by maintaining a
+permanent branch per environment. This repository's existing branch model (a frozen release-
+candidate branch plus one active development branch, per "Current state" above) already works this
+way, and introducing AWS environments does not change that.
 
 Development continues privately for now — there is no external tester population against the
 current backend. This matters specifically for anything that would create new persistent

@@ -71,14 +71,18 @@ For anything not covered directly in this file, these are the authoritative docu
 
 1. `CLAUDE.md` (this file) — repository guardrails and implementation rules.
 2. `docs/branch-and-release-policy.md` — branch/release/environment policy.
-3. `docs/platform-scope.md` — currently supported platforms and beta boundaries.
-4. `docs/accessibility-foundation.md` — accessibility requirements, current and future.
-5. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
+3. `docs/environment-separation-plan.md` — future Development/Staging/Production AWS environment
+   architecture. **Planning only — no separate environments exist yet.**
+4. `docs/aws-current-state-audit.md` — most recent read-only AWS inventory attempt.
+5. `docs/platform-scope.md` — currently supported platforms and beta boundaries.
+6. `docs/accessibility-foundation.md` — accessibility requirements, current and future.
+7. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
    sharing, and AI draft architecture. **Specification only — not implemented.**
-6. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
+8. `docs/library-ui-foundation.md` — the implemented local-only Library UI foundation.
+9. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
    **Specification only — not implemented.**
-7. `docs/sync-invariants.md` — current offline-first sync invariants.
-8. `docs/v3-beta-release-checklist.md` — current verification/QA state.
+10. `docs/sync-invariants.md` — current offline-first sync invariants.
+11. `docs/v3-beta-release-checklist.md` — current verification/QA state.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -215,6 +219,35 @@ The authenticated sync flow still needs to be validated end-to-end against the
 deployed backend.
 
 Never accept the user ID from the request body or query parameters.
+
+## Environment Safety
+
+Interval currently runs on a **single** shared AWS environment (see "AWS Resources" above) —
+there is no separate Development, Staging, or Production infrastructure yet. The authoritative
+plan for introducing them is `docs/environment-separation-plan.md`; a founder-performed, read-only
+CloudShell audit (2026-08-08) confirmed this single environment's live state against the correct
+account and is recorded in `docs/aws-current-state-audit.md`. Both remain planning documents —
+neither implies separate Development/Staging/Production environments already exist, and live
+audit confirmation of the current environment is not the same as implementing separation. The
+founder approved the plan's architecture decisions (existing stack as Production baseline, AWS CDK,
+separate Dev/Staging Cognito pools, `interval-<env>-*` naming for new resources only) on
+2026-08-08 — see `docs/environment-separation-plan.md` §17. Approval of the plan is not
+implementation of it; none of Development, Staging, or CDK exists yet.
+
+- No Production AWS mutation without explicit founder approval, every time — a prior approval does
+  not carry forward to a new mutation.
+- Before any AWS write, identify the exact target environment and resource by name — never infer
+  it from context or from whatever the CLI happens to be configured for.
+- Read-only AWS inspection (`get`/`describe`/`list` calls) may be used freely to verify live state;
+  mutating calls (`create-*`/`update-*`/`delete-*`/`put-*`/deploy) require the explicit approval
+  above.
+- Never assume a deployed Lambda matches this repository's `backend/lambdas/**` source — that has
+  not been verified end-to-end (see "Current Backend Task Status").
+- Future environment-specific values (table names, pool IDs, bucket names) come from configuration
+  injected per environment, never from a code fork or an environment-specific branch of logic.
+- Library (`app/library/**`) remains local metadata only until a secure-upload phase is explicitly
+  authorized by the founder — see `docs/library-and-source-architecture.md` and the "Library
+  (local metadata foundation only)" section above.
 
 ## Current Known Technical Debt
 
