@@ -1,4 +1,4 @@
-import Constants from "expo-constants";
+import { getEnvironmentConfig } from "../config/environment";
 
 export type AuthConfig = {
   cognitoRegion: string;
@@ -7,17 +7,6 @@ export type AuthConfig = {
 };
 
 export function getAuthConfig(): AuthConfig {
-  const extra = Constants.expoConfig?.extra as
-    | {
-        cognitoRegion?: string;
-        cognitoUserPoolId?: string;
-        cognitoAppClientId?: string;
-      }
-    | undefined;
-
-  return {
-    cognitoRegion: extra?.cognitoRegion ?? "",
-    cognitoUserPoolId: extra?.cognitoUserPoolId ?? "",
-    cognitoAppClientId: extra?.cognitoAppClientId ?? "",
-  };
+  const { cognitoRegion, cognitoUserPoolId, cognitoAppClientId } = getEnvironmentConfig();
+  return { cognitoRegion, cognitoUserPoolId, cognitoAppClientId };
 }

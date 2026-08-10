@@ -73,16 +73,19 @@ For anything not covered directly in this file, these are the authoritative docu
 2. `docs/branch-and-release-policy.md` — branch/release/environment policy.
 3. `docs/environment-separation-plan.md` — future Development/Staging/Production AWS environment
    architecture. **Planning only — no separate environments exist yet.**
-4. `docs/aws-current-state-audit.md` — most recent read-only AWS inventory attempt.
-5. `docs/platform-scope.md` — currently supported platforms and beta boundaries.
-6. `docs/accessibility-foundation.md` — accessibility requirements, current and future.
-7. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
+4. `docs/aws-current-state-audit.md` — live-confirmed AWS resource inventory (2026-08-08 audit).
+5. `docs/environment-config-contract.md` — the implemented client/repository environment-identity
+   and public config contract (`INTERVAL_ENV` and related). Client-side only — see the document's
+   own "Current limitation" section for what it does not yet have anywhere real to point at.
+6. `docs/platform-scope.md` — currently supported platforms and beta boundaries.
+7. `docs/accessibility-foundation.md` — accessibility requirements, current and future.
+8. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
    sharing, and AI draft architecture. **Specification only — not implemented.**
-8. `docs/library-ui-foundation.md` — the implemented local-only Library UI foundation.
-9. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
-   **Specification only — not implemented.**
-10. `docs/sync-invariants.md` — current offline-first sync invariants.
-11. `docs/v3-beta-release-checklist.md` — current verification/QA state.
+9. `docs/library-ui-foundation.md` — the implemented local-only Library UI foundation.
+10. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
+    **Specification only — not implemented.**
+11. `docs/sync-invariants.md` — current offline-first sync invariants.
+12. `docs/v3-beta-release-checklist.md` — current verification/QA state.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -232,7 +235,10 @@ audit confirmation of the current environment is not the same as implementing se
 founder approved the plan's architecture decisions (existing stack as Production baseline, AWS CDK,
 separate Dev/Staging Cognito pools, `interval-<env>-*` naming for new resources only) on
 2026-08-08 — see `docs/environment-separation-plan.md` §17. Approval of the plan is not
-implementation of it; none of Development, Staging, or CDK exists yet.
+implementation of it; none of Development, Staging, or CDK exists yet. The client/repository-side
+`INTERVAL_ENV` config contract (`docs/environment-config-contract.md`) is implemented — the app is
+environment-aware — but `development`/`staging` currently have nothing real to point at, since
+only Production AWS resources exist.
 
 - No Production AWS mutation without explicit founder approval, every time — a prior approval does
   not carry forward to a new mutation.

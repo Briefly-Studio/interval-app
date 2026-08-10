@@ -1,13 +1,8 @@
-import Constants from "expo-constants";
+import { getEnvironmentConfig } from "../../config/environment";
 import type { PullRequest, PullResponse, PushRequest, PushResponse } from "./types";
 
 function getBaseUrl(): string {
-  const apiBaseUrl = (Constants.expoConfig?.extra as any)?.apiBaseUrl as
-    | string
-    | undefined;
-
-  if (!apiBaseUrl) throw new Error("Missing EXPO_PUBLIC_API_BASE_URL");
-  return apiBaseUrl;
+  return getEnvironmentConfig().apiBaseUrl;
 }
 
 // Thrown when the sync request never got a response at all — offline, DNS failure, timeout,

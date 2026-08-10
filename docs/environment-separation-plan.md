@@ -252,14 +252,21 @@ never as a reason to rename something that already exists and works.
 
 ## 6. Client environment configuration design
 
+**Status: implemented.** See `docs/environment-config-contract.md` for the full, current contract
+— `src/config/environmentValidation.ts` and `src/config/environment.ts` now centralize this,
+`app.config.ts` exposes `intervalEnv` alongside the existing four `extra` values, and
+`src/auth/AuthConfig.ts`/`src/cloud/sync/http.ts` both consume the centralized module rather than
+reading `Constants.expoConfig.extra` directly. What follows is retained as the original design
+rationale, now realized rather than merely proposed.
+
 **Build on the existing pipeline rather than replacing it.** The current `.env` → `app.config.ts`
 (`dotenv/config` + `process.env.EXPO_PUBLIC_*`) → Expo `extra` → `AuthConfig.ts`/`http.ts` pattern
-already does exactly what environment configuration needs — inject build-time values without
-hardcoding them in source. The smallest safe extension is one new variable plus one new value per
+already did exactly what environment configuration needed — inject build-time values without
+hardcoding them in source. The smallest safe extension was one new variable plus one new value per
 existing variable, not a new mechanism.
 
-**Recommended contract** (names chosen to match the existing `EXPO_PUBLIC_COGNITO_*` convention
-already in `.env.example`, not invented fresh):
+**Contract** (names chosen to match the existing `EXPO_PUBLIC_COGNITO_*` convention already in
+`.env.example`, not invented fresh):
 
 ```
 INTERVAL_ENV=development | staging | production
@@ -615,8 +622,9 @@ more granular, per-resource elaboration of the same flow, not a competing plan:
   additions), performed once Development and Staging are already proven safe.
 - **Phase I — Only then begin secure Library file upload** → STEP 10.
 
-**None of Phase B through Phase I begins in this mission** — this mission is documentation-only,
-per its own explicit scope.
+**Phase B is implemented** (client/repository environment config contract — see
+`docs/environment-config-contract.md`), pending founder review before commit. **Phase C through
+Phase I have not begun** — no CDK, no Development/Staging resources, no Production mutation.
 
 **STEP 1 — Confirm current AWS state and choose what existing resources become.**
 **Status: complete.** Live evidence was obtained via the 2026-08-08 CloudShell audit (the
@@ -629,14 +637,15 @@ status" and "Known unknowns" sections) plus the OAuth-callback-usage item in §1
 block proceeding to Phase B.
 
 **STEP 2 — Introduce the repository environment configuration contract.**
-Objective: add `INTERVAL_ENV` to `.env.example` and `app.config.ts`, following §6 exactly.
-Resource classes affected: none (client repository code only). Prerequisites: Step 1's confirmation
-of what "Production" values should be. Founder decision required: approve the contract as designed
-in §6. Risk: low — purely additive, backward-compatible if implemented as described. Rollback: revert
-the commit. Manual QA: confirm the app still builds and syncs against the existing (Production)
-backend with `INTERVAL_ENV=production` and today's existing values. AWS mutations: none. Exit
-criteria: the app runs identically to today when configured with today's values plus the new
-`INTERVAL_ENV=production`.
+**Status: implemented, pending founder review.** `INTERVAL_ENV` was added to `.env.example` and
+`app.config.ts`, following §6. Resource classes affected: none (client repository code only).
+Founder decision required: review the implementation before it is committed (per this phase's own
+commit policy — left uncommitted). Risk: low — purely additive; existing `EXPO_PUBLIC_*` variables
+were not renamed. Rollback: discard the uncommitted changes. Manual QA: requires the founder to add
+`INTERVAL_ENV=production` to their local `.env` (not present before this change) and confirm the
+app still builds and syncs against the existing Production backend — see
+`docs/environment-config-contract.md`. AWS mutations: none. Exit criteria: the app runs identically
+to today once `INTERVAL_ENV=production` plus today's existing values are set locally.
 
 **STEP 3 — Introduce the IaC foundation.**
 Objective: scaffold the CDK app (§8) — no resources synthesized against real AWS yet. Resource

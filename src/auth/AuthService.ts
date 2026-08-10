@@ -1,6 +1,6 @@
 import * as SecureStore from "../storage/secureStore";
 
-import { getAuthConfig, type AuthConfig } from "./AuthConfig";
+import { getAuthConfig } from "./AuthConfig";
 import { emitWorkspaceChanged } from "./authSignal";
 import { deriveIdentityFromClaims, type UserIdentity } from "./identity";
 import { buildNameAttributes } from "./nameValidation";
@@ -53,43 +53,16 @@ type CognitoResponse = {
   __type?: string;
 };
 
-// Catches unfilled-in template values from .env.example (e.g. "us-east-2_XXXXXXXXX",
-// "xxxxxxxxxxxxxxxxxxxxxxxxxx", "https://api.example.com/prod") as well as the literal
-// "PASTE_..._HERE" markers used as placeholders — none of these are valid Cognito config,
-// but a plain empty-string check doesn't catch them since they're non-empty.
-function isPlaceholderValue(value: string): boolean {
-  const normalized = value.trim();
-  if (!normalized) return true;
-  if (/paste|your_|example\.com/i.test(normalized)) return true;
-  if (/[xX]{6,}/.test(normalized)) return true;
-  return false;
-}
-
-const REQUIRED_CONFIG_FIELDS: [key: keyof AuthConfig, envVar: string][] = [
-  ["cognitoRegion", "EXPO_PUBLIC_COGNITO_REGION"],
-  ["cognitoUserPoolId", "EXPO_PUBLIC_COGNITO_USER_POOL_ID"],
-  ["cognitoAppClientId", "EXPO_PUBLIC_COGNITO_APP_CLIENT_ID"],
-];
-
-function assertAuthConfigured(): AuthConfig {
-  const config = getAuthConfig();
-  for (const [key, envVar] of REQUIRED_CONFIG_FIELDS) {
-    if (isPlaceholderValue(config[key])) {
-      throw new Error(
-        `Cognito auth is not configured: ${envVar} is missing or still set to a placeholder ` +
-          `value. Set a real value in your local .env (see .env.example) and restart Expo with ` +
-          `cache cleared: npx expo start -c.`
-      );
-    }
-  }
-  return config;
-}
-
 async function cognitoRequest<TPayload extends Record<string, unknown>>(
   action: "SignUp" | "ConfirmSignUp" | "InitiateAuth" | "UpdateUserAttributes" | "ChangePassword",
   payload: TPayload
 ): Promise<CognitoResponse> {
-  const { cognitoRegion } = assertAuthConfigured();
+  // getAuthConfig() (src/auth/AuthConfig.ts) reads through the centralized
+  // src/config/environment.ts, which is the single authoritative parser/validator for this
+  // config — it throws InvalidEnvironmentConfigError for missing/malformed/placeholder values in
+  // every environment. AuthService no longer duplicates that check itself; see
+  // docs/environment-config-contract.md.
+  const { cognitoRegion } = getAuthConfig();
   let res: Response;
   try {
     res = await fetch(`https://cognito-idp.${cognitoRegion}.amazonaws.com/`, {
@@ -195,7 +168,7 @@ async function refreshAccessToken(): Promise<string | null> {
     return null;
   }
 
-  const { cognitoAppClientId } = assertAuthConfigured();
+  const { cognitoAppClientId } = getAuthConfig();
   let json: CognitoResponse;
   try {
     json = await cognitoRequest("InitiateAuth", {
@@ -247,7 +220,7 @@ async function forceRefreshIdentity(): Promise<void> {
 
 export const AuthService = {
   async signUp(email: string, password: string, givenName: string, familyName: string): Promise<void> {
-    const { cognitoAppClientId } = assertAuthConfigured();
+    const { cognitoAppClientId } = getAuthConfig();
     await cognitoRequest("SignUp", {
       ClientId: cognitoAppClientId,
       Username: email,
@@ -257,7 +230,7 @@ export const AuthService = {
   },
 
   async confirmSignUp(email: string, code: string): Promise<void> {
-    const { cognitoAppClientId } = assertAuthConfigured();
+    const { cognitoAppClientId } = getAuthConfig();
     await cognitoRequest("ConfirmSignUp", {
       ClientId: cognitoAppClientId,
       Username: email,
@@ -266,7 +239,7 @@ export const AuthService = {
   },
 
   async signIn(email: string, password: string): Promise<void> {
-    const { cognitoAppClientId } = assertAuthConfigured();
+    const { cognitoAppClientId } = getAuthConfig();
     const json = await cognitoRequest("InitiateAuth", {
       AuthFlow: "USER_PASSWORD_AUTH",
       ClientId: cognitoAppClientId,

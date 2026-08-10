@@ -6,6 +6,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
 import { SyncService } from "../src/cloud/sync/SyncService";
+import { getEnvironmentConfig } from "../src/config/environment";
 import { resetDevLibraryFixtures, seedDevLibraryFixtures } from "../src/domain/librarySeed";
 import { useTranslation } from "../src/i18n";
 import { ForceResyncUnsyncedChangesError, forceFullResyncPrep, resetLocalData } from "../src/storage/devReset";
@@ -52,6 +53,14 @@ export default function DevToolsScreen() {
     );
   }
 
+  let environmentLabel = "Not configured";
+  try {
+    const envConfig = getEnvironmentConfig();
+    environmentLabel = envConfig.environment.charAt(0).toUpperCase() + envConfig.environment.slice(1);
+  } catch {
+    // Diagnostic display only — an invalid/missing INTERVAL_ENV must not crash Dev Tools itself.
+  }
+
   return (
     <Screen scroll>
       <View style={[styles.header, { gap: spacing.sm }]}>
@@ -59,6 +68,13 @@ export default function DevToolsScreen() {
         <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">Developer tools</Text>
       </View>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>For debugging only.</Text>
+
+      <Card style={[styles.toolCard, { gap: spacing.sm }]}>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]}>Environment</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+          Current build target: {environmentLabel}
+        </Text>
+      </Card>
 
       <Card style={[styles.toolCard, { gap: spacing.sm }]}>
         <Text style={[typography.subheading, { color: colors.textPrimary }]}>Force Resync</Text>
