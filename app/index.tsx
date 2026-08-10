@@ -12,14 +12,21 @@ import type { SyncStatus } from "../src/cloud/sync/syncState";
 import { SYNC_STATUS_KEYS } from "../src/cloud/sync/syncStatusCopy";
 import { useSyncState } from "../src/cloud/sync/useSyncState";
 import { getHomeGreeting } from "../src/content/timeGreeting";
+import { sortDeckCollectionsCanonical } from "../src/domain/deckCollectionOrder";
+import { getAssignedDeckIds, getUnfiledDecks } from "../src/domain/deckCollectionMembership";
+import { sortDecksCanonical } from "../src/domain/deckOrder";
 import { useTranslation } from "../src/i18n";
 import type { DeckRecord } from "../src/models/deck";
+import type { DeckCollectionRecord } from "../src/models/deckCollection";
+import { getActiveDeckCollections, unassignDeckFromCollection } from "../src/storage/deckCollections";
 import { deleteDeckById, getDecksAll } from "../src/storage/decks";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { useTheme, type ThemeTokens } from "@/src/theme";
 import { AccountButton } from "../src/ui/AccountButton";
 import { Button } from "../src/ui/Button";
 import { DeckCard } from "../src/ui/DeckCard";
+import { DeckCollectionChip } from "../src/ui/DeckCollectionChip";
+import { showDeckActionsSheet } from "../src/ui/deckActionsSheet";
 import { EmptyState } from "../src/ui/EmptyState";
 import { HomeHeader } from "../src/ui/HomeHeader";
 import { IconButton } from "../src/ui/IconButton";
@@ -56,6 +63,7 @@ export default function DecksHome() {
   const { t } = useTranslation();
   const { colors, spacing, typography } = useTheme();
   const [decks, setDecksState] = useState<DeckRecord[]>([]);
+  const [collections, setCollections] = useState<DeckCollectionRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
@@ -95,9 +103,16 @@ export default function DecksHome() {
   }, [signedIn, syncState.status, syncStatusText]);
 
   const loadDecks = useCallback(async (activeScope: WorkspaceScope) => {
-    const allDecks = await getDecksAll(activeScope);
-    const data = allDecks.filter((deck) => !deck.deletedAt);
-    setDecksState(data);
+    const [allDecks, activeCollections] = await Promise.all([
+      getDecksAll(activeScope),
+      getActiveDeckCollections(activeScope),
+    ]);
+    const active = allDecks.filter((deck) => !deck.deletedAt);
+    // Canonical order (docs/deck-ordering.md) — without this, two devices holding the same
+    // decks can render them in different orders, since raw storage order depends on whether a
+    // deck was created locally (prepended) or arrived via sync pull (appended).
+    setDecksState(sortDecksCanonical(active));
+    setCollections(sortDeckCollectionsCanonical(activeCollections));
     setLoaded(true);
   }, []);
 
@@ -179,6 +194,11 @@ export default function DecksHome() {
             // Recently Deleted -> Restore with nothing to bring back.
             await deleteDeckById(activeScope, deck.id);
 
+            // Deck Collections keep membership on their own side (deckIds), not on DeckRecord
+            // (see docs/deck-collections.md) — this sweeps the deleted deck's id out of whatever
+            // collection held it, purely local bookkeeping with no effect on deck sync.
+            await unassignDeckFromCollection(activeScope, deck.id);
+
             await loadDecks(activeScope);
           } catch (error) {
             console.error("[home] delete deck failed:", error);
@@ -192,14 +212,29 @@ export default function DecksHome() {
   };
 
   const onDeckLongPress = (deck: DeckRecord) => {
-    Alert.alert(t("home.deckActionsTitle"), undefined, [
-      { text: t("home.renameAction"), onPress: () => router.push(`/deck/${deck.id}/edit`) },
-      { text: t("deckDetail.deleteAction"), style: "destructive", onPress: () => confirmDelete(deck) },
-      { text: t("common.cancel"), style: "cancel" },
-    ]);
+    // Home's flat deck list only ever shows unfiled decks (see loadDecks) — there is never a
+    // "Remove from collection" action to offer here, only Move (which functions as an assign
+    // for an unfiled deck).
+    showDeckActionsSheet({
+      t,
+      onRename: () => router.push(`/deck/${deck.id}/edit`),
+      onMoveToCollection: () => router.push(`/deck/${deck.id}/move-to-collection` as any),
+      onDelete: () => confirmDelete(deck),
+    });
   };
 
   const isEmpty = loaded && decks.length === 0;
+
+  // Shared with the Add Decks picker (src/domain/deckCollectionMembership.ts) rather than each
+  // screen re-deriving its own notion of "assigned"/"unfiled".
+  const assignedDeckIds = useMemo(() => getAssignedDeckIds(decks, collections), [decks, collections]);
+  const unassignedDecks = useMemo(() => getUnfiledDecks(decks, collections), [decks, collections]);
+  // assignedDeckIds is the union of every collection's deckIds already intersected against the
+  // real active deck list — filtering this one collection's deckIds against it is equivalent to
+  // intersecting against active decks directly, without needing a second set.
+  const deckCountForCollection = (collection: DeckCollectionRecord) =>
+    collection.deckIds.filter((id) => assignedDeckIds.has(id)).length;
+  const hasCollections = collections.length > 0;
 
   return (
     <Screen>
@@ -268,20 +303,58 @@ export default function DecksHome() {
         </View>
       ) : (
         <View style={[styles.deckSection, { gap: spacing.md }]}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("home.myDecks")}</Text>
-            <Button
-              label={t("home.newDeckButton")}
-              variant="primary"
-              size="sm"
-              onPress={() => router.push("/create-deck")}
-            />
-          </View>
           <FlatList
-            data={decks}
+            data={unassignedDecks}
             keyExtractor={(item) => item.id}
             style={styles.list}
             contentContainerStyle={[styles.listContent, { gap: spacing.sm, paddingBottom: spacing.xl }]}
+            ListHeaderComponent={
+              <View style={{ gap: spacing.md }}>
+                <View style={{ gap: spacing.sm }}>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("home.collectionsHeader")}</Text>
+                    <Button
+                      label={t("home.newCollectionButton")}
+                      variant="primary"
+                      size="sm"
+                      onPress={() => router.push({ pathname: "/deck-collections/create" as any })}
+                    />
+                  </View>
+                  {hasCollections ? (
+                    <View style={[styles.collectionsRow, { gap: spacing.sm }]}>
+                      {collections.map((collection) => (
+                        <DeckCollectionChip
+                          key={collection.id}
+                          collection={collection}
+                          deckCount={deckCountForCollection(collection)}
+                          onPress={() => router.push({ pathname: "/deck-collections/[id]" as any, params: { id: collection.id } })}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("home.noCollectionsYet")}</Text>
+                  )}
+                </View>
+
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={[typography.subheading, { color: colors.textPrimary }]}>
+                    {hasCollections ? t("home.unfiledDecksHeader") : t("home.myDecks")}
+                  </Text>
+                  <Button
+                    label={t("home.newDeckButton")}
+                    variant="primary"
+                    size="sm"
+                    onPress={() => router.push("/create-deck")}
+                  />
+                </View>
+              </View>
+            }
+            ListHeaderComponentStyle={{ marginBottom: spacing.md }}
+            ListEmptyComponent={
+              hasCollections ? (
+                <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("home.allDecksOrganized")}</Text>
+              ) : null
+            }
             renderItem={({ item }) => (
               <DeckCard
                 deck={item}
@@ -311,6 +384,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  collectionsRow: { flexDirection: "row", flexWrap: "wrap" },
   list: { flex: 1 },
   listContent: {},
 });

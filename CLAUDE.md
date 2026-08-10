@@ -82,10 +82,16 @@ For anything not covered directly in this file, these are the authoritative docu
 8. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
    sharing, and AI draft architecture. **Specification only — not implemented.**
 9. `docs/library-ui-foundation.md` — the implemented local-only Library UI foundation.
-10. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
+10. `docs/library-cross-device-diagnosis.md` — code-verified root cause of Library metadata not
+    appearing across devices on the same account (expected: local-only, no sync exists).
+11. `docs/library-cloud-sync-contract.md` — the required future shape of Library metadata cloud
+    sync. **Specification only — not implemented.**
+12. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
     **Specification only — not implemented.**
-11. `docs/sync-invariants.md` — current offline-first sync invariants.
-12. `docs/v3-beta-release-checklist.md` — current verification/QA state.
+13. `docs/sync-invariants.md` — current offline-first sync invariants.
+14. `docs/deck-ordering.md` — the implemented canonical, deterministic deck ordering rule.
+15. `docs/deck-collections.md` — the implemented local-only Deck Collections foundation.
+16. `docs/v3-beta-release-checklist.md` — current verification/QA state.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -163,7 +169,37 @@ area:
   this code. Do not add one without following `docs/library-and-source-architecture.md` §18's
   account/guest boundary.
 - Do not wire Library storage into `src/cloud/sync/**` — no Library sync protocol exists or is
-  approved yet (see `docs/library-and-source-architecture.md` §12).
+  approved yet (see `docs/library-and-source-architecture.md` §12 and
+  `docs/library-cloud-sync-contract.md` for the specification a future implementation must follow).
+  This is why the same signed-in account currently sees different Library contents on different
+  devices — expected, not a bug; see `docs/library-cross-device-diagnosis.md`.
+
+### Deck Collections (local-only foundation)
+
+`app/deck-collections/**` implements a **local-only** Deck Collections foundation — see
+`docs/deck-collections.md` for full detail. Not the same feature as Library Source Collections
+(`src/models/sourceCollection.ts`) — do not conflate the two in code, docs, or copy. Guardrails:
+
+- `DeckCollectionRecord` (`src/models/deckCollection.ts`) tracks deck membership on its own
+  `deckIds` field. **Never add a collection reference to `DeckRecord`** (`src/models/deck.ts`) —
+  decks already participate in the live Production sync path (`src/cloud/sync/SyncService.ts`
+  pushes the entire deck record whenever `dirty`), so any field added there reaches Production the
+  next time any signed-in user syncs. Deck Collections were deliberately designed to avoid this by
+  keeping membership on the collection side instead — see `docs/deck-collections.md`'s "Why
+  collection-owned membership, not a `DeckRecord` field" section before changing this.
+- Storage key is `interval.deckCollections.v1` (`src/storage/deckCollectionKeys.ts`), scoped
+  through the existing `scopedKey(WorkspaceScope, ...)` mechanism — same convention as decks/cards
+  and Library. Do not bypass this scoping.
+- No cloud Deck Collection record, no `ownerId`, no Cognito authorization check anywhere in this
+  code, and Deck Collections are not wired into `src/cloud/sync/**` — see `docs/deck-collections.md`'s
+  "Future cloud sync" section for what a future implementation must satisfy before this changes.
+- **Add never implicitly moves a deck between collections.** The Add Decks picker
+  (`app/deck-collections/[id]/add.tsx`) must only ever offer unfiled decks
+  (`getUnfiledDecks` in `src/domain/deckCollectionMembership.ts`) — never a deck already in this
+  or another collection. Moving an already-assigned deck is its own explicit action ("Move to
+  collection", `app/deck/[id]/move-to-collection.tsx`). Do not reintroduce "select any deck,
+  silently reassign it" behavior into Add — see `docs/deck-collections.md`'s "Interaction model"
+  section for why this was deliberately changed after founder QA.
 
 ## AWS Resources
 
@@ -273,6 +309,14 @@ only Production AWS resources exist.
   Briefly naming remains elsewhere (storage keys, filenames, comments).
 - AWS infrastructure is not yet managed through Infrastructure as Code.
 - Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.
+- Library metadata (sources and collections) is local-only per device, even for a signed-in
+  account — the same account sees different Library contents on different devices. Diagnosed and
+  documented (`docs/library-cross-device-diagnosis.md`, `docs/library-cloud-sync-contract.md`),
+  not fixed — fixing it requires cloud sync work this repository has not built or approved yet.
+- Deck ordering was previously non-deterministic across devices (storage-array-order dependent —
+  see `docs/deck-ordering.md`); now fixed for Home via a canonical comparator. Deck Collections
+  (`docs/deck-collections.md`) are local-only, same status as Library metadata above — same
+  device sees the same organization, a second device signed into the same account does not yet.
 
 ## Accessibility Guardrails
 

@@ -490,7 +490,9 @@ Once cloud Library records exist: separate source metadata per environment, sepa
 environment (§11 below), separate transcription/extraction processing per environment, separate
 deletion lifecycle per environment, and — explicitly — no Staging access to Production source
 documents under any circumstance, matching the same "no cross-environment mutable store" principle
-as DynamoDB above.
+as DynamoDB above. See `docs/library-cloud-sync-contract.md` for the full metadata-sync
+specification (revision/conflict model, ownership, tombstones) a future implementation must
+satisfy — that document covers metadata only, distinct from this section's binary/S3 concerns.
 
 ## 11. Future S3 / Library environment rules
 
