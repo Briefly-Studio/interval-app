@@ -196,6 +196,11 @@ Development and Staging identifiers will be added to local `.env` files once AWS
 provisions those environments — this repository's `.env.example` intentionally ships placeholder
 values, never real ones, for exactly this reason.
 
+**CDK foundation status:** the Development CDK stack (`infra/`, see `docs/cdk-infrastructure.md`)
+is implemented and locally validated, but **not deployed** — no Development AWS resources exist
+yet. Deployment happens later, from AWS CloudShell, only after explicit founder review. This
+paragraph itself will need updating once that deployment actually happens.
+
 **Founder-local configuration, current state:** the founder's local, gitignored `.env` has
 `INTERVAL_ENV=production` explicitly set alongside the four existing `EXPO_PUBLIC_*` values, which
 already pointed at the live Production baseline before this contract existed. This makes today's

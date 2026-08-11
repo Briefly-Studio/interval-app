@@ -77,21 +77,24 @@ For anything not covered directly in this file, these are the authoritative docu
 5. `docs/environment-config-contract.md` — the implemented client/repository environment-identity
    and public config contract (`INTERVAL_ENV` and related). Client-side only — see the document's
    own "Current limitation" section for what it does not yet have anywhere real to point at.
-6. `docs/platform-scope.md` — currently supported platforms and beta boundaries.
-7. `docs/accessibility-foundation.md` — accessibility requirements, current and future.
-8. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
+6. `docs/cdk-infrastructure.md` — the implemented (not yet deployed) AWS CDK Development stack
+   (`infra/`) and its CloudShell deployment procedure. Building the stack is not deploying it —
+   see that document's own status line.
+7. `docs/platform-scope.md` — currently supported platforms and beta boundaries.
+8. `docs/accessibility-foundation.md` — accessibility requirements, current and future.
+9. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
    sharing, and AI draft architecture. **Specification only — not implemented.**
-9. `docs/library-ui-foundation.md` — the implemented local-only Library UI foundation.
-10. `docs/library-cross-device-diagnosis.md` — code-verified root cause of Library metadata not
+10. `docs/library-ui-foundation.md` — the implemented local-only Library UI foundation.
+11. `docs/library-cross-device-diagnosis.md` — code-verified root cause of Library metadata not
     appearing across devices on the same account (expected: local-only, no sync exists).
-11. `docs/library-cloud-sync-contract.md` — the required future shape of Library metadata cloud
+12. `docs/library-cloud-sync-contract.md` — the required future shape of Library metadata cloud
     sync. **Specification only — not implemented.**
-12. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
+13. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
     **Specification only — not implemented.**
-13. `docs/sync-invariants.md` — current offline-first sync invariants.
-14. `docs/deck-ordering.md` — the implemented canonical, deterministic deck ordering rule.
-15. `docs/deck-collections.md` — the implemented local-only Deck Collections foundation.
-16. `docs/v3-beta-release-checklist.md` — current verification/QA state.
+14. `docs/sync-invariants.md` — current offline-first sync invariants.
+15. `docs/deck-ordering.md` — the implemented canonical, deterministic deck ordering rule.
+16. `docs/deck-collections.md` — the implemented local-only Deck Collections foundation.
+17. `docs/v3-beta-release-checklist.md` — current verification/QA state.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -271,10 +274,14 @@ audit confirmation of the current environment is not the same as implementing se
 founder approved the plan's architecture decisions (existing stack as Production baseline, AWS CDK,
 separate Dev/Staging Cognito pools, `interval-<env>-*` naming for new resources only) on
 2026-08-08 — see `docs/environment-separation-plan.md` §17. Approval of the plan is not
-implementation of it; none of Development, Staging, or CDK exists yet. The client/repository-side
-`INTERVAL_ENV` config contract (`docs/environment-config-contract.md`) is implemented — the app is
-environment-aware — but `development`/`staging` currently have nothing real to point at, since
-only Production AWS resources exist.
+implementation of it. The client/repository-side `INTERVAL_ENV` config contract
+(`docs/environment-config-contract.md`) is implemented — the app is environment-aware — but
+`development`/`staging` currently have nothing real to point at, since only Production AWS
+resources exist. The Development AWS CDK stack (`infra/`, `docs/cdk-infrastructure.md`) is
+implemented and locally validated (`cdk synth` produces a clean, Production-isolated template)
+but **not deployed** — building the stack is not the same as any Development AWS resource
+existing. Deployment is a separate, explicit step from AWS CloudShell, pending founder review.
+Staging is still not created.
 
 - No Production AWS mutation without explicit founder approval, every time — a prior approval does
   not carry forward to a new mutation.
@@ -307,7 +314,10 @@ only Production AWS resources exist.
   details (fixed this batch), but its own Features/Project Structure sections still
   describe an earlier version of the app rather than being fully rewritten. Some
   Briefly naming remains elsewhere (storage keys, filenames, comments).
-- AWS infrastructure is not yet managed through Infrastructure as Code.
+- Production AWS infrastructure is not yet managed through Infrastructure as Code, and this
+  remains true by design (see "Production grandfathering" in `docs/cdk-infrastructure.md`) — a
+  Development CDK stack now exists (`infra/`) but has not been deployed, and Production is not
+  imported or managed by it.
 - Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.
 - Library metadata (sources and collections) is local-only per device, even for a signed-in
   account — the same account sees different Library contents on different devices. Diagnosed and
