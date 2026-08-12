@@ -625,8 +625,13 @@ more granular, per-resource elaboration of the same flow, not a competing plan:
 - **Phase I — Only then begin secure Library file upload** → STEP 10.
 
 **Phase B is implemented** (client/repository environment config contract — see
-`docs/environment-config-contract.md`), pending founder review before commit. **Phase C through
-Phase I have not begun** — no CDK, no Development/Staging resources, no Production mutation.
+`docs/environment-config-contract.md`). **Phase C is implemented** (AWS CDK TypeScript foundation,
+`infra/`, see `docs/cdk-infrastructure.md`). **Phase D is complete** — `IntervalDevelopmentStack`
+is deployed and verified live (`CREATE_COMPLETE`; `interval-dev-records`/`interval-dev-changes`
+both `ACTIVE`). **Phase E is the current milestone** — proving the existing sync protocol
+end-to-end against Development, now that the client config side of that (this document's own
+`INTERVAL_ENV=development` contract) is ready for the founder to point a local build at it. Phase
+F through Phase I have not begun — no Staging resources, no Production mutation/import.
 
 **STEP 1 — Confirm current AWS state and choose what existing resources become.**
 **Status: complete.** Live evidence was obtained via the 2026-08-08 CloudShell audit (the
@@ -639,24 +644,21 @@ status" and "Known unknowns" sections) plus the OAuth-callback-usage item in §1
 block proceeding to Phase B.
 
 **STEP 2 — Introduce the repository environment configuration contract.**
-**Status: implemented, pending founder review.** `INTERVAL_ENV` was added to `.env.example` and
-`app.config.ts`, following §6. Resource classes affected: none (client repository code only).
-Founder decision required: review the implementation before it is committed (per this phase's own
-commit policy — left uncommitted). Risk: low — purely additive; existing `EXPO_PUBLIC_*` variables
-were not renamed. Rollback: discard the uncommitted changes. Manual QA: requires the founder to add
-`INTERVAL_ENV=production` to their local `.env` (not present before this change) and confirm the
-app still builds and syncs against the existing Production backend — see
-`docs/environment-config-contract.md`. AWS mutations: none. Exit criteria: the app runs identically
-to today once `INTERVAL_ENV=production` plus today's existing values are set locally.
+**Status: complete.** `INTERVAL_ENV` was added to `.env.example` and `app.config.ts`, following
+§6, reviewed, and committed. Resource classes affected: none (client repository code only). Risk:
+low — purely additive; existing `EXPO_PUBLIC_*` variables were not renamed. Manual QA: the founder
+added `INTERVAL_ENV=production` to their local `.env` and confirmed the app builds and syncs
+against the existing Production backend unchanged — see `docs/environment-config-contract.md`.
+AWS mutations: none. The founder's local `.env` is now being updated again, to
+`INTERVAL_ENV=development` plus the deployed Development values, as part of Phase E (STEP 6).
 
 **STEP 3 — Introduce the IaC foundation.**
-Objective: scaffold the CDK app (§8) — no resources synthesized against real AWS yet. Resource
-classes affected: none live; a new `infrastructure/` directory and its dependencies. Prerequisites:
-Step 2. Founder decision required: none — CDK is already approved (§17); this step is
-implementation, not a further decision point. Risk: low (local scaffolding only). Rollback: delete
-the directory. Manual QA: `cdk synth` produces valid CloudFormation locally, without deploying. AWS
-mutations: none. Exit criteria: a synthesizable (not yet deployed) CDK app exists, modeling
-Production's *existing* shape as code, matching Step 1's confirmed reality.
+**Status: complete.** The CDK app (§8) exists at `infra/` (AWS CDK v2, TypeScript), isolated from
+the mobile app's own dependency graph. Resource classes affected: none live at the time this step
+completed; a new `infra/` directory and its dependencies. Manual QA: `cdk synth
+IntervalDevelopmentStack` produces valid CloudFormation locally, verified Production-isolated (no
+Production resource name, ARN, or account ID present in the synthesized template). AWS mutations
+during this step: none. See `docs/cdk-infrastructure.md` for the full architecture.
 
 **STEP 4 — Import/model existing resources in IaC, or recreate carefully, per the approved
 strategy.**
@@ -673,21 +675,30 @@ management-state-only, no resource recreation** — requires explicit founder ap
 guardrails.
 
 **STEP 5 — Create the Development environment.**
-Objective: stand up `interval-dev-*` resources via the now-working IaC. Resource classes affected:
-new API Gateway, Lambda, DynamoDB, Cognito pool/client, IAM roles, log groups — all new, all
-Development-only. Prerequisites: Steps 2–4. Founder decision required: final approval to deploy.
-Risk: low (entirely new, isolated resources; nothing existing is touched). Rollback: destroy the
-Development stack. Manual QA: founder confirms Development resources exist and are reachable.
-AWS mutations: **yes — resource creation**, requires explicit founder approval.
+**Status: complete.** `IntervalDevelopmentStack` is deployed to `us-east-2` — CloudFormation
+status `CREATE_COMPLETE`, `interval-dev-records` and `interval-dev-changes` both confirmed
+`ACTIVE`, `cdk diff IntervalDevelopmentStack` reports no differences. Resource classes affected:
+new API Gateway, 2 Lambdas, 2 DynamoDB tables, Cognito pool/client, 1 shared IAM role — all new,
+all Development-only (see "Exact eight Development resource names" in
+`docs/cdk-infrastructure.md`). Actually deployed without needing STEP 4 first (importing
+Production into IaC) — Phase D's own note above already anticipated this: Development was stood
+up as genuinely new resources, with Production import deferred to Phase H. Rollback: `cdk destroy
+IntervalDevelopmentStack` (fully disposable — `DESTROY` removal policy throughout). AWS mutations:
+resource creation — performed with explicit founder approval, from AWS CloudShell, not from any
+local machine.
 
 **STEP 6 — Validate sync end-to-end against Development.**
+**Status: current milestone — client config side ready, end-to-end validation not yet run.**
 Objective: confirm the existing sync protocol (push/pull, per `docs/sync-invariants.md`) works
-correctly against the new Development backend, using `INTERVAL_ENV=development` client
-configuration. Resource classes affected: Development only. Prerequisites: Step 5. Founder decision
-required: none beyond running the test. Risk: none to Production. Rollback: not applicable. Manual
-QA: full sync push/pull cycle, multi-device if practical. AWS mutations: normal read/write traffic
-to Development tables only (expected, not a "mutation" in the guardrail sense). Exit criteria: sync
-behaves identically to Production's documented invariants.
+correctly against the live Development backend, using `INTERVAL_ENV=development` client
+configuration. Resource classes affected: Development only. Prerequisites: Step 5 — **done**.
+Founder decision required: none beyond running the test. Risk: none to Production. Rollback: not
+applicable. Manual QA: the founder places the real Development values (API URL, Cognito pool ID,
+Cognito app client ID from the stack's `CfnOutput`s) into their local, gitignored `.env` alongside
+`INTERVAL_ENV=development`, then exercises sign-up/sign-in and a full sync push/pull cycle,
+multi-device if practical. AWS mutations: normal read/write traffic to Development tables only
+(expected, not a "mutation" in the guardrail sense). Exit criteria: sync behaves identically to
+Production's documented invariants, confirmed against the live Development backend.
 
 **STEP 7 — Create the Staging/Beta environment.**
 Objective: repeat Step 5's process for `interval-staging-*`, serving as both Staging and the

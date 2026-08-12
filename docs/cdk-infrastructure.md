@@ -1,9 +1,14 @@
 # Interval CDK Infrastructure
 
-**Status: implemented locally, not yet deployed.** This document covers the AWS CDK v2
+**Status: deployed and verified live.** `IntervalDevelopmentStack` has been deployed to
+`us-east-2` from AWS CloudShell, per the procedure below — CloudFormation status
+`CREATE_COMPLETE`, `interval-dev-records` and `interval-dev-changes` both confirmed `ACTIVE`,
+`cdk diff IntervalDevelopmentStack` reports no differences. This document covers the AWS CDK v2
 (TypeScript) foundation for Interval's Development environment — what it defines, what it
-deliberately does not touch, and the exact procedure for deploying it from AWS CloudShell once
-the founder has reviewed it. No AWS resource described here has been created yet.
+deliberately does not touch, and the deployment procedure that was followed. **Staging is not
+deployed.** The next infrastructure milestone is proving the existing sync protocol end-to-end
+against this live Development backend (see `docs/environment-separation-plan.md` §16 STEP 6),
+before Staging is created.
 
 ## Architecture
 
@@ -203,9 +208,9 @@ this repository does not do so either.
 
 ## CloudShell deployment procedure
 
-**Prepared, not yet run.** Every command below is exact and ready to copy/paste, but none has been
-executed as part of this mission — deployment happens only after the founder has reviewed this
-infrastructure and explicitly decided to proceed.
+**Followed — Development is live.** The founder ran this exact procedure from AWS CloudShell to
+deploy `IntervalDevelopmentStack`. Kept below as the accurate record of how it was deployed, and
+as the same procedure a future Staging deployment would follow (with the stack name substituted).
 
 ### 1–2. Open CloudShell, confirm region
 
@@ -334,11 +339,17 @@ npx cdk destroy IntervalDevelopmentStack
 This deletes only the 8 named Development resources and their CDK/CloudFormation support
 constructs. It cannot affect Production, which this project has no reference to at all.
 
-## Future: Development values for the app config contract
+## Development values for the app config contract
 
-Once deployed, the stack's `CfnOutput`s (`SyncApiUrl`, `UserPoolId`, `UserPoolClientId`) provide
-the real values for `docs/environment-config-contract.md`'s `INTERVAL_ENV=development` local
-`.env` — see that document and `docs/environment-separation-plan.md` §6 for the full contract.
-Not configured yet; see the "App config preparation" note in this mission's final report for what
-remains manual (adding these real values to a local `.env`) versus what this stack already
-provides (the values themselves, once deployed).
+The stack's `CfnOutput`s (`SyncApiUrl`, `UserPoolId`, `UserPoolClientId`) provide the real values
+for `docs/environment-config-contract.md`'s `INTERVAL_ENV=development` local `.env` — see that
+document and `docs/environment-separation-plan.md` §6 for the full contract. Retrieve them with:
+
+```bash
+aws cloudformation describe-stacks --stack-name IntervalDevelopmentStack --region us-east-2 \
+  --query "Stacks[0].Outputs"
+```
+
+The founder places these values directly into their local, gitignored `.env` — never into any
+tracked file. See `docs/environment-config-contract.md`'s "Current status" section for exactly
+which local variables this maps to.

@@ -2,8 +2,9 @@
 
 **Status: implemented, client/repository-side only.** This document describes the environment
 identity and public config contract introduced to prepare the app to be environment-aware, per
-`docs/environment-separation-plan.md` §6/§7. It does not create, provision, or point at any new
-AWS environment — only Production AWS resources exist today (see "Current limitation" below).
+`docs/environment-separation-plan.md` §6/§7. This contract itself does not create or provision any
+AWS environment — Production and now Development both exist as real AWS resources; Staging does
+not yet (see "Current status" below).
 
 ## Canonical environment values
 
@@ -86,9 +87,8 @@ config-build time, not app runtime.
 
 A developer sets `INTERVAL_ENV=development` (or any of the three values) in their local,
 gitignored `.env` and restarts Metro (`app.config.ts` only re-evaluates on process start, matching
-existing pre-change behavior for the other four variables). There is currently nothing real for
-`development` to point at — see "Current limitation" below — so a real Development build target is
-future work, not something this contract invents infrastructure for.
+existing pre-change behavior for the other four variables). `development` now has a real,
+deployed backend to point at — see "Current status" below for where the real values come from.
 
 ## Staging behavior
 
@@ -99,7 +99,8 @@ the Staging/Beta environment, once it's provisioned. Nothing currently exists fo
 
 `INTERVAL_ENV=production` plus today's existing, live Production values (the same
 `EXPO_PUBLIC_*` values already in use before this change) reproduces exactly today's app
-behavior. **This is the only environment with real AWS resources behind it right now.**
+behavior. Production remains the grandfathered existing baseline, untouched by the Development
+deployment — see `docs/cdk-infrastructure.md`'s "Production grandfathering" section.
 
 ## Safety validation
 
@@ -186,28 +187,28 @@ storage namespacing.** Confirmed unchanged by this batch:
   configured with — switching environments only changes which backend a signed-in sync talks to,
   never which local storage keys are read or written.
 
-## Current limitation: only Production AWS exists today
+## Current status: Development live, Staging not yet
 
-Setting `INTERVAL_ENV=development` or `INTERVAL_ENV=staging` today produces a build whose
-`EXPO_PUBLIC_*` values point nowhere real, because no Development or Staging AWS resources exist
-yet (see `docs/environment-separation-plan.md`). This contract prepares the client to be
-environment-aware; it does not itself create anything for `development`/`staging` to reach. Real
-Development and Staging identifiers will be added to local `.env` files once AWS CDK (§8) actually
-provisions those environments — this repository's `.env.example` intentionally ships placeholder
-values, never real ones, for exactly this reason.
+Setting `INTERVAL_ENV=staging` today still produces a build whose `EXPO_PUBLIC_*` values point
+nowhere real — no Staging AWS resources exist yet (see `docs/environment-separation-plan.md`).
 
-**CDK foundation status:** the Development CDK stack (`infra/`, see `docs/cdk-infrastructure.md`)
-is implemented and locally validated, but **not deployed** — no Development AWS resources exist
-yet. Deployment happens later, from AWS CloudShell, only after explicit founder review. This
-paragraph itself will need updating once that deployment actually happens.
+Setting `INTERVAL_ENV=development` no longer falls into that category: `IntervalDevelopmentStack`
+is deployed and verified live in `us-east-2` (CloudFormation `CREATE_COMPLETE`,
+`interval-dev-records`/`interval-dev-changes` both `ACTIVE`) — see `docs/cdk-infrastructure.md`
+for the full deployment record. A `development` build now has somewhere real to reach, once the
+founder places the real Development `EXPO_PUBLIC_*` values (retrievable from the stack's
+`CfnOutput`s — see `docs/cdk-infrastructure.md`'s "Development values for the app config
+contract") into their local, gitignored `.env`. This repository's `.env.example` still ships only
+placeholder values, never real ones — see "Safety validation" above for why a placeholder is
+rejected identically in every environment, not just Production.
 
-**Founder-local configuration, current state:** the founder's local, gitignored `.env` has
-`INTERVAL_ENV=production` explicitly set alongside the four existing `EXPO_PUBLIC_*` values, which
-already pointed at the live Production baseline before this contract existed. This makes today's
-build target explicit rather than implicit — the app now behaves identically to before this
-contract, but because `INTERVAL_ENV=production` is set, not because of an unstated default. This
-will change to `development` (or `staging`) only once a real Development/Staging environment
-exists for the founder to point a local build at.
+**Founder-local configuration, current state:** the founder's local `.env` is being updated from
+`INTERVAL_ENV=production` (the prior state, pointing at the live Production baseline) to
+`INTERVAL_ENV=development` plus the four real Development values, to begin proving the existing
+sync protocol end-to-end against the new Development backend
+(`docs/environment-separation-plan.md` §16 STEP 6) — the current infrastructure milestone, ahead
+of creating Staging. Nothing about the config *contract* changed to make this possible; it already
+supported this before Development existed to point at.
 
 ## What this batch does not do
 

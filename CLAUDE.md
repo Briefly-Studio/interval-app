@@ -275,13 +275,14 @@ founder approved the plan's architecture decisions (existing stack as Production
 separate Dev/Staging Cognito pools, `interval-<env>-*` naming for new resources only) on
 2026-08-08 — see `docs/environment-separation-plan.md` §17. Approval of the plan is not
 implementation of it. The client/repository-side `INTERVAL_ENV` config contract
-(`docs/environment-config-contract.md`) is implemented — the app is environment-aware — but
-`development`/`staging` currently have nothing real to point at, since only Production AWS
-resources exist. The Development AWS CDK stack (`infra/`, `docs/cdk-infrastructure.md`) is
-implemented and locally validated (`cdk synth` produces a clean, Production-isolated template)
-but **not deployed** — building the stack is not the same as any Development AWS resource
-existing. Deployment is a separate, explicit step from AWS CloudShell, pending founder review.
-Staging is still not created.
+(`docs/environment-config-contract.md`) is implemented — the app is environment-aware.
+**Development is now live**: `IntervalDevelopmentStack` (`infra/`, `docs/cdk-infrastructure.md`)
+was deployed to `us-east-2` from AWS CloudShell and is verified (`CREATE_COMPLETE`;
+`interval-dev-records`/`interval-dev-changes` both `ACTIVE`). Production remains the grandfathered
+existing baseline, untouched and not managed by CDK. **Staging is still not created.** The next
+infrastructure milestone is proving the existing sync protocol end-to-end against the live
+Development backend before Staging is created — see `docs/environment-separation-plan.md` §16
+STEP 6.
 
 - No Production AWS mutation without explicit founder approval, every time — a prior approval does
   not carry forward to a new mutation.
@@ -315,9 +316,12 @@ Staging is still not created.
   describe an earlier version of the app rather than being fully rewritten. Some
   Briefly naming remains elsewhere (storage keys, filenames, comments).
 - Production AWS infrastructure is not yet managed through Infrastructure as Code, and this
-  remains true by design (see "Production grandfathering" in `docs/cdk-infrastructure.md`) — a
-  Development CDK stack now exists (`infra/`) but has not been deployed, and Production is not
-  imported or managed by it.
+  remains true by design (see "Production grandfathering" in `docs/cdk-infrastructure.md`) — the
+  Development CDK stack (`infra/`) is now deployed and live, but Production is not imported or
+  managed by it.
+- The authenticated sync protocol has not yet been validated end-to-end against the live
+  Development backend — client config is ready (`INTERVAL_ENV=development`) but the manual QA
+  pass itself has not been run. See `docs/environment-separation-plan.md` §16 STEP 6.
 - Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.
 - Library metadata (sources and collections) is local-only per device, even for a signed-in
   account — the same account sees different Library contents on different devices. Diagnosed and
