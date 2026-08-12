@@ -71,15 +71,17 @@ For anything not covered directly in this file, these are the authoritative docu
 
 1. `CLAUDE.md` (this file) — repository guardrails and implementation rules.
 2. `docs/branch-and-release-policy.md` — branch/release/environment policy.
-3. `docs/environment-separation-plan.md` — future Development/Staging/Production AWS environment
-   architecture. **Planning only — no separate environments exist yet.**
-4. `docs/aws-current-state-audit.md` — live-confirmed AWS resource inventory (2026-08-08 audit).
+3. `docs/environment-separation-plan.md` — the Development/Staging/Production AWS environment
+   architecture. **Development and Staging are now deployed and live; Production remains the
+   existing grandfathered baseline outside CDK** — see that document's §16 for exact phase status.
+4. `docs/aws-current-state-audit.md` — live-confirmed Production AWS resource inventory (2026-08-08
+   audit, predates Development/Staging's existence — scoped to Production only).
 5. `docs/environment-config-contract.md` — the implemented client/repository environment-identity
    and public config contract (`INTERVAL_ENV` and related). Client-side only — see the document's
-   own "Current limitation" section for what it does not yet have anywhere real to point at.
-6. `docs/cdk-infrastructure.md` — the implemented (not yet deployed) AWS CDK Development stack
-   (`infra/`) and its CloudShell deployment procedure. Building the stack is not deploying it —
-   see that document's own status line.
+   own "Current status" section for which environments it can now reach for real.
+6. `docs/cdk-infrastructure.md` — the implemented AWS CDK Development and Staging stacks
+   (`infra/`), both deployed and founder-QA verified. Production is not managed by CDK — see that
+   document's own status line and "Production grandfathering" section.
 7. `docs/platform-scope.md` — currently supported platforms and beta boundaries.
 8. `docs/accessibility-foundation.md` — accessibility requirements, current and future.
 9. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
@@ -264,25 +266,43 @@ Never accept the user ID from the request body or query parameters.
 
 ## Environment Safety
 
-Interval currently runs on a **single** shared AWS environment (see "AWS Resources" above) —
-there is no separate Development, Staging, or Production infrastructure yet. The authoritative
-plan for introducing them is `docs/environment-separation-plan.md`; a founder-performed, read-only
-CloudShell audit (2026-08-08) confirmed this single environment's live state against the correct
-account and is recorded in `docs/aws-current-state-audit.md`. Both remain planning documents —
-neither implies separate Development/Staging/Production environments already exist, and live
-audit confirmation of the current environment is not the same as implementing separation. The
-founder approved the plan's architecture decisions (existing stack as Production baseline, AWS CDK,
-separate Dev/Staging Cognito pools, `interval-<env>-*` naming for new resources only) on
-2026-08-08 — see `docs/environment-separation-plan.md` §17. Approval of the plan is not
-implementation of it. The client/repository-side `INTERVAL_ENV` config contract
-(`docs/environment-config-contract.md`) is implemented — the app is environment-aware.
-**Development is now live**: `IntervalDevelopmentStack` (`infra/`, `docs/cdk-infrastructure.md`)
-was deployed to `us-east-2` from AWS CloudShell and is verified (`CREATE_COMPLETE`;
-`interval-dev-records`/`interval-dev-changes` both `ACTIVE`). Production remains the grandfathered
-existing baseline, untouched and not managed by CDK. **Staging is still not created.** The next
-infrastructure milestone is proving the existing sync protocol end-to-end against the live
-Development backend before Staging is created — see `docs/environment-separation-plan.md` §16
-STEP 6.
+**The three-environment architecture is now operational.** Interval runs three separate AWS
+environments in `us-east-2`:
+
+- **Production** — the existing, grandfathered baseline (see "AWS Resources" above). Live before
+  this architecture existed, untouched by it, and still **not managed by CDK** — never imported,
+  renamed, or recreated. Protected from routine development work; changes require explicit
+  founder approval every time (see the guardrails below).
+- **Development** (`IntervalDevelopmentStack`, `infra/`, `docs/cdk-infrastructure.md`) — deployed
+  and founder-QA verified end-to-end: fresh Cognito account creation, sign-up/sign-in, repeated
+  Force Resync, deck/card creation and sync, and cross-device (phone + simulator) consistency all
+  confirmed working, with Production confirmed isolated throughout. For active engineering/testing
+  — its DynamoDB tables and Cognito pool use a disposable `DESTROY` removal policy on purpose.
+- **Staging/Beta** (`IntervalStagingStack`, same `infra/` project) — deployed and founder-QA
+  verified end-to-end with the identical checklist as Development. For **external beta-tester
+  validation before Production** — its DynamoDB tables and Cognito pool use `RemovalPolicy.RETAIN`
+  plus Cognito deletion protection, deliberately different from Development, because real external
+  beta-tester accounts/data may exist there. See `docs/cdk-infrastructure.md`'s "Staging
+  removal/deletion policy" before ever changing this in code.
+
+The authoritative plan is `docs/environment-separation-plan.md` (§16 tracks phase-by-phase status
+— Phases A through F are now complete); the founder-performed, read-only CloudShell audit
+(2026-08-08) that originally confirmed Production's live state, before Development/Staging
+existed, is recorded in `docs/aws-current-state-audit.md`. The client/repository-side
+`INTERVAL_ENV` config contract (`docs/environment-config-contract.md`) is implemented and now has
+two real, live AWS environments to point at (`development`, `staging`) in addition to Production —
+the founder currently switches between them by hand-editing the single gitignored local `.env`;
+no per-environment env files or switching scripts exist, by design, for now.
+
+**What "operational" does and does not mean:** infrastructure deployed successfully and app-level
+founder QA passed for both Development and Staging — that is what's complete. It does **not** mean
+either environment is fully hardened. Known, deliberately-deferred hardening work: DynamoDB
+point-in-time recovery (PITR) remains off in all three environments and its own future enablement
+is a separate decision, not a defect; the CDK `pointInTimeRecovery` API is deprecated in favor of
+`pointInTimeRecoverySpecification` (a synth-time warning, not a functional issue) and remains
+unaddressed cleanup work; Production is still not managed by CDK, by design, pending its own
+future, separate, explicit decision (see `docs/cdk-infrastructure.md`'s "Production
+grandfathering"). None of this blocked closing out the three-environment milestone.
 
 - No Production AWS mutation without explicit founder approval, every time — a prior approval does
   not carry forward to a new mutation.
@@ -317,11 +337,18 @@ STEP 6.
   Briefly naming remains elsewhere (storage keys, filenames, comments).
 - Production AWS infrastructure is not yet managed through Infrastructure as Code, and this
   remains true by design (see "Production grandfathering" in `docs/cdk-infrastructure.md`) — the
-  Development CDK stack (`infra/`) is now deployed and live, but Production is not imported or
-  managed by it.
-- The authenticated sync protocol has not yet been validated end-to-end against the live
-  Development backend — client config is ready (`INTERVAL_ENV=development`) but the manual QA
-  pass itself has not been run. See `docs/environment-separation-plan.md` §16 STEP 6.
+  Development and Staging CDK stacks (`infra/`) are both deployed and live, but Production is not
+  imported or managed by CDK, and there is no current plan to change that without a separate,
+  explicit founder decision.
+- DynamoDB point-in-time recovery (PITR) remains disabled in Development, Staging, and Production
+  — a deliberate, separate future hardening decision, not an oversight of the environment
+  separation milestone. The CDK `pointInTimeRecovery` API used in `infra/lib/interval-sync-stack.ts`
+  is itself deprecated in favor of `pointInTimeRecoverySpecification` (a `cdk synth`-time warning
+  only, not a functional issue) — remains unaddressed cleanup work.
+- No automated test harness exists in this repository — all verification (app and infrastructure)
+  is manual founder QA plus local static checks (`tsc`, lint, `cdk synth`), not automated tests.
+- `expo-doctor` reports a known, accepted 17/18 due to 8 packages sitting one SDK patch version
+  behind — tracked, not a regression each time it's re-confirmed.
 - Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.
 - Library metadata (sources and collections) is local-only per device, even for a signed-in
   account — the same account sees different Library contents on different devices. Diagnosed and

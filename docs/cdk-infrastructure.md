@@ -1,22 +1,32 @@
 # Interval CDK Infrastructure
 
-**Status: Development deployed and founder-QA verified end-to-end. Staging is defined in this CDK
-app but not yet deployed.**
+**Status: both Development and Staging deployed and founder-QA verified end-to-end. Production
+remains the existing grandfathered baseline, outside CDK.** The three-environment architecture
+described in `docs/environment-separation-plan.md` is now operational.
 
-`IntervalDevelopmentStack` was deployed to `us-east-2` from AWS CloudShell, per the procedure
-below — CloudFormation status `CREATE_COMPLETE`, `interval-dev-records`/`interval-dev-changes`
-both confirmed `ACTIVE`, `cdk diff IntervalDevelopmentStack` reports no differences. Founder QA
-went beyond infrastructure-only verification: a fresh Development Cognito account was created,
-authentication worked, sync worked repeatedly, deck/card creation and sync worked, and the same
-Development account worked correctly across both a physical phone and the simulator — all while
-Production remained isolated and untouched throughout.
+**Infrastructure deployed successfully:** `IntervalDevelopmentStack` and `IntervalStagingStack`
+are both live in `us-east-2` — CloudFormation `CREATE_COMPLETE` for both, `cdk diff` reports no
+differences against either, and every DynamoDB table (`interval-dev-records`,
+`interval-dev-changes`, `interval-staging-records`, `interval-staging-changes`) is `ACTIVE`.
 
-`IntervalStagingStack` now exists in this CDK app, reusing the exact same `IntervalSyncStack`
-construct that Development's verification just proved out — see "Staging resource names" below.
-**Not deployed.** The next step is founder review, then running `cdk synth`/`cdk diff` for
-`IntervalStagingStack` from AWS CloudShell (commands below) — `cdk deploy` is a separate, later,
-explicitly-approved step. Staging/Beta is intended for external beta-tester validation before
-Production; it is not a fourth environment and not an internal detail of Development.
+**App-level founder QA completed, for both environments, using the same checklist:** app
+configured with the environment's `INTERVAL_ENV` value and Dev Tools reporting the matching label
+(`Development` / `Staging`); a fresh Cognito account created; sign-up/sign-in working; repeated
+Force Resync working with no errors; deck/card creation and cloud sync working; the same account
+verified working on both a physical phone and the iOS simulator. Production confirmed isolated
+and untouched throughout both deployments.
+
+**Remaining infrastructure hardening intentionally not part of this milestone:** DynamoDB PITR
+stays off in both environments (a separate future decision); the CDK `pointInTimeRecovery` API
+used in this project is deprecated in favor of `pointInTimeRecoverySpecification` (a `cdk
+synth`-time warning, not a functional issue) and remains unaddressed cleanup work; CloudShell may
+warn about Node.js 20 relative to future AWS SDK releases — not a current deployment blocker, just
+worth knowing about for a future CloudShell session; Production is still not managed by CDK, by
+design. None of this was in scope for, or blocked, closing out the three-environment milestone.
+
+Staging/Beta is the same environment as Development's counterpart for *external beta-tester*
+validation before Production — it is not a fourth environment, and it is not an internal detail
+of Development.
 
 ## Architecture
 
@@ -295,9 +305,11 @@ this repository does not do so either.
 
 ## CloudShell deployment procedure
 
-**Followed — Development is live.** The founder ran this exact procedure from AWS CloudShell to
-deploy `IntervalDevelopmentStack`. Kept below as the accurate record of how it was deployed, and
-as the same procedure a future Staging deployment would follow (with the stack name substituted).
+**Followed for both stacks — Development and Staging are both live.** The founder ran this exact
+procedure from AWS CloudShell first for `IntervalDevelopmentStack`, then again for
+`IntervalStagingStack` with the stack name substituted throughout (steps 9/11/12 target
+`IntervalStagingStack`, all other steps are identical). Kept below as the accurate record of how
+both were deployed.
 
 ### 1–2. Open CloudShell, confirm region
 
@@ -414,30 +426,20 @@ aws cognito-idp list-user-pools --max-results 20 --region us-east-2 \
 The last two commands re-confirm Production is still present and untouched — the same check as
 step 3, run again after Development's deployment, as a closing safety confirmation.
 
-## Next: Staging synth/diff (prepared, not yet run)
+## Staging deployment record
 
-`IntervalStagingStack` is defined in this CDK app and locally synth-validated (see "Local
-validation" below), but has not been synthesized, diffed, or deployed from CloudShell. Once the
-founder has reviewed this infrastructure, the next step is running the same steps 1–3 above
-(confirm CloudShell region and account), then:
+`IntervalStagingStack` followed the identical procedure above (steps 1–12, with
+`IntervalStagingStack` substituted in steps 9/11/12) — deployed, `CREATE_COMPLETE`,
+`interval-staging-records`/`interval-staging-changes` both `ACTIVE`, `cdk diff
+IntervalStagingStack` reports no differences. Founder QA against the live Staging backend used the
+same checklist as Development's (see the status block at the top of this document) and passed:
+fresh Cognito account creation, sign-up/sign-in, repeated Force Resync, sync/data operations, and
+cross-device (phone + simulator) consistency all confirmed working, with Production confirmed
+isolated throughout.
 
-```bash
-cd interval-app/infra
-npm install
-
-npx cdk synth IntervalStagingStack
-
-npx cdk diff IntervalStagingStack
-```
-
-Review the diff for the same things step 10 above checks, adapted to Staging: only new
-`interval-staging-*` resources, no Production resource name anywhere in the diff, no deletion or
-modification of any existing resource (including `IntervalDevelopmentStack`'s own resources —
-this diff should not mention them at all, since the two stacks are independent).
-
-**`cdk deploy IntervalStagingStack` is explicitly out of scope for this review round** — it is a
-separate, later, explicitly-approved step, not something to run as part of reviewing synth/diff
-output.
+Post-deployment verification for Staging follows the same read-only command shape as step 12
+above, substituting `interval-staging-*` table/API/function names and the `IntervalStagingStack`
+stack name.
 
 ## Rollback / removal
 
@@ -472,11 +474,13 @@ contract. Retrieve them with:
 ```bash
 aws cloudformation describe-stacks --stack-name IntervalDevelopmentStack --region us-east-2 \
   --query "Stacks[0].Outputs"
-# once IntervalStagingStack is deployed:
 aws cloudformation describe-stacks --stack-name IntervalStagingStack --region us-east-2 \
   --query "Stacks[0].Outputs"
 ```
 
 The founder places these values directly into their local, gitignored `.env` — never into any
-tracked file. See `docs/environment-config-contract.md`'s "Current status" section for exactly
-which local variables this maps to.
+tracked file, and never both environments' values at once (the app reads one active `INTERVAL_ENV`
+at a time; switching environments today means hand-editing `.env` and restarting Metro — see
+`docs/environment-config-contract.md`'s "Current status" section for exactly which local
+variables this maps to. No per-environment env files or switching scripts exist in this
+repository; that remains a possible future improvement, not implemented here).

@@ -632,12 +632,17 @@ both `ACTIVE`). **Phase E is complete** — founder QA confirmed the existing sy
 end-to-end against Development: fresh Development Cognito account creation, authentication, and
 repeated sync (including deck/card creation) all verified working, the same account confirmed
 working across both a physical phone and the simulator, Production confirmed isolated and
-untouched throughout. **Phase F is in progress** — `IntervalStagingStack` is defined in this CDK
-app (reusing the same `IntervalSyncStack` construct Phase E just proved out) but not yet
-deployed; the next step is founder review, then `cdk synth`/`cdk diff` for `IntervalStagingStack`
-from AWS CloudShell (`docs/cdk-infrastructure.md`), with `cdk deploy` remaining a separate,
-later, explicitly-approved step. Phase G through Phase I have not begun — no Staging deployment,
-no Production mutation/import.
+untouched throughout. **Phase F is complete** — `IntervalStagingStack` was deployed via the
+identical CloudShell procedure (`CREATE_COMPLETE`; `interval-staging-records`/
+`interval-staging-changes` both `ACTIVE`) and passed the same founder-QA checklist as Development
+(fresh Staging Cognito account, sign-up/sign-in, repeated Force Resync, sync/data operations,
+phone + simulator consistency), with Production confirmed isolated and untouched throughout.
+**The three-environment separation milestone (Phases A–F) is now complete.** Phase G through
+Phase I have not begun — no promotion-process validation yet, no Production mutation/import.
+Remaining hardening intentionally deferred, not part of this milestone: DynamoDB PITR stays off
+in all three environments (a separate future decision); the CDK `pointInTimeRecovery` API used
+here is deprecated in favor of `pointInTimeRecoverySpecification` (a synth-time warning, not a
+functional issue); Production remains unmanaged by CDK, by design.
 
 **STEP 1 — Confirm current AWS state and choose what existing resources become.**
 **Status: complete.** Live evidence was obtained via the 2026-08-08 CloudShell audit (the
@@ -703,23 +708,23 @@ not a "mutation" in the guardrail sense). Exit criteria met: sync behaves identi
 Production's documented invariants, confirmed against the live Development backend.
 
 **STEP 7 — Create the Staging/Beta environment.**
-**Status: in progress — CDK definition complete, not yet deployed.** Objective: repeat Step 5's
-process for `interval-staging-*`, serving as both Staging and the external Beta environment per
-§17's founder-approved decision — no separate fourth environment. `IntervalStagingStack` now
-exists in `infra/` (reusing the same `IntervalSyncStack` construct Step 6 just proved out via
-Development), locally synth-validated, not yet deployed. Resource classes affected: new,
-Staging-only resources — fully independent from Development's own resources, sharing no table,
-pool, function, or role. Prerequisites: Step 6 passing cleanly — **done**. Founder decision
-required: review this CDK definition, then approval to deploy (the Staging-is-Beta question
-itself is already resolved, §17). Risk: low (isolated resources; Development and Production both
-unaffected by this stack's existence). Rollback: `cdk destroy IntervalStagingStack` — note
-Staging's DynamoDB tables and Cognito pool use `RemovalPolicy.RETAIN` (deliberately different
-from Development's `DESTROY` — see `docs/cdk-infrastructure.md`'s "Staging removal/deletion
-policy" for the full reasoning: Staging is expected to hold real external beta-tester data before
-Production does, so accidental data loss from a routine infrastructure change or a mistaken
-destroy command is a real risk Development doesn't have). Manual QA: same as Step 6, against
-Staging, once deployed. AWS mutations: none yet — resource creation requires separate, explicit
-founder approval before any `cdk deploy` is run.
+**Status: complete.** Objective: repeat Step 5's process for `interval-staging-*`, serving as both
+Staging and the external Beta environment per §17's founder-approved decision — no separate
+fourth environment. `IntervalStagingStack` was deployed via the identical CloudShell procedure
+Development used (`docs/cdk-infrastructure.md`) — CloudFormation `CREATE_COMPLETE`,
+`interval-staging-records`/`interval-staging-changes` both `ACTIVE`, `cdk diff
+IntervalStagingStack` reports no differences. Resource classes affected: new, Staging-only
+resources — fully independent from Development's own resources, sharing no table, pool, function,
+or role. Rollback: `cdk destroy IntervalStagingStack` — note Staging's DynamoDB tables and
+Cognito pool use `RemovalPolicy.RETAIN` (deliberately different from Development's `DESTROY` —
+see `docs/cdk-infrastructure.md`'s "Staging removal/deletion policy" for the full reasoning:
+Staging is expected to hold real external beta-tester data before Production does, so accidental
+data loss from a routine infrastructure change or a mistaken destroy command is a real risk
+Development doesn't have). Manual QA: same checklist as Step 6, against the live Staging backend
+— **done**: fresh Staging Cognito account, sign-up/sign-in, repeated Force Resync, sync/data
+operations, and phone + simulator consistency all confirmed working, Production confirmed
+isolated throughout. AWS mutations: resource creation — performed with explicit founder approval,
+from AWS CloudShell, not from any local machine.
 
 **STEP 8 — Validate the migration/deployment process itself.**
 Objective: prove that promoting the *same* Lambda source from Development to Staging (per §9) works

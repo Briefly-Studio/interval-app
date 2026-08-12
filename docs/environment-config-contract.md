@@ -3,8 +3,8 @@
 **Status: implemented, client/repository-side only.** This document describes the environment
 identity and public config contract introduced to prepare the app to be environment-aware, per
 `docs/environment-separation-plan.md` §6/§7. This contract itself does not create or provision any
-AWS environment — Production and now Development both exist as real AWS resources; Staging does
-not yet (see "Current status" below).
+AWS environment — but all three named environments (`development`, `staging`, `production`) now
+have real, deployed AWS resources behind them (see "Current status" below).
 
 ## Canonical environment values
 
@@ -93,7 +93,8 @@ deployed backend to point at — see "Current status" below for where the real v
 ## Staging behavior
 
 Same mechanism as Development — `INTERVAL_ENV=staging` plus the four `EXPO_PUBLIC_*` values for
-the Staging/Beta environment, once it's provisioned. Nothing currently exists for it to point at.
+the Staging/Beta environment. `IntervalStagingStack` is deployed and founder-QA verified — see
+"Current status" below for where the real values come from.
 
 ## Production behavior
 
@@ -187,28 +188,33 @@ storage namespacing.** Confirmed unchanged by this batch:
   configured with — switching environments only changes which backend a signed-in sync talks to,
   never which local storage keys are read or written.
 
-## Current status: Development live, Staging not yet
+## Current status: all three environments live
 
-Setting `INTERVAL_ENV=staging` today still produces a build whose `EXPO_PUBLIC_*` values point
-nowhere real — no Staging AWS resources exist yet (see `docs/environment-separation-plan.md`).
+All three `INTERVAL_ENV` values now have somewhere real to reach:
 
-Setting `INTERVAL_ENV=development` no longer falls into that category: `IntervalDevelopmentStack`
-is deployed and verified live in `us-east-2` (CloudFormation `CREATE_COMPLETE`,
-`interval-dev-records`/`interval-dev-changes` both `ACTIVE`) — see `docs/cdk-infrastructure.md`
-for the full deployment record. A `development` build now has somewhere real to reach, once the
-founder places the real Development `EXPO_PUBLIC_*` values (retrievable from the stack's
-`CfnOutput`s — see `docs/cdk-infrastructure.md`'s "Development values for the app config
-contract") into their local, gitignored `.env`. This repository's `.env.example` still ships only
-placeholder values, never real ones — see "Safety validation" above for why a placeholder is
-rejected identically in every environment, not just Production.
+- **`development`** — `IntervalDevelopmentStack`, deployed and founder-QA verified end-to-end
+  (fresh Cognito account, sign-up/sign-in, repeated Force Resync, deck/card creation and sync,
+  phone + simulator consistency all confirmed).
+- **`staging`** — `IntervalStagingStack`, deployed and founder-QA verified end-to-end with the
+  identical checklist.
+- **`production`** — the existing, grandfathered Production baseline, unchanged throughout both
+  deployments.
 
-**Founder-local configuration, current state:** the founder's local `.env` is being updated from
-`INTERVAL_ENV=production` (the prior state, pointing at the live Production baseline) to
-`INTERVAL_ENV=development` plus the four real Development values, to begin proving the existing
-sync protocol end-to-end against the new Development backend
-(`docs/environment-separation-plan.md` §16 STEP 6) — the current infrastructure milestone, ahead
-of creating Staging. Nothing about the config *contract* changed to make this possible; it already
-supported this before Development existed to point at.
+See `docs/cdk-infrastructure.md` for the full deployment record and the exact `describe-stacks`
+commands to retrieve each environment's real `EXPO_PUBLIC_*` values from its stack outputs. This
+repository's `.env.example` still ships only placeholder values, never real ones, for any
+environment — see "Safety validation" above for why a placeholder is rejected identically in
+every environment, not just Production.
+
+**Founder-local configuration, current state:** the founder switches between environments today
+by hand-editing the single gitignored local `.env` — setting `INTERVAL_ENV` to the target
+environment plus that environment's four real values, then restarting Metro. There is exactly one
+active environment per build; the app does not read multiple environments' config at once. No
+per-environment `.env` files (e.g. `.env.development`, `.env.staging`) and no environment-switching
+script exist in this repository — that remains a possible future workflow improvement, not
+implemented here. Nothing about the config *contract* itself changed to make any of this possible;
+it already supported all three environments before any of them but Production had real
+infrastructure to point at.
 
 ## What this batch does not do
 
