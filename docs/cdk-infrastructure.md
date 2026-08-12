@@ -1,14 +1,22 @@
 # Interval CDK Infrastructure
 
-**Status: deployed and verified live.** `IntervalDevelopmentStack` has been deployed to
-`us-east-2` from AWS CloudShell, per the procedure below — CloudFormation status
-`CREATE_COMPLETE`, `interval-dev-records` and `interval-dev-changes` both confirmed `ACTIVE`,
-`cdk diff IntervalDevelopmentStack` reports no differences. This document covers the AWS CDK v2
-(TypeScript) foundation for Interval's Development environment — what it defines, what it
-deliberately does not touch, and the deployment procedure that was followed. **Staging is not
-deployed.** The next infrastructure milestone is proving the existing sync protocol end-to-end
-against this live Development backend (see `docs/environment-separation-plan.md` §16 STEP 6),
-before Staging is created.
+**Status: Development deployed and founder-QA verified end-to-end. Staging is defined in this CDK
+app but not yet deployed.**
+
+`IntervalDevelopmentStack` was deployed to `us-east-2` from AWS CloudShell, per the procedure
+below — CloudFormation status `CREATE_COMPLETE`, `interval-dev-records`/`interval-dev-changes`
+both confirmed `ACTIVE`, `cdk diff IntervalDevelopmentStack` reports no differences. Founder QA
+went beyond infrastructure-only verification: a fresh Development Cognito account was created,
+authentication worked, sync worked repeatedly, deck/card creation and sync worked, and the same
+Development account worked correctly across both a physical phone and the simulator — all while
+Production remained isolated and untouched throughout.
+
+`IntervalStagingStack` now exists in this CDK app, reusing the exact same `IntervalSyncStack`
+construct that Development's verification just proved out — see "Staging resource names" below.
+**Not deployed.** The next step is founder review, then running `cdk synth`/`cdk diff` for
+`IntervalStagingStack` from AWS CloudShell (commands below) — `cdk deploy` is a separate, later,
+explicitly-approved step. Staging/Beta is intended for external beta-tester validation before
+Production; it is not a fourth environment and not an internal detail of Development.
 
 ## Architecture
 
@@ -18,17 +26,18 @@ install` in `infra/` never touches the mobile app's dependencies, and vice versa
 
 ```
 infra/
-  bin/interval-infra.ts        CDK app entrypoint — instantiates Development only
+  bin/interval-infra.ts        CDK app entrypoint — instantiates Development and Staging
   lib/environment-config.ts    Resource-naming model for development/staging/production
   lib/interval-sync-stack.ts   The stack construct: API, Lambdas, DynamoDB, Cognito, IAM
   cdk.json, tsconfig.json, package.json
 ```
 
 `IntervalSyncStack` is written to be reusable across `development` / `staging` / `production`
-(matching `docs/environment-separation-plan.md`'s three-environment model) — but `bin/interval-infra.ts` **only ever instantiates it once, for `development`**. There is no code path anywhere
-in this project that creates, imports, or manages a Production or Staging stack. Staging is not
-created by this mission; Production is explicitly out of scope for CDK, permanently, by design —
-see "What CDK does not manage" below.
+(matching `docs/environment-separation-plan.md`'s three-environment model) — `bin/interval-infra.ts`
+instantiates it twice, once for `development` and once for `staging`, as two independent
+CloudFormation stacks with no resources shared between them. There is no code path anywhere in
+this project that creates, imports, or manages a Production stack — that remains permanently out
+of scope for CDK, by design — see "What CDK does not manage" below.
 
 **Region: `us-east-2`** — fixed in `bin/interval-infra.ts`, matching every existing Interval
 environment.
@@ -64,6 +73,28 @@ standard:
 
 CloudFormation stack name: **`IntervalDevelopmentStack`**.
 
+## Staging resource names
+
+Same eight resource types, `interval-staging-*` names, a fully independent set of AWS resources
+from Development's — no table, pool, function, or role is shared between the two stacks:
+
+| Resource | Name |
+|---|---|
+| API Gateway HTTP API | `interval-staging-sync-api` |
+| Lambda (push) | `interval-staging-sync-push` |
+| Lambda (pull) | `interval-staging-sync-pull` |
+| DynamoDB (records) | `interval-staging-records` |
+| DynamoDB (changes) | `interval-staging-changes` |
+| Cognito user pool | `interval-staging-user-pool` |
+| Cognito app client | `interval-staging-mobile` |
+| IAM role (shared, both Lambdas) | `interval-staging-sync-lambda-role` |
+
+CloudFormation stack name: **`IntervalStagingStack`**.
+
+Staging/Beta is the same environment — external beta-tester validation before Production, per
+`docs/environment-separation-plan.md` §17's founder-approved decision. There is no separate fourth
+"beta" environment anywhere in this project.
+
 ## Production grandfathering
 
 The existing Production stack (`IntervalSyncApi`, `IntervalSyncPush`, `IntervalSyncPull`,
@@ -84,12 +115,54 @@ AWS-managed encryption at rest, streams and TTL both off — matching the live-c
 shape (`docs/aws-current-state-audit.md`), since nothing in the current backend source needs
 streams or TTL for either environment.
 
-**Removal policy: `DESTROY`.** Development data is disposable by design — decks/cards/sessions
-pushed to a Development backend during testing are expected to be wiped freely, and a
-`cdk destroy`/stack-replacement should not require a manual DynamoDB table deletion step. This is
-never applied to Production (Production isn't managed by this project at all, so the question
-doesn't arise) — documented here so a future Staging stack's removal policy is a deliberate choice
-made by rereading this section, not copied blindly from Development's.
+**Removal policy: `DESTROY` for Development, `RETAIN` for Staging.** Not the same decision copied
+across environments — see "Staging removal/deletion policy" below for the full reasoning. Neither
+policy is ever applied to Production, which isn't managed by this project at all.
+
+`interval-staging-records` / `interval-staging-changes` — identical schema, billing mode,
+encryption, streams-off, and TTL-off to Development. Same infrastructure shape; different data
+sensitivity, hence the different removal policy below.
+
+## Staging removal/deletion policy
+
+**Decision: `RemovalPolicy.RETAIN` for Staging's DynamoDB tables and Cognito user pool, plus
+Cognito deletion protection enabled — deliberately different from Development's `DESTROY`/
+disabled-protection defaults, not inherited blindly.**
+
+**Reasoning.** Development is founder-only and its data is genuinely disposable — destructive
+testing is expected, and `DESTROY` correctly makes cleanup free. Staging/Beta is different in
+kind, not just degree: it exists specifically for **external beta-tester validation**
+(`docs/environment-separation-plan.md`), meaning real people's Cognito accounts and their synced
+decks/cards/sessions can exist there before Production ever does. Two concrete risks `DESTROY`
+would create for Staging that don't exist for Development:
+
+1. **CloudFormation-driven replacement.** Certain property changes to a DynamoDB table or Cognito
+   user pool force CloudFormation to replace the resource rather than update it in place. With
+   `DESTROY`, a routine infrastructure change could silently delete every beta tester's account
+   and data as a side effect — not a deliberate decision, just an accident of which property
+   happened to change.
+2. **Accidental `cdk destroy`.** A mistyped or miscontextualized destroy command against Staging
+   would be unrecoverable under `DESTROY`.
+
+`RETAIN` means the underlying table/pool survives even if its CDK-managed lifecycle ends —
+orphaned, not deleted, requiring a deliberate, separate, manual deletion step to actually remove
+it. That asymmetry (safe by default, an explicit extra step required to genuinely destroy real
+user data) is exactly the posture an environment holding external users' data should have.
+Cognito deletion protection (a separate mechanism from `RemovalPolicy` — it also blocks direct
+API/console deletion, not just CloudFormation-driven removal) is enabled for the same reason,
+matching the live-confirmed Production user pool's own `ACTIVE` deletion protection
+(`docs/aws-current-state-audit.md`).
+
+**What this does not change:** Development's `RemovalPolicy.DESTROY` and disabled deletion
+protection are unchanged — this decision only affects Staging. If Staging is ever destroyed on
+purpose (e.g. decommissioning it), the retained tables/pool require a separate, explicit AWS
+console/CLI deletion afterward — this is intentional friction, not an oversight.
+
+**Not addressed by this decision (out of scope for this mission):** point-in-time recovery (PITR)
+remains off for Staging, matching Development and the live-confirmed Production shape. PITR is a
+genuinely separate hardening question (recovering from a *bad write*, not preventing *resource
+deletion*) — worth revisiting once Staging actually holds real beta-tester data, but not decided
+here.
 
 ## Cognito
 
@@ -113,8 +186,10 @@ CDK doesn't actually treat as "off." Production's own OAuth/CloudFront callback 
 (whose actual usage remains unresolved — see `docs/aws-current-state-audit.md`'s Cognito section)
 is not copied here at all.
 
-**Deletion protection: off**, matching the `DESTROY` removal-policy reasoning above — Development
-identities are disposable.
+**Deletion protection: off for Development, `ACTIVE` for Staging** — see "Staging removal/deletion
+policy" above for the full reasoning. `interval-staging-user-pool` otherwise matches
+`interval-dev-user-pool` exactly: no client secret, same explicit auth flows, same `disableOAuth:
+true`, same MFA-off/password-policy configuration.
 
 ## IAM
 
@@ -135,6 +210,11 @@ Plus the standard `AWSLambdaBasicExecutionRole` AWS-managed policy (CloudWatch L
 Lambda needs this to run at all; not a DynamoDB grant). No human IAM user is created anywhere in
 this project.
 
+`interval-staging-sync-lambda-role` follows the identical pattern, scoped to
+`interval-staging-records`/`interval-staging-changes` only — it has no access to Development's
+tables, Production's tables, or any other resource. Each environment's shared role can only ever
+reach that same environment's own two tables.
+
 ## Lambda packaging
 
 `interval-dev-sync-push` / `interval-dev-sync-pull` package
@@ -147,9 +227,14 @@ Production's live-confirmed configuration exactly (`docs/aws-current-state-audit
 Environment variables:
 - `interval-dev-sync-push`: `RECORDS_TABLE=interval-dev-records`, `CHANGES_TABLE=interval-dev-changes`
 - `interval-dev-sync-pull`: `CHANGES_TABLE=interval-dev-changes`
+- `interval-staging-sync-push`: `RECORDS_TABLE=interval-staging-records`, `CHANGES_TABLE=interval-staging-changes`
+- `interval-staging-sync-pull`: `CHANGES_TABLE=interval-staging-changes`
 
-No Production table name, API ID, or Cognito identifier appears in either function's environment
-or anywhere else in this project.
+`interval-staging-sync-push`/`interval-staging-sync-pull` package the exact same
+`backend/lambdas/sync-push`/`sync-pull` source, same runtime/architecture/memory/timeout — the
+only difference from Development is which table names get injected as environment variables. No
+Production table name, API ID, or Cognito identifier appears in any function's environment or
+anywhere else in this project.
 
 ## API Gateway / JWT authorization
 
@@ -164,39 +249,41 @@ the `interval-dev-mobile` app client ID — both resolved via CDK references to 
 pool/client this same stack creates, never hardcoded. **No unauthenticated route exists.**
 Integrations are `AWS_PROXY` with payload format `2.0`, matching Production.
 
+`interval-staging-sync-api` is the identical shape, scoped entirely to
+`interval-staging-user-pool`/`interval-staging-mobile` — a request bearing a Development or
+Production token is rejected by Staging's authorizer, and vice versa. Each environment's API can
+only ever be reached with that same environment's own tokens.
+
 ## Tagging
 
-Every taggable resource in the stack carries:
+Every taggable resource in each stack carries that stack's own environment tag:
 
 ```
 Project = Interval
-Environment = development
+Environment = development   (or "staging" in IntervalStagingStack)
 ManagedBy = CDK
 ```
 
-Applied stack-wide via `cdk.Tags.of(this).add(...)`, not per-resource, so nothing can be added to
-this stack later without inheriting the same tags. No sensitive data in any tag value.
+Applied per-stack via `cdk.Tags.of(this).add(...)`, not per-resource, so nothing can be added to
+either stack later without inheriting the same tags. No sensitive data in any tag value.
 
 ## What CDK manages
 
-Everything in "Development resource names" above, and only those — plus the minimal
-CloudFormation/CDK support constructs required to wire them together (the JWT authorizer, Lambda
-invoke permissions for API Gateway, the IAM policy attached to the shared role, the API's default
-stage, and CDK's own bootstrap-version metadata resource). Verified directly against the
-synthesized template — see "Local validation" below.
+Everything in "Development resource names" and "Staging resource names" above, and only those —
+plus the minimal CloudFormation/CDK support constructs each stack needs to wire its own resources
+together (the JWT authorizer, Lambda invoke permissions for API Gateway, the IAM policy attached
+to the shared role, the API's default stage, and CDK's own bootstrap-version metadata resource).
+Verified directly against both synthesized templates — see "Local validation" below.
 
 ## What CDK does not manage
 
 - **Production.** Not imported, not referenced, not modeled as a stack. Continues to be managed
   exactly as it is today, outside IaC, until a separate, explicit, founder-approved decision
   changes that.
-- **Staging.** Not created by this mission. The naming model
-  (`infra/lib/environment-config.ts`) already knows what Staging's resource names *would* be, for
-  when that's approved, but no Staging stack is ever instantiated by the code in this repository
-  today.
-- Anything outside the 8 named resources: no S3, no AI/transcription infrastructure, no Canvas
-  integration, no notification infrastructure, no hosted-sharing infrastructure. All explicitly
-  out of scope for this mission and not present anywhere in `infra/`.
+- Anything outside the 16 named resources across both stacks: no S3, no AI/transcription
+  infrastructure, no Canvas integration, no notification infrastructure, no hosted-sharing
+  infrastructure. All explicitly out of scope for this mission and not present anywhere in
+  `infra/`.
 
 ## No permanent local AWS credentials required
 
@@ -276,8 +363,8 @@ npx cdk synth
 npx cdk diff IntervalDevelopmentStack
 ```
 
-Naming the stack explicitly (rather than a bare `cdk diff`) is deliberate — if a Staging stack is
-ever added to this same CDK app in the future, this still targets only Development.
+Naming the stack explicitly (rather than a bare `cdk diff`) is deliberate — now that
+`IntervalStagingStack` also exists in this same CDK app, this still targets only Development.
 
 ### 10. Review the diff
 
@@ -327,26 +414,66 @@ aws cognito-idp list-user-pools --max-results 20 --region us-east-2 \
 The last two commands re-confirm Production is still present and untouched — the same check as
 step 3, run again after Development's deployment, as a closing safety confirmation.
 
+## Next: Staging synth/diff (prepared, not yet run)
+
+`IntervalStagingStack` is defined in this CDK app and locally synth-validated (see "Local
+validation" below), but has not been synthesized, diffed, or deployed from CloudShell. Once the
+founder has reviewed this infrastructure, the next step is running the same steps 1–3 above
+(confirm CloudShell region and account), then:
+
+```bash
+cd interval-app/infra
+npm install
+
+npx cdk synth IntervalStagingStack
+
+npx cdk diff IntervalStagingStack
+```
+
+Review the diff for the same things step 10 above checks, adapted to Staging: only new
+`interval-staging-*` resources, no Production resource name anywhere in the diff, no deletion or
+modification of any existing resource (including `IntervalDevelopmentStack`'s own resources —
+this diff should not mention them at all, since the two stacks are independent).
+
+**`cdk deploy IntervalStagingStack` is explicitly out of scope for this review round** — it is a
+separate, later, explicitly-approved step, not something to run as part of reviewing synth/diff
+output.
+
 ## Rollback / removal
 
-`interval-dev-*` resources are fully disposable by design (`DESTROY` removal policy throughout —
-see "DynamoDB" and "Cognito" above). To remove the entire Development stack:
+**Development** — `interval-dev-*` resources are fully disposable by design (`DESTROY` removal
+policy throughout — see "DynamoDB" and "Cognito" above):
 
 ```bash
 npx cdk destroy IntervalDevelopmentStack
 ```
 
-This deletes only the 8 named Development resources and their CDK/CloudFormation support
-constructs. It cannot affect Production, which this project has no reference to at all.
+This deletes the 8 named Development resources, including their data, and their CDK/
+CloudFormation support constructs.
 
-## Development values for the app config contract
+**Staging** — `interval-staging-*` DynamoDB tables and the Cognito user pool use `RETAIN` (see
+"Staging removal/deletion policy" above), so `cdk destroy IntervalStagingStack` removes the stack
+and its non-retained resources (Lambdas, API Gateway, IAM role) but **leaves the
+`interval-staging-records`/`interval-staging-changes` tables and `interval-staging-user-pool`
+behind**, orphaned from CloudFormation. Actually deleting that retained data/those identities
+afterward requires a separate, explicit, manual AWS console/CLI action — this is intentional, not
+a bug, given real external beta-tester data may exist there by then.
 
-The stack's `CfnOutput`s (`SyncApiUrl`, `UserPoolId`, `UserPoolClientId`) provide the real values
-for `docs/environment-config-contract.md`'s `INTERVAL_ENV=development` local `.env` — see that
-document and `docs/environment-separation-plan.md` §6 for the full contract. Retrieve them with:
+Neither command can affect Production, which this project has no reference to at all — and
+neither command has been run as part of this mission.
+
+## App config contract values
+
+Each stack's `CfnOutput`s (`SyncApiUrl`, `UserPoolId`, `UserPoolClientId`) provide the real values
+for `docs/environment-config-contract.md`'s `INTERVAL_ENV=development`/`INTERVAL_ENV=staging`
+local `.env`— see that document and `docs/environment-separation-plan.md` §6 for the full
+contract. Retrieve them with:
 
 ```bash
 aws cloudformation describe-stacks --stack-name IntervalDevelopmentStack --region us-east-2 \
+  --query "Stacks[0].Outputs"
+# once IntervalStagingStack is deployed:
+aws cloudformation describe-stacks --stack-name IntervalStagingStack --region us-east-2 \
   --query "Stacks[0].Outputs"
 ```
 

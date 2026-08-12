@@ -25,6 +25,20 @@ new IntervalSyncStack(app, "IntervalDevelopmentStack", {
   description: "Interval Development environment: sync API, Lambdas, DynamoDB, Cognito. See docs/cdk-infrastructure.md.",
 });
 
-// Staging and Production are deliberately NOT instantiated here — see
-// infra/lib/environment-config.ts's header comment and docs/cdk-infrastructure.md. Production
-// is never imported or managed by CDK under any circumstance.
+// IntervalDevelopmentStack is deployed and founder-QA verified end-to-end (auth, sync, deck/card
+// creation, repeated multi-device sync) — see docs/cdk-infrastructure.md. IntervalStagingStack
+// reuses the exact same IntervalSyncStack construct, proven by that verification, with only the
+// environment-specific differences the construct itself already models (resource names via
+// environment-config.ts, and the RETAIN removal/deletion policy for real external beta-user data
+// — see interval-sync-stack.ts's REMOVAL_POLICY_FOR comment). Not yet deployed — see this
+// mission's report / docs/cdk-infrastructure.md for the CloudShell synth/diff commands to run
+// next, before any `cdk deploy`.
+new IntervalSyncStack(app, "IntervalStagingStack", {
+  env: { region },
+  environmentName: "staging",
+  description: "Interval Staging/Beta environment: sync API, Lambdas, DynamoDB, Cognito. See docs/cdk-infrastructure.md.",
+});
+
+// Production is deliberately NOT instantiated here — see infra/lib/environment-config.ts's
+// header comment and docs/cdk-infrastructure.md. Production is never imported or managed by CDK
+// under any circumstance.

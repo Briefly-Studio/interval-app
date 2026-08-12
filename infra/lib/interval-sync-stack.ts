@@ -29,10 +29,32 @@ export class IntervalSyncStack extends cdk.Stack {
     const { environmentName } = props;
     const names = resourceNamesFor(environmentName);
 
-    // Development data/identities are disposable — see docs/cdk-infrastructure.md's "Removal
-    // policy" section. Never used for "production" since that branch of this stack is never
-    // instantiated (see this file's class comment).
-    const removalPolicy = cdk.RemovalPolicy.DESTROY;
+    // Removal/deletion policy is a deliberate, per-environment decision — not inherited blindly.
+    // Development data/identities are genuinely disposable (founder-only, destructive testing is
+    // expected) — DESTROY is correct there and is unchanged by this stack supporting Staging.
+    // Staging/Beta is different in kind, not just degree: it is intended for *external* beta
+    // tester validation (docs/environment-separation-plan.md), meaning real people's accounts and
+    // synced study data can exist there before Production ever does. A CloudFormation-driven
+    // replacement (some DynamoDB/Cognito property changes force replacement, not an in-place
+    // update) or an accidental `cdk destroy` must not silently delete that data as a side effect
+    // of routine infrastructure work. RETAIN means the underlying table/pool survives even if its
+    // CDK-managed lifecycle ends — orphaned and requiring a deliberate manual deletion, which is
+    // exactly the asymmetry wanted: safe by default, an extra explicit step required to actually
+    // destroy real user data. See docs/cdk-infrastructure.md's "Staging removal/deletion policy"
+    // section for the full reasoning. Production is never instantiated by this stack at all (see
+    // this file's class comment) — its entry in this map is unreachable, not a real decision.
+    const REMOVAL_POLICY_FOR: Record<IntervalEnvironmentName, cdk.RemovalPolicy> = {
+      development: cdk.RemovalPolicy.DESTROY,
+      staging: cdk.RemovalPolicy.RETAIN,
+      production: cdk.RemovalPolicy.RETAIN,
+    };
+    const removalPolicy = REMOVAL_POLICY_FOR[environmentName];
+
+    // Same reasoning as removalPolicy above, applied to Cognito's own deletion-protection flag
+    // (a separate mechanism from RemovalPolicy — it blocks direct pool deletion via the API/
+    // console too, not just CloudFormation-driven removal). Off for Development (throwaway,
+    // founder-only), on for Staging (real external beta identities) and Production.
+    const cognitoDeletionProtectionEnabled = environmentName !== "development";
 
     cdk.Tags.of(this).add("Project", "Interval");
     cdk.Tags.of(this).add("Environment", environmentName);
@@ -88,7 +110,7 @@ export class IntervalSyncStack extends cdk.Stack {
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
       removalPolicy,
-      deletionProtection: false,
+      deletionProtection: cognitoDeletionProtectionEnabled,
     });
 
     const userPoolClient = userPool.addClient("MobileClient", {
