@@ -11,6 +11,11 @@ import {
   retryUploadSourceFile,
   verifyCloudSourceAccessible,
 } from "../../../src/cloud/librarySourceStorage";
+import {
+  openSourceOriginal,
+  type OpenSourceErrorReason,
+  type OpenSourceStage,
+} from "../../../src/cloud/librarySourceStorage/openSource";
 import { formatAudioDuration, formatFileSize } from "../../../src/domain/librarySourceFormat";
 import { SOURCE_TYPE_LABEL_KEYS, STATUS_LABEL_KEYS } from "../../../src/domain/librarySourceLabels";
 import { useTranslation } from "../../../src/i18n";
@@ -18,11 +23,32 @@ import type { LibrarySourceRecord } from "../../../src/models/librarySource";
 import type { SourceCollectionRecord } from "../../../src/models/sourceCollection";
 import { archiveLibrarySource, getLibrarySources, restoreLibrarySource, softDeleteLibrarySource } from "../../../src/storage/librarySources";
 import { getActiveSourceCollections } from "../../../src/storage/sourceCollections";
+import { logLibraryFileAttach } from "../../../src/utils/libraryFileAttachLog";
 import { useTheme } from "@/src/theme";
 import { Button } from "../../../src/ui/Button";
 import { Card } from "../../../src/ui/Card";
 import { IconButton } from "../../../src/ui/IconButton";
 import { Screen } from "../../../src/ui/Screen";
+
+function openFailedBodyKey(reason: OpenSourceErrorReason): string {
+  switch (reason) {
+    case "offline-no-local":
+      return "librarySource.detail.openFailedOfflineBody";
+    case "access-denied":
+      return "librarySource.detail.openFailedAccessDeniedBody";
+    case "not-found":
+      return "librarySource.detail.openFailedNotFoundBody";
+    case "download-failed":
+      return "librarySource.detail.openFailedDownloadBody";
+    case "unsupported-viewer":
+      return "librarySource.detail.openFailedUnsupportedBody";
+    case "handoff-failed":
+      return "librarySource.detail.openFailedHandoffBody";
+    case "unavailable":
+    default:
+      return "librarySource.detail.openFailedGenericBody";
+  }
+}
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   const { colors, spacing, typography } = useTheme();
@@ -49,6 +75,7 @@ export default function LibrarySourceDetailScreen() {
   const [mutating, setMutating] = useState(false);
   const [hasLocalFile, setHasLocalFile] = useState(false);
   const [fileBusy, setFileBusy] = useState(false);
+  const [openStage, setOpenStage] = useState<OpenSourceStage | null>(null);
   const storageEnabled = isLibrarySourceStorageEnabled();
 
   const load = useCallback(async () => {
@@ -120,17 +147,31 @@ export default function LibrarySourceDetailScreen() {
   const onAttachFile = async () => {
     if (!source || fileBusy) return;
     const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+    logLibraryFileAttach("detail.tsx: picker result", {
+      canceled: result.canceled,
+      assetCount: result.canceled ? 0 : (result.assets?.length ?? 0),
+    });
     if (result.canceled || !result.assets?.length) return;
     const asset = result.assets[0];
+    logLibraryFileAttach("detail.tsx: picker asset", {
+      uriPresent: !!asset.uri,
+      mimeTypePresent: !!asset.mimeType,
+    });
     setFileBusy(true);
     try {
       const scope = await AuthService.getActiveScope();
+      logLibraryFileAttach("detail.tsx: calling attachAndUploadSourceFile");
       const attached = await attachAndUploadSourceFile(scope, source.id, { uri: asset.uri, mimeType: asset.mimeType });
+      logLibraryFileAttach("detail.tsx: attach result", { attached });
       if (!attached) {
         Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
       }
       await load();
-    } catch {
+    } catch (error) {
+      if (__DEV__) {
+        const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        console.warn(`[LibraryFileAttach] detail.tsx: onAttachFile threw — ${detail}`);
+      }
       Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
     } finally {
       setFileBusy(false);
@@ -142,9 +183,15 @@ export default function LibrarySourceDetailScreen() {
     setFileBusy(true);
     try {
       const scope = await AuthService.getActiveScope();
-      await retryUploadSourceFile(scope, source.id);
+      logLibraryFileAttach("detail.tsx: calling retryUploadSourceFile");
+      const retried = await retryUploadSourceFile(scope, source.id);
+      logLibraryFileAttach("detail.tsx: retry result", { retried });
       await load();
-    } catch {
+    } catch (error) {
+      if (__DEV__) {
+        const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        console.warn(`[LibraryFileAttach] detail.tsx: onRetryUpload threw — ${detail}`);
+      }
       Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
     } finally {
       setFileBusy(false);
@@ -165,6 +212,24 @@ export default function LibrarySourceDetailScreen() {
         );
       }
     } finally {
+      setFileBusy(false);
+    }
+  };
+
+  const onOpenOriginal = async () => {
+    if (!source || fileBusy) return;
+    setFileBusy(true);
+    setOpenStage("resolving");
+    try {
+      const outcome = await openSourceOriginal(source, setOpenStage);
+      if (outcome.status === "error") {
+        Alert.alert(t("librarySource.detail.openFailedTitle"), t(openFailedBodyKey(outcome.reason) as any));
+      }
+      // A cloud fallback download may have just made a local copy durable — refresh hasLocalFile
+      // so the rest of this screen (Verify button visibility, future Retry/Open state) reflects it.
+      await load();
+    } finally {
+      setOpenStage(null);
       setFileBusy(false);
     }
   };
@@ -218,6 +283,18 @@ export default function LibrarySourceDetailScreen() {
   const sizeLabel = formatFileSize(source.fileSize);
   const durationLabel = formatAudioDuration(source.audioDuration);
 
+  // IMPORTANT PRODUCT RULE: openability is independent of upload state — a source with a local
+  // copy but cloudUploadState "pending"/"failed" must still be openable on this device. Never
+  // gate this on cloudUploadState === "uploaded" alone (see
+  // docs/library-and-source-architecture.md's "Source open/preview" section).
+  const canOpenOriginal = hasLocalFile || source.cloudUploadState === "uploaded";
+  const openButtonLabel =
+    fileBusy && openStage === "downloading"
+      ? t("librarySource.detail.downloadingOriginal")
+      : fileBusy && openStage
+        ? t("librarySource.detail.preparingSource")
+        : t("librarySource.detail.openOriginalButton");
+
   return (
     <Screen scroll>
       <View style={[styles.header, { gap: spacing.sm }]}>
@@ -264,6 +341,17 @@ export default function LibrarySourceDetailScreen() {
           <Text style={[typography.subheading, { color: colors.textPrimary }]}>
             {t("librarySource.detail.originalFileHeading")}
           </Text>
+
+          {canOpenOriginal ? (
+            <Button
+              label={openButtonLabel}
+              variant="primary"
+              fullWidth
+              loading={fileBusy && !!openStage}
+              disabled={fileBusy && !openStage}
+              onPress={onOpenOriginal}
+            />
+          ) : null}
 
           {!source.cloudUploadState ? (
             <>

@@ -5,7 +5,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
-import { isLibrarySourceStorageEnabled } from "../src/cloud/librarySourceStorage";
+import { isLibrarySourceStorageEnabled, isSourceFileAvailableOnThisDevice } from "../src/cloud/librarySourceStorage";
 import { isLibraryMetadataCloudSyncEnabled } from "../src/cloud/sync/libraryMetadataSyncCapability";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { getEnvironmentConfig } from "../src/config/environment";
@@ -31,9 +31,16 @@ export default function DevToolsScreen() {
     sources: 0,
     collections: 0,
   });
-  const [sourceStorageCounts, setSourceStorageCounts] = useState<{ pending: number; failed: number }>({
+  const [sourceStorageCounts, setSourceStorageCounts] = useState<{
+    pending: number;
+    failed: number;
+    localAvailable: number;
+    cloudOnly: number;
+  }>({
     pending: 0,
     failed: 0,
+    localAvailable: 0,
+    cloudOnly: 0,
   });
 
   useFocusEffect(
@@ -64,9 +71,17 @@ export default function DevToolsScreen() {
           sources: sources.filter((s) => s.dirty).length,
           collections: collections.filter((c) => c.dirty).length,
         });
+        // Local-availability check is per-source and touches the filesystem — bounded by however
+        // many sources exist in this workspace, acceptable for a diagnostics-only screen. Never
+        // surfaces which sources — only aggregate counts.
+        const localFlags = await Promise.all(sources.map((s) => isSourceFileAvailableOnThisDevice(s.id)));
+        if (!alive) return;
+        const localAvailable = localFlags.filter(Boolean).length;
         setSourceStorageCounts({
           pending: sources.filter((s) => s.cloudUploadState === "pending").length,
           failed: sources.filter((s) => s.cloudUploadState === "failed").length,
+          localAvailable,
+          cloudOnly: sources.filter((s, i) => s.cloudUploadState === "uploaded" && !localFlags[i]).length,
         });
       })();
       return () => {
@@ -242,6 +257,10 @@ export default function DevToolsScreen() {
         </Text>
         <Text style={[typography.secondary, { color: colors.textSecondary }]}>
           Pending uploads: {sourceStorageCounts.pending} · Failed uploads: {sourceStorageCounts.failed}
+        </Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+          Local originals on this device: {sourceStorageCounts.localAvailable} · Cloud-only (not
+          local): {sourceStorageCounts.cloudOnly}
         </Text>
       </Card>
 

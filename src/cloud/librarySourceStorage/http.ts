@@ -70,3 +70,8 @@ export async function requestDownloadUrl(accessToken: string, sourceId: string):
 export function isLibrarySourceStorageNetworkError(error: unknown): boolean {
   return error instanceof LibrarySourceStorageNetworkError;
 }
+
+/** The server's numeric HTTP status, if this error came from a non-ok response. Mirrors src/cloud/sync/http.ts's getSyncHttpStatus. */
+export function getLibrarySourceStorageHttpStatus(error: unknown): number | undefined {
+  return error instanceof LibrarySourceStorageHttpError ? error.status : undefined;
+}

@@ -13,10 +13,16 @@ const URL_TTL_SECONDS = 300;
 // Raise only as a deliberate documented change — see docs/library-and-source-architecture.md.
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
-// Matches src/utils/id.ts's makeId() output shape exactly (`<prefix>_<base36>_<base36>`).
-// Anchoring the object-key namespace to a known-safe charset means a source id can never smuggle
-// a path-traversal segment ("../") or an unexpected "/" into an S3 key built from it.
-const SOURCE_ID_PATTERN = /^[a-z0-9_]{1,128}$/;
+// Matches the REAL canonical id shape this app generates — src/models/deck.ts's makeId()
+// (`<base36 timestamp>-<base36 random>`, e.g. "mst3f9k2-8h2p1qte"), which every id-generating call
+// site in the app imports, Library sources included. An earlier version of this pattern
+// (`^[a-z0-9_]{1,128}$`, no hyphen) was based on a different, unused underscore-based id generator
+// and rejected every real Library source id — see docs/library-and-source-architecture.md's
+// "Local file URI rule and local source file durability" for the full incident record. Anchoring
+// the object-key namespace to a known-safe charset (still lowercase alphanumeric and hyphen only)
+// means a source id can never smuggle a path-traversal segment ("../") or an unexpected "/" into
+// an S3 key built from it.
+const SOURCE_ID_PATTERN = /^[a-z0-9-]{1,128}$/;
 
 // Conservative allow-list mirroring src/models/librarySource.ts's SourceType union, minus audio —
 // no audio file-intake UI exists yet (see docs/library-and-source-architecture.md's "Supported

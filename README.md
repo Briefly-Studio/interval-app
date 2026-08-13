@@ -1,3 +1,4 @@
+
 # Interval
 
 Interval is an offline-first mobile study app built with React Native and Expo. It centers on

@@ -30,7 +30,13 @@ async function readMap(scope: WorkspaceScope): Promise<LocalFileMap> {
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
+  } catch (error) {
+    // Malformed/unreadable stored data must never crash the app — but a silent {} here previously
+    // gave no way to tell "no local file was ever recorded" apart from "local storage is broken".
+    if (__DEV__) {
+      const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      console.warn(`[LibraryFileAttach] librarySourceLocalFiles: readMap failed — ${detail}`);
+    }
     return {};
   }
 }

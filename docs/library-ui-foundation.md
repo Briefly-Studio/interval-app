@@ -20,7 +20,7 @@ extracted text, and no AI-generated content on any record this batch creates.
 |---|---|
 | `app/library/index.tsx` | Library main screen — search, sort, filter, organization, list, empty states |
 | `app/library/add.tsx` | Add source details (metadata-only creation) |
-| `app/library/[id]/index.tsx` | Source detail — view metadata, grouped "Source actions" (Edit/Manage collections/Archive-Restore/Delete) |
+| `app/library/[id]/index.tsx` | Source detail — view metadata, grouped "Source actions" (Edit/Manage collections/Archive-Restore/Delete), Development-only Original File card (attach/retry-upload/verify-cloud-access and, per `docs/library-and-source-architecture.md`'s "Source open/preview" section, Open Original) |
 | `app/library/[id]/edit.tsx` | Edit source details (reuses the same field set as Add) |
 | `app/library/[id]/collections.tsx` | Manage collections for one source — checkable multi-select, "+ New collection" |
 | `app/library/collections/index.tsx` | Collection list, with per-collection source counts |

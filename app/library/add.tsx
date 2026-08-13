@@ -13,6 +13,7 @@ import type { LibrarySource } from "../../src/models/librarySource";
 import type { SourceCollectionRecord } from "../../src/models/sourceCollection";
 import { addLibrarySource } from "../../src/storage/librarySources";
 import { getActiveSourceCollections } from "../../src/storage/sourceCollections";
+import { logLibraryFileAttach } from "../../src/utils/libraryFileAttachLog";
 import { useTheme } from "@/src/theme";
 import { Button } from "../../src/ui/Button";
 import { Card } from "../../src/ui/Card";
@@ -52,8 +53,16 @@ export default function AddLibrarySourceScreen() {
 
   const onPickFile = async () => {
     const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+    logLibraryFileAttach("add.tsx: picker result", {
+      canceled: result.canceled,
+      assetCount: result.canceled ? 0 : (result.assets?.length ?? 0),
+    });
     if (result.canceled || !result.assets?.length) return;
     const asset = result.assets[0];
+    logLibraryFileAttach("add.tsx: picker asset", {
+      uriPresent: !!asset.uri,
+      mimeTypePresent: !!asset.mimeType,
+    });
     setPickedFile({ uri: asset.uri, name: asset.name ?? "", mimeType: asset.mimeType, size: asset.size });
     setValues((prev) => ({
       ...prev,
@@ -80,7 +89,9 @@ export default function AddLibrarySourceScreen() {
       };
       const scope = await AuthService.getActiveScope();
       await addLibrarySource(scope, source);
+      logLibraryFileAttach("add.tsx: source metadata saved");
       if (storageEnabled && pickedFile) {
+        logLibraryFileAttach("add.tsx: calling attachAndUploadSourceFile");
         // Awaited here: this only copies the file into Interval's own durable local directory
         // (fast, local disk, no network) — never the network upload attempt itself, which
         // attachAndUploadSourceFile still runs in the background without blocking on it. This
@@ -91,15 +102,20 @@ export default function AddLibrarySourceScreen() {
           uri: pickedFile.uri,
           mimeType: pickedFile.mimeType,
         });
+        logLibraryFileAttach("add.tsx: attach result", { attached });
         if (!attached) {
           Alert.alert(t("librarySource.form.attachFailedTitle"), t("librarySource.form.attachFailedBody"));
         }
       }
       router.back();
-    } catch {
+    } catch (error) {
       // Never log title/tags/course/semester — only a diagnostic tag. Values stay in the form so
       // the user doesn't have to retype anything after a failed save.
       console.error("[library-add] failed to save source details");
+      if (__DEV__) {
+        const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        console.warn(`[LibraryFileAttach] add.tsx: onSave threw — ${detail}`);
+      }
       Alert.alert(t("librarySource.form.saveFailedTitle"), t("librarySource.form.saveFailedBody"));
     } finally {
       setSubmitting(false);
