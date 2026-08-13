@@ -28,6 +28,16 @@ Staging/Beta is the same environment as Development's counterpart for *external 
 validation before Production — it is not a fourth environment, and it is not an internal detail
 of Development.
 
+**New since that milestone closed, not yet deployed:** the Library Organization + Private Source
+Storage batch added a Development-only S3 bucket, dedicated IAM role, Lambda, and two API routes
+for private original-source-file storage — defined in `infra/lib/interval-sync-stack.ts`, confirmed
+by `cdk synth`/`cdk diff` to be additive-only for Development and completely absent from Staging's
+synthesized template, but **not yet deployed to either environment**. See "Library source storage"
+below for the full design and "Development resource names" above for the exact new resource
+names. `IntervalDevelopmentStack` will show a real, non-empty diff the next time
+`cdk diff IntervalDevelopmentStack` is run against the live account — that is expected and is
+exactly this new, undeployed addition, not drift.
+
 ## Architecture
 
 `infra/` is a self-contained CDK v2 TypeScript project, isolated from the React Native
@@ -67,8 +77,10 @@ automatically from CloudShell's own authenticated session; nothing here needs to
 
 ## Development resource names
 
-Exactly eight application resources, per `docs/environment-separation-plan.md` §4's naming
-standard:
+Eight original sync-path application resources, per `docs/environment-separation-plan.md` §4's
+naming standard, plus three Library-source-storage resources added by the Library Organization +
+Private Source Storage batch (see "Library source storage" below) — **defined in this repository,
+not yet deployed**:
 
 | Resource | Name |
 |---|---|
@@ -79,9 +91,62 @@ standard:
 | DynamoDB (changes) | `interval-dev-changes` |
 | Cognito user pool | `interval-dev-user-pool` |
 | Cognito app client | `interval-dev-mobile` |
-| IAM role (shared, both Lambdas) | `interval-dev-sync-lambda-role` |
+| IAM role (shared, both sync Lambdas) | `interval-dev-sync-lambda-role` |
+| Lambda (library source storage) | `interval-dev-library-source-storage` — **not yet deployed** |
+| IAM role (library source storage only) | `interval-dev-library-source-storage-role` — **not yet deployed** |
+| S3 bucket (library source originals) | CloudFormation-auto-generated, no fixed name — see "Library source storage" below — **not yet deployed** |
 
 CloudFormation stack name: **`IntervalDevelopmentStack`**.
+
+## Library source storage
+
+Added to `infra/lib/interval-sync-stack.ts` by the Library Organization + Private Source Storage
+batch — see `docs/library-and-source-architecture.md`'s "Private source storage architecture" for
+the full design record (object-key ownership, IAM reasoning, upload state machine, delete
+behavior). **Repository-defined, not yet deployed** — `cdk synth`/`cdk diff` confirm the shape
+below; no `cdk deploy` has run for this batch (see this document's own CloudShell procedure for
+what the founder runs next).
+
+**Development-only, by construction.** All three resources — the S3 bucket, its dedicated IAM
+role, and the storage Lambda plus its two API routes — are defined inside a single
+`if (environmentName === "development")` block inside `IntervalSyncStack`'s constructor, the same
+per-environment conditional idiom already used for `cognitoDeletionProtectionEnabled`. There is no
+separate stack class for this — `IntervalStagingStack` instantiates the exact same
+`IntervalSyncStack` construct, so the conditional is what keeps Staging from getting any of it.
+**Verified, not assumed:** `npx cdk synth IntervalStagingStack` contains zero references to any
+`LibrarySource*` logical ID — see "Local validation" below for the exact command run.
+
+- **S3 bucket** — deliberately has **no explicit `bucketName`** (unlike every other named
+  resource in this project). S3 bucket names are unique across every AWS account on the entire
+  platform, not just this one — a deterministic `interval-dev-library-sources`-style name could
+  collide with an unrelated bucket some other AWS customer already owns and fail to deploy.
+  CloudFormation's auto-generated name avoids that risk entirely; the real name is available after
+  deployment via the stack's `LibrarySourceBucketName` output.
+  - `BlockPublicAccess.BLOCK_ALL` (all four sub-settings true), `ObjectOwnership.BUCKET_OWNER_ENFORCED`
+    (ACLs disabled entirely), `BucketEncryption.S3_MANAGED` (SSE-S3/AES256 — the AWS-managed
+    default; no concrete reason for a customer-managed KMS key exists for this batch), `enforceSSL:
+    true` (CDK auto-adds a bucket policy denying any non-TLS request). Not a static website, not
+    fronted by any CloudFront distribution.
+  - `removalPolicy: DESTROY` + `autoDeleteObjects: true` — Development is a disposable engineering
+    environment by design (same reasoning as `REMOVAL_POLICY_FOR.development` above); original
+    files uploaded here during Development testing are exactly as disposable as the Development
+    DynamoDB tables/Cognito pool already are. This is a Development-only choice — a future
+    Staging/Production source-storage rollout would need its own explicit `RETAIN` decision,
+    exactly like Staging's DynamoDB tables/Cognito pool already have.
+- **IAM role** (`interval-dev-library-source-storage-role`) — dedicated to this one Lambda, never
+  shared with `SyncLambdaRole`. Only permissions beyond standard Lambda logging:
+  `s3:PutObject`/`s3:GetObject`, scoped to `<bucket-arn>/users/*/sources/*/original` — never a
+  bucket-wide or account-wide `Resource: "*"`. No `s3:DeleteObject` (this batch never deletes cloud
+  originals), no `s3:ListBucket` (never lists keys).
+- **Lambda** (`interval-dev-library-source-storage`) — packages
+  `backend/lambdas/library-source-storage/index.mjs` directly via `lambda.Code.fromAsset(...)`,
+  same convention as the two sync Lambdas; same `nodejs24.x` runtime, ARM64 architecture. Receives
+  the bucket name via a `LIBRARY_SOURCE_BUCKET` environment variable set from the bucket's own
+  synthesized name — never hardcoded.
+- **API routes** — `POST /library/sources/{sourceId}/upload-url` and
+  `POST /library/sources/{sourceId}/download-url`, added to the same `HttpApi` as `/sync/push`/
+  `/sync/pull`, behind the identical Cognito JWT authorizer. No unauthenticated route exists for
+  either.
 
 ## Staging resource names
 
@@ -283,17 +348,21 @@ Everything in "Development resource names" and "Staging resource names" above, a
 plus the minimal CloudFormation/CDK support constructs each stack needs to wire its own resources
 together (the JWT authorizer, Lambda invoke permissions for API Gateway, the IAM policy attached
 to the shared role, the API's default stage, and CDK's own bootstrap-version metadata resource).
-Verified directly against both synthesized templates — see "Local validation" below.
+Verified directly against both synthesized templates — see "Local validation" below. This now
+includes the Development-only S3 bucket/Lambda/IAM role/routes described in "Library source
+storage" above — repository-defined, not yet deployed.
 
 ## What CDK does not manage
 
 - **Production.** Not imported, not referenced, not modeled as a stack. Continues to be managed
   exactly as it is today, outside IaC, until a separate, explicit, founder-approved decision
   changes that.
-- Anything outside the 16 named resources across both stacks: no S3, no AI/transcription
-  infrastructure, no Canvas integration, no notification infrastructure, no hosted-sharing
-  infrastructure. All explicitly out of scope for this mission and not present anywhere in
-  `infra/`.
+- **S3 in Staging or Production.** The Library source storage bucket described above exists only
+  inside Development's `if (environmentName === "development")` block — Staging and Production get
+  none of it, verified by synth (see "Local validation").
+- Anything else outside the resources named above: no AI/transcription infrastructure, no Canvas
+  integration, no notification infrastructure, no hosted-sharing infrastructure. All explicitly
+  out of scope and not present anywhere in `infra/`.
 
 ## No permanent local AWS credentials required
 

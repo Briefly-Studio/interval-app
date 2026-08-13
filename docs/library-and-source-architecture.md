@@ -18,15 +18,21 @@ launch against the current single, unseparated backend environment.
 Added by the Library Local UI Foundation batch — see `docs/library-ui-foundation.md` for full
 detail (routes, data model, storage keys, accessibility, known limitations, founder QA checklist).
 
-**Implemented now (local-only):**
+**Implemented now (local-only, every environment and guests):**
 
 - Local Library source metadata model and local collections
 - Library navigation (a dedicated route reachable from Home and Settings — no tab bar)
 - Local search, sort, and composable filtering
-- Metadata-only source creation and editing (no file picker, no binary of any kind)
+- Metadata-only source creation and editing
 - Source detail, archive, restore, and soft-delete/restore lifecycle
 - Collection create/rename/delete (deleting a collection never deletes its sources)
 - Accessibility and English/Spanish localization for all of the above
+- **Root Library organization rule** (Library Organization + Private Source Storage batch): the
+  root Library screen shows only sources with zero *active* collection memberships ("unfiled") —
+  a filed source lives only in its collection's own detail view, never duplicated on root. See
+  "Root Library rule" below for the full behavior. Unlike everything else in this bullet list, this
+  is a pure local UI/organization change with no environment gating — every build and every guest
+  sees it identically.
 
 **Implemented now, Development-only (metadata cloud sync):**
 
@@ -38,22 +44,248 @@ detail (routes, data model, storage keys, accessibility, known limitations, foun
   local-only Library behavior. **Founder-QA verified end-to-end in Development** (physical iPhone
   via Expo Go + iOS Simulator) — see that contract doc's status note for the full verified
   checklist.
-- Still explicitly not covered by this: source binaries/content (never synced, no field exists for
-  it), guest-to-account adoption, and anything below.
+- As of the Library Organization + Private Source Storage batch, this also carries two new durable
+  fields per source (`cloudUploadState`, `cloudUploadedAt` — see "Private source storage" below) —
+  still metadata only, still no binary/file content in the synced record itself.
+
+**Implemented now, Development-only (private original-source storage — repository-only, not yet
+deployed):**
+
+- A user can attach an original file to a Library source and have it uploaded to a private,
+  per-user S3 location, gated to `INTERVAL_ENV === "development"` via its own separate capability
+  check (`src/cloud/librarySourceStorage/capability.ts`) — see "Private source storage
+  architecture" below for the full design. **This is repository implementation only** — no AWS
+  resource has been deployed for this yet; see `docs/cdk-infrastructure.md`'s "Library source
+  storage" section for exact deployment status.
+- Explicitly NOT implemented by this: extraction, parsing, OCR, transcription, or any AI
+  processing of the uploaded bytes — this batch stops at secure storage and on-demand,
+  authenticated availability.
 
 **Not implemented (still future work, per this document's other sections):**
 
-- Actual file/audio intake (no upload, no file picker)
-- Cloud Library records with binary/file content, or authenticated source ownership beyond
-  metadata
+- File intake, extraction, or processing outside a Development build (Staging/Production source
+  storage remains unimplemented and undeployed by design — see "Environment boundary" below)
+- Cloud Library records with authenticated source ownership beyond what's described above
 - Guest-to-account source adoption (§18)
 - Library metadata sync in Staging or Production (Development-only for now)
-- Extraction, OCR, or transcription
+- Extraction, OCR, or transcription of any uploaded original file
 - AI generation of any kind
 - Canvas integration
 - Notifications
 - Hosted/in-platform sharing (§5)
 - Environment separation (§15 Phase 3)
+- Automatic cleanup of orphaned cloud source objects (see "Delete behavior" below)
+
+## Root Library rule
+
+The root Library screen (`app/library/index.tsx`) and Collection Detail
+(`app/library/collections/[id].tsx`) together implement one organizational model, mirroring the
+Deck Collections precedent (`docs/deck-collections.md`, `src/domain/deckCollectionMembership.ts`'s
+`getUnfiledDecks`):
+
+- **Root Library = active sources with zero *active* collection memberships ("unfiled").**
+  Computed by `src/domain/libraryOrganize.ts`'s `getUnfiledLibrarySources`, intersecting a
+  source's `collectionIds` against the currently-active collection set (not just checking for an
+  empty array) — defense in depth against a stale id, even though
+  `unassignCollectionFromAllSources` already reconciles this synchronously on collection deletion.
+- **Collection Detail = sources belonging to that one collection**, via the existing
+  `collectionIds.includes(id)` filter — unchanged by this batch.
+- A source in two or more active collections is filed (hidden from root) and appears in every
+  applicable collection's own detail view. The canonical record is never duplicated — this is
+  presentation-layer filtering over the same `collectionIds` array that has always been the single
+  source of truth, exactly as the mission that introduced this rule required.
+- Removing a source from its last collection, or deleting its last remaining collection
+  (`softDeleteSourceCollection` → `unassignCollectionFromAllSources`), makes it unfiled again —
+  it reappears on root automatically, with no extra code needed, because root re-derives its list
+  live from `collectionIds` on every load.
+- **Deliberately does NOT apply to Archived or Recently Deleted.** Collection Detail only ever
+  queries `getActiveLibrarySources` — an archived-and-filed source has no other screen it would
+  remain reachable from if the unfiled rule applied to Archived too, so Archived keeps showing
+  every archived source regardless of collection membership. Recently Deleted was already
+  independent of collection membership and needed no change.
+- **Search/sort/filter scope**: root's search/sort/filter pipeline runs over the root/unfiled set
+  only, for the Active view — this is the narrowest reading of a previously-ambiguous contract
+  (there was no existing "global cross-collection search" requirement to preserve). The
+  now-redundant "filter by collection" chip was removed from the root screen's filter panel: once
+  root only shows unfiled sources, filtering root by any specific collection would always yield
+  zero results by definition. Browsing a specific collection's sources remains Collection Detail's
+  job, unchanged.
+- A new empty state (`library.allFiledTitle`/`allFiledDescription`) distinguishes "you have zero
+  active sources at all" from "every active source is filed into a collection" — reusing the old
+  "No active sources" copy for the all-filed case would have been actively misleading.
+
+## Private source storage architecture
+
+Implemented by the Library Organization + Private Source Storage batch, Development-only (see
+"Environment boundary" below). Selected architecture:
+
+```
+authenticated mobile app
+  → JWT-protected HTTP API route (POST /library/sources/{sourceId}/upload-url or /download-url)
+  → dedicated library-source-storage Lambda (backend/lambdas/library-source-storage/index.mjs)
+  → short-lived presigned S3 PutObject/GetObject URL
+  → private S3 bucket (Development only)
+```
+
+This matches the architecture this document originally anticipated in §12/§11, confirmed rather
+than assumed: metadata-only records already flow through the existing sync engine, and original
+file bytes get their own dedicated authenticated presigned-URL path, entirely separate from
+`/sync/push`/`/sync/pull`.
+
+### Object-key ownership
+
+`users/<Cognito sub>/sources/<sourceId>/original` — both segments are server-derived, never
+client-supplied: `sub` comes only from the trusted JWT authorizer claims (same rule as every other
+backend Lambda — see `CLAUDE.md`'s "Never accept the user ID from the request body or query
+parameters"), and `sourceId` is taken from the URL path and validated server-side against
+`^[a-z0-9_]{1,128}$` (matching `src/utils/id.ts`'s `makeId()` output shape exactly) before it is
+ever concatenated into a key — this is what prevents a path-traversal or cross-namespace key from
+ever being constructed. A client can only ever request a URL scoped to its own `users/<its own
+sub>/...` prefix; there is no request parameter that names a bucket path directly.
+
+### IAM
+
+`LibrarySourceStorageRole` (`infra/lib/interval-sync-stack.ts`) is a dedicated role, separate from
+the existing sync Lambdas' shared `SyncLambdaRole` — the sync Lambdas remain responsible for
+sync only. Its only non-logging permission is `s3:PutObject`/`s3:GetObject`, scoped to
+`<bucket-arn>/users/*/sources/*/original` — never a bucket-wide or account-wide `Resource: "*"`.
+No `s3:DeleteObject`, no `s3:ListBucket` (this Lambda never deletes or lists objects — see "Delete
+behavior" below). This Lambda has no DynamoDB permissions at all and never touches
+`Interval_Records`/`Interval_Changes` — cloud object existence is derived structurally (from the
+JWT sub + path sourceId), not looked up in a table.
+
+### Size/type validation
+
+Server-side, in `backend/lambdas/library-source-storage/index.mjs`, before a presigned upload URL
+is ever issued:
+
+- `mimeType` must be one of a conservative allow-list mirroring `SourceType` (pdf, docx/doc, plain
+  text, jpeg/png/heic images, pptx, xlsx) — **audio is deliberately excluded**, since no audio
+  file-intake UI exists anywhere in the app yet (source type selection is a manual dropdown,
+  independent of any real audio file); there is nothing to justify accepting an audio upload in
+  this batch.
+- `fileSize` (client-declared) must be a positive number no greater than 25 MB (`MAX_UPLOAD_BYTES`
+  in that file) — a deliberately conservative Development limit, not derived from any hard
+  platform constraint. Raise only as a deliberate, documented change.
+- **Documented enforcement boundary**: `ContentType` is a signed parameter on the presigned PUT, so
+  S3 itself rejects an upload whose `Content-Type` header doesn't match what was authorized — real
+  enforcement, not just a client-side check. `fileSize`/content-length is **not** enforced the same
+  way: a presigned PUT (unlike a presigned POST policy's `content-length-range` condition) cannot
+  bind an exact byte-range constraint, so the size check above only gates whether a URL is issued
+  at all, never what actually gets uploaded through it. This is a known, accepted, documented
+  limitation for this batch, not a silent gap — a future hardening pass could move to presigned
+  POST with a signed `content-length-range` policy condition if stronger enforcement is needed.
+
+### Upload lifecycle / state machine
+
+`LibrarySourceRecord` gained exactly two new durable, synced fields (see
+`src/models/librarySource.ts`) — chosen to be the smallest schema supporting "local source
+exists / upload pending / cloud source available / upload failure+retry / another device knows a
+cloud original exists":
+
+- `cloudUploadState?: "pending" | "uploaded" | "failed"` — absent/undefined means "no upload ever
+  attempted from any device" (the default for every source, including every one that predates this
+  field). Deliberately a single field shared across devices rather than splitting "pending" into
+  local-only state: a `"pending"`/`"failed"` value on a device that never attempted the upload is
+  harmless, informational context, not something that device needs to act on — only `"uploaded"`
+  is cross-device-actionable (see `verifyCloudSourceAccessible`).
+- `cloudUploadedAt?: string` — set only on a successful transition to `"uploaded"`, mirroring
+  `lastSyncedAt`'s shape/purpose but marking the cloud-availability event specifically.
+- **Deliberately not added**: a content hash or dedup field — not required to satisfy any of the
+  five states above; would be speculative "might be useful someday" scope, which this batch's own
+  instructions explicitly rule out.
+- Both fields sync through the **existing, already-implemented** Library metadata cloud sync path
+  (`docs/library-cloud-sync-contract.md`) — no separate sync mechanism was built for them.
+
+State transitions, all in `src/cloud/librarySourceStorage/index.ts`:
+
+1. `attachAndUploadSourceFile` — first copies the picked file into Interval's own **durable**
+   app-owned directory (`src/storage/librarySourceFileStorage.ts`; see "Local file URI rule and
+   local source file durability" below for why this step exists and what it replaced). If that
+   copy fails, returns `false` and leaves `cloudUploadState` untouched — never reports "pending"
+   for a file that isn't actually durably available. Only once the durable copy is confirmed does
+   it record that durable URI in the **local-only** store, set `cloudUploadState: "pending"`, and
+   attempt an immediate upload.
+2. On success: `"uploaded"` + `cloudUploadedAt` set.
+3. On a real server/S3 rejection: `"failed"`.
+4. On a network failure (couldn't reach the server at all — see
+   `src/cloud/librarySourceStorage/http.ts`'s network/HTTP error split, mirroring
+   `src/cloud/sync/http.ts`'s existing convention): left as `"pending"`, never `"failed"` — this is
+   what keeps ordinary offline usage from ever being misreported as a rejection.
+5. `retryUploadSourceFile` — re-attempts using whatever local file bytes this device still has
+   durably cached; returns `false` without changing any state if this device never picked a file
+   for this source (only the originating device can (re)upload from local bytes).
+
+### Local file URI rule and local source file durability
+
+Never added to `LibrarySourceRecord` or any synced type. A device-local file URI is kept
+exclusively in `src/storage/librarySourceLocalFiles.ts` — a completely separate AsyncStorage key,
+untouched by `getLibrarySources`/`setLibrarySources` and by every `src/cloud/sync/**` code path.
+This is a structural guarantee, not just a convention: since `SyncService.ts`'s `collectDirty`
+pushes a record's entire field set verbatim, adding a local URI field to `LibrarySourceRecord`
+itself would have leaked it into every push regardless of intent — keeping it in a separate model
+makes that impossible by construction.
+
+**Durability audit finding (post-implementation review):** the *value* stored in that local-only
+map was, in the first version of this batch, the raw URI `DocumentPicker.getDocumentAsync`
+returns with `copyToCacheDirectory: true` — a copy inside `FileSystem.cacheDirectory`. That is not
+durable: both iOS and Android explicitly reserve the right to purge an app's cache directory at
+any time while the app isn't running, especially under storage pressure — exactly the scenario an
+offline `pending` upload sitting for hours or days is meant to survive. A file evicted from cache
+before the next successful upload attempt would have been unrecoverable, silently defeating the
+"local source remains usable, upload may happen later" contract this feature exists to provide.
+
+**Fix:** `src/storage/librarySourceFileStorage.ts` copies the picked file, once, at attach time,
+into an Interval-owned subdirectory of `FileSystem.documentDirectory` (`librarySourceFiles/`) —
+not purged by the OS the way Caches is. The destination path is deterministic and extension-less
+(`<documentDirectory>/librarySourceFiles/<sourceId>`, sourceId validated against the same
+`^[a-z0-9_]{1,128}$` pattern used server-side), so repeated attach/retry always overwrites the
+same file rather than accumulating duplicate copies, and a source id can never smuggle a
+path-traversal segment into the destination path. `attachAndUploadSourceFile` now performs this
+copy *before* ever recording `cloudUploadState: "pending"` — if the durable copy cannot be made,
+it returns `false` and leaves `cloudUploadState` untouched (never a false "pending"), and the
+calling screen surfaces this to the user without touching the already-created metadata record.
+`src/storage/librarySourceLocalFiles.ts` now stores this durable `documentDirectory`-based URI,
+never the original cache-directory URI the picker returned. The original DocumentPicker cache copy
+itself is never deleted by this code — only ever read from, once, to make the durable copy.
+
+**Missing-file detection:** `isSourceFileAvailableOnThisDevice(sourceId)` checks real on-disk
+presence at the durable path (not merely whether a local-map entry exists) and is what Source
+Detail uses to decide whether Retry can work. If a previously-persisted copy has since disappeared
+by some other means, retry correctly reports `cloudUploadState: "failed"` (via the existing
+`FileSystem.getInfoAsync` check inside `attemptUpload`) rather than hanging or fabricating an
+uploaded state, and Source Detail offers "Attach file" again as the recovery path — re-picking the
+original re-establishes a fresh durable copy under the same idempotent scheme.
+
+### Download / cross-device availability
+
+`verifyCloudSourceAccessible(sourceId)` requests a short-lived (5-minute) presigned GET URL and
+reports only whether the request succeeded — it never downloads the file, never persists the URL,
+and is never called automatically (only from an explicit Source Detail button, only shown when
+this device has no local copy). This satisfies "another device can determine a cloud original
+exists" without building a document viewer or auto-downloading every source onto every device.
+
+### Delete behavior
+
+Soft-deleting or restoring a `LibrarySourceRecord` never touches the underlying S3 object — the
+`library-source-storage` Lambda has no `s3:DeleteObject` permission at all, so this is enforced
+structurally, not just by convention. A metadata tombstone leaves the cloud original in place;
+orphaned-object cleanup (for a source that stays deleted permanently) is explicitly deferred future
+lifecycle work, not an aggressive garbage collector built into this batch. Collections never own
+file objects either way — deleting a collection only ever unassigns membership
+(`unassignCollectionFromAllSources`), never touches any source's cloud original.
+
+### Environment boundary
+
+Gated independently from Library metadata sync, via its own capability function
+(`src/cloud/librarySourceStorage/capability.ts`'s `isLibrarySourceStorageEnabled`), currently also
+resolving to `development`-only but deliberately a *separate* allow-list from
+`libraryMetadataSyncCapability.ts` — metadata sync and source storage are independent capabilities
+that could be enabled for Staging/Production on different schedules. The Development-only S3
+bucket, IAM role, Lambda, and both API routes are defined inside a single
+`if (environmentName === "development")` block in `infra/lib/interval-sync-stack.ts` — see
+`docs/cdk-infrastructure.md`'s "Library source storage" section for the full resource list and the
+confirmation that `IntervalStagingStack`'s synthesized template contains none of it.
 
 ## 1. What the Library is
 

@@ -1,8 +1,16 @@
+import * as DocumentPicker from "expo-document-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
+import {
+  attachAndUploadSourceFile,
+  isLibrarySourceStorageEnabled,
+  isSourceFileAvailableOnThisDevice,
+  retryUploadSourceFile,
+  verifyCloudSourceAccessible,
+} from "../../../src/cloud/librarySourceStorage";
 import { formatAudioDuration, formatFileSize } from "../../../src/domain/librarySourceFormat";
 import { SOURCE_TYPE_LABEL_KEYS, STATUS_LABEL_KEYS } from "../../../src/domain/librarySourceLabels";
 import { useTranslation } from "../../../src/i18n";
@@ -39,13 +47,24 @@ export default function LibrarySourceDetailScreen() {
   const [collections, setCollections] = useState<SourceCollectionRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [mutating, setMutating] = useState(false);
+  const [hasLocalFile, setHasLocalFile] = useState(false);
+  const [fileBusy, setFileBusy] = useState(false);
+  const storageEnabled = isLibrarySourceStorageEnabled();
 
   const load = useCallback(async () => {
     if (!id) return;
     const scope = await AuthService.getActiveScope();
-    const [all, cols] = await Promise.all([getLibrarySources(scope), getActiveSourceCollections(scope)]);
+    // hasLocalFile reflects real on-disk presence of Interval's own durable copy (see
+    // src/storage/librarySourceFileStorage.ts), not merely a record in the local file map — this
+    // is what lets Retry/Attach correctly detect a persisted copy that has since disappeared.
+    const [all, cols, hasFile] = await Promise.all([
+      getLibrarySources(scope),
+      getActiveSourceCollections(scope),
+      isSourceFileAvailableOnThisDevice(id),
+    ]);
     setSource(all.find((s) => s.id === id) ?? null);
     setCollections(cols);
+    setHasLocalFile(hasFile);
     setLoaded(true);
   }, [id]);
 
@@ -95,6 +114,58 @@ export default function LibrarySourceDetailScreen() {
       Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
     } finally {
       setMutating(false);
+    }
+  };
+
+  const onAttachFile = async () => {
+    if (!source || fileBusy) return;
+    const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    setFileBusy(true);
+    try {
+      const scope = await AuthService.getActiveScope();
+      const attached = await attachAndUploadSourceFile(scope, source.id, { uri: asset.uri, mimeType: asset.mimeType });
+      if (!attached) {
+        Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
+      }
+      await load();
+    } catch {
+      Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
+    } finally {
+      setFileBusy(false);
+    }
+  };
+
+  const onRetryUpload = async () => {
+    if (!source || fileBusy) return;
+    setFileBusy(true);
+    try {
+      const scope = await AuthService.getActiveScope();
+      await retryUploadSourceFile(scope, source.id);
+      await load();
+    } catch {
+      Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
+    } finally {
+      setFileBusy(false);
+    }
+  };
+
+  const onVerifyCloudAccess = async () => {
+    if (!source || fileBusy) return;
+    setFileBusy(true);
+    try {
+      const ok = await verifyCloudSourceAccessible(source.id);
+      if (ok) {
+        Alert.alert(t("librarySource.detail.originalFileVerifiedTitle"), t("librarySource.detail.originalFileVerifiedBody"));
+      } else {
+        Alert.alert(
+          t("librarySource.detail.originalFileVerifyFailedTitle"),
+          t("librarySource.detail.originalFileVerifyFailedBody")
+        );
+      }
+    } finally {
+      setFileBusy(false);
     }
   };
 
@@ -184,7 +255,85 @@ export default function LibrarySourceDetailScreen() {
         {durationLabel ? <DetailRow label={t("librarySource.detail.durationLabel")} value={durationLabel} /> : null}
       </Card>
 
-      <Text style={[typography.caption, { color: colors.textSecondary }]}>{t("librarySource.detail.localOnlyNote")}</Text>
+      {!source.cloudUploadState ? (
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>{t("librarySource.detail.localOnlyNote")}</Text>
+      ) : null}
+
+      {storageEnabled ? (
+        <Card style={[styles.detailCard, { gap: spacing.sm }]}>
+          <Text style={[typography.subheading, { color: colors.textPrimary }]}>
+            {t("librarySource.detail.originalFileHeading")}
+          </Text>
+
+          {!source.cloudUploadState ? (
+            <>
+              <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+                {t("librarySource.detail.originalFileNotAttached")}
+              </Text>
+              <Button
+                label={t("librarySource.detail.originalFileAttachButton")}
+                variant="secondary"
+                fullWidth
+                loading={fileBusy}
+                onPress={onAttachFile}
+              />
+            </>
+          ) : null}
+
+          {source.cloudUploadState === "pending" ? (
+            <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+              {t("librarySource.detail.originalFilePending")}
+            </Text>
+          ) : null}
+
+          {source.cloudUploadState === "uploaded" ? (
+            <>
+              <Text style={[typography.secondary, { color: colors.success }]}>
+                {t("librarySource.detail.originalFileUploaded")}
+              </Text>
+              {!hasLocalFile ? (
+                <Button
+                  label={t("librarySource.detail.originalFileVerifyButton")}
+                  variant="secondary"
+                  fullWidth
+                  loading={fileBusy}
+                  onPress={onVerifyCloudAccess}
+                />
+              ) : null}
+            </>
+          ) : null}
+
+          {source.cloudUploadState === "failed" ? (
+            <>
+              <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+                {t("librarySource.detail.originalFileFailed")}
+              </Text>
+              {hasLocalFile ? (
+                <Button
+                  label={t("librarySource.detail.originalFileRetryButton")}
+                  variant="secondary"
+                  fullWidth
+                  loading={fileBusy}
+                  onPress={onRetryUpload}
+                />
+              ) : (
+                <>
+                  <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                    {t("librarySource.detail.originalFileUnavailableOnDevice")}
+                  </Text>
+                  <Button
+                    label={t("librarySource.detail.originalFileAttachButton")}
+                    variant="secondary"
+                    fullWidth
+                    loading={fileBusy}
+                    onPress={onAttachFile}
+                  />
+                </>
+              )}
+            </>
+          ) : null}
+        </Card>
+      ) : null}
 
       <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("librarySource.detail.actionsHeading")}</Text>
       <View style={[styles.actions, { gap: spacing.sm }]}>

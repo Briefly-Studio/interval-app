@@ -156,12 +156,45 @@ via the platform-safe wrapper at `src/storage/secureStore.ts` — SecureStore ha
 implementation, so on web every call through that wrapper resolves to a safe no-op rather than
 throwing. See `docs/platform-scope.md`.
 
-### Library (local metadata foundation only)
+### Library (local metadata foundation, plus Development-only private source storage)
 
-`app/library/**` implements a **local-only** Library UI foundation — see
-`docs/library-ui-foundation.md` for full detail and `docs/library-and-source-architecture.md`'s
-"Implementation status" section for what is and is not implemented. Guardrails when touching this
-area:
+`app/library/**` implements a Library UI foundation — local-only metadata for every guest/Staging/
+Production build, with Development-only cloud metadata sync and Development-only private original-
+file storage layered on top. See `docs/library-ui-foundation.md`,
+`docs/library-and-source-architecture.md`'s "Implementation status" section, and
+`docs/cdk-infrastructure.md`'s "Library source storage" section for what is and is not implemented
+and deployed. Guardrails when touching this area:
+
+- **Root Library organization rule** (local-only, every environment/guest — no gating): the root
+  Library screen shows only sources with zero *active* collection memberships ("unfiled"); a filed
+  source lives only inside its collection's own detail view
+  (`app/library/collections/[id].tsx`), never duplicated on root. Computed by
+  `src/domain/libraryOrganize.ts`'s `getUnfiledLibrarySources` — never re-introduce a "filter by
+  collection" chip on the root screen (it was deliberately removed: once root is unfiled-only, that
+  filter would always show zero results). This rule must never apply to Archived or Recently
+  Deleted — Collection Detail only ever queries active sources, so an archived-and-filed source
+  would become unreachable from anywhere if Archived also hid filed sources. See
+  `docs/library-and-source-architecture.md`'s "Root Library rule" before changing this.
+- **Private source storage (`src/cloud/librarySourceStorage/**`, Development-only)**: gated by its
+  own separate capability check, `isLibrarySourceStorageEnabled()`
+  (`src/cloud/librarySourceStorage/capability.ts`) — deliberately NOT the same gate as
+  `isLibraryMetadataCloudSyncEnabled()`, since metadata sync and file storage are independent
+  capabilities that may roll out to Staging/Production on different schedules. Do not merge these
+  two gates. A device-local file URI must NEVER be added to `LibrarySourceRecord` or any other
+  synced type — it lives only in `src/storage/librarySourceLocalFiles.ts`, a completely separate,
+  unsynced storage key; see that file's header comment before changing this. That URI must always
+  point into Interval's own durable `documentDirectory`-backed copy
+  (`src/storage/librarySourceFileStorage.ts`), never the raw `DocumentPicker`
+  `copyToCacheDirectory` URI directly — the OS is free to purge its cache directory at any time
+  while the app isn't running, which is not durable enough for a `pending` upload that may sit for
+  hours or days; see that file's header comment before changing the persistence directory or key
+  scheme. The backend Lambda
+  (`backend/lambdas/library-source-storage/index.mjs`) and its dedicated IAM role
+  (`infra/lib/interval-sync-stack.ts`) must never be granted `s3:DeleteObject` — this batch never
+  deletes a cloud original on metadata tombstone, by design (see
+  `docs/library-and-source-architecture.md`'s "Delete behavior"). See that same doc's "Private
+  source storage architecture" section before changing object-key derivation, IAM scope, or the
+  upload state machine.
 
 - `LibrarySourceRecord` (`src/models/librarySource.ts`) is metadata only. Never add a field that
   could hold a file URI, binary content, extracted text, or AI-generated content without an
@@ -321,9 +354,11 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   not been verified end-to-end (see "Current Backend Task Status").
 - Future environment-specific values (table names, pool IDs, bucket names) come from configuration
   injected per environment, never from a code fork or an environment-specific branch of logic.
-- Library (`app/library/**`) remains local metadata only until a secure-upload phase is explicitly
-  authorized by the founder — see `docs/library-and-source-architecture.md` and the "Library
-  (local metadata foundation only)" section above.
+- Library (`app/library/**`) private source-file storage is repository-implemented and
+  Development-only (see "Library" guardrails above and `docs/library-and-source-architecture.md`'s
+  "Private source storage architecture") — Staging and Production remain local metadata only.
+  Widening source storage or metadata sync beyond Development requires explicit founder approval,
+  every time, same as any other environment-boundary change in this file.
 
 ## Current Known Technical Debt
 
@@ -356,14 +391,19 @@ grandfathering"). None of this blocked closing out the three-environment milesto
 - `expo-doctor` reports a known, accepted 17/18 due to 8 packages sitting one SDK patch version
   behind — tracked, not a regression each time it's re-confirmed.
 - Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.
-- Library metadata (sources and collections) is local-only per device, even for a signed-in
-  account — the same account sees different Library contents on different devices. Diagnosed and
-  documented (`docs/library-cross-device-diagnosis.md`, `docs/library-cloud-sync-contract.md`),
-  not fixed — fixing it requires cloud sync work this repository has not built or approved yet.
+- Library metadata (sources and collections) cross-device sync is implemented and founder-QA
+  verified, but **Development-only** — a Staging or Production build (and every guest) still sees
+  local-only Library metadata, the same account showing different Library contents on different
+  devices, exactly as originally diagnosed (`docs/library-cross-device-diagnosis.md`,
+  `docs/library-cloud-sync-contract.md`). Widening past Development requires explicit founder
+  approval. Original source-file bytes are separately Development-only and repository-only (not
+  yet deployed) — see `docs/library-and-source-architecture.md`'s "Private source storage
+  architecture".
 - Deck ordering was previously non-deterministic across devices (storage-array-order dependent —
   see `docs/deck-ordering.md`); now fixed for Home via a canonical comparator. Deck Collections
-  (`docs/deck-collections.md`) are local-only, same status as Library metadata above — same
-  device sees the same organization, a second device signed into the same account does not yet.
+  (`docs/deck-collections.md`) remain local-only in every environment, including Development
+  (unlike Library metadata above, which now syncs in Development) — same device sees the same
+  organization, a second device signed into the same account does not yet, anywhere.
 
 ## Accessibility Guardrails
 

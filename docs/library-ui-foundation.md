@@ -209,10 +209,25 @@ deleted as a side effect, and the confirmation copy says so explicitly.
 ## Sorting / filtering / search behavior
 
 `src/domain/libraryOrganize.ts` — pure, side-effect-free functions run against a single loaded
-source array, composed freely by the Library main screen (type filter + collection filter +
-course/semester filter + search + sort all apply simultaneously, e.g. "PDF + Calculus + Recently
-used"), per `docs/library-and-source-architecture.md` §2's explicit "filters compose, not
-exclusive views" requirement. No duplicate per-view datasets are created.
+source array, composed freely by the Library main screen (type filter + course/semester filter +
+search + sort all apply simultaneously, e.g. "PDF + Calculus + Recently used"), per
+`docs/library-and-source-architecture.md` §2's explicit "filters compose, not exclusive views"
+requirement. No duplicate per-view datasets are created.
+
+**No collection filter on the root screen** — this was removed by the Library Organization
+Refinement batch (see `docs/library-and-source-architecture.md`'s "Root Library rule"). Once root
+only shows unfiled sources, a "filter by collection" chip on that same screen would always produce
+zero results (nothing on root belongs to any collection by definition), so it was removed rather
+than left as dead UI. Browsing one specific collection's sources is Collection Detail's job
+(`app/library/collections/[id].tsx`), unchanged by this note.
+
+Root's search/sort/filter pipeline runs over the root/unfiled source set only, for the Active view
+— not a cross-collection global search. This is the narrowest reading of an otherwise-ambiguous
+prior contract; see `docs/library-and-source-architecture.md`'s "Root Library rule" for the full
+reasoning. The Archived view is unaffected — it still searches/filters/sorts every archived
+source regardless of collection membership, since Collection Detail never surfaces archived
+sources at all (see that same doc section for why the unfiled rule deliberately does not apply to
+Archived).
 
 "Recently used" sorting has a genuine limitation: this foundation has no study/generation
 integration to derive real usage from, so `lastUsedAt` is only updated when a source's metadata is

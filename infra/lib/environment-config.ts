@@ -17,6 +17,14 @@ export interface IntervalResourceNames {
   userPool: string;
   mobileClient: string;
   syncLambdaRole: string;
+  // Private original-source storage (see interval-sync-stack.ts's Development-only conditional
+  // block and docs/library-and-source-architecture.md). Computed for every environment here,
+  // same as every other name in this file — only the STACK decides which environments actually
+  // get these resources created; this file remains pure naming, never a feature gate. Note the S3
+  // bucket itself deliberately has NO entry here — see the stack's own comment for why bucket
+  // names can't safely be deterministic the way every other resource in this file is.
+  librarySourceStorage: string;
+  librarySourceStorageRole: string;
 }
 
 const ENVIRONMENT_PREFIX: Record<IntervalEnvironmentName, string> = {
@@ -36,5 +44,7 @@ export function resourceNamesFor(environmentName: IntervalEnvironmentName): Inte
     userPool: `${prefix}-user-pool`,
     mobileClient: `${prefix}-mobile`,
     syncLambdaRole: `${prefix}-sync-lambda-role`,
+    librarySourceStorage: `${prefix}-library-source-storage`,
+    librarySourceStorageRole: `${prefix}-library-source-storage-role`,
   };
 }

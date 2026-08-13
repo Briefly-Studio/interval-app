@@ -34,6 +34,29 @@ export function sortLibrarySources(sources: LibrarySourceRecord[], sort: SortOpt
   }
 }
 
+// ROOT LIBRARY ORGANIZATION RULE (see docs/library-and-source-architecture.md's "Root Library
+// rule") — mirrors src/domain/deckCollectionMembership.ts's getUnfiledDecks precedent for the
+// analogous Deck Collections feature. Unlike decks (whose membership lives on the collection's
+// own deckIds, requiring a two-direction reconciliation), a Library source owns its own
+// membership directly via collectionIds, so this is a simpler one-direction filter — but it still
+// intersects against the CURRENTLY ACTIVE collection set rather than just checking
+// `collectionIds.length === 0`, for the same defensive reason getAssignedDeckIds does: a stale
+// collectionId should never be able to keep a source hidden from root once its collection is gone
+// (in practice src/storage/sourceCollections.ts#softDeleteSourceCollection already reconciles
+// this synchronously via unassignCollectionFromAllSources, so a source should never actually carry
+// a dangling id — this is defense in depth, not a workaround for a known gap).
+//
+// Callers pass an ACTIVE source list only (see getActiveLibrarySources) — this function does not
+// itself filter out archived/deleted sources, matching filterLibrarySources/searchLibrarySources'
+// existing convention of operating on whatever list the caller already scoped.
+export function getUnfiledLibrarySources(
+  sources: LibrarySourceRecord[],
+  activeCollections: SourceCollectionRecord[]
+): LibrarySourceRecord[] {
+  const activeCollectionIds = new Set(activeCollections.map((c) => c.id));
+  return sources.filter((source) => !source.collectionIds.some((id) => activeCollectionIds.has(id)));
+}
+
 export type LibraryFilters = {
   sourceType?: SourceType;
   collectionId?: string;

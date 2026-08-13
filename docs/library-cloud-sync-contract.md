@@ -93,6 +93,14 @@ extended to include both; `validateChange.ts` gained shallow shape validators fo
 (`isLibrarySourceRecordShape`/`isSourceCollectionRecordShape`), matching the existing
 deck/card/session validators' depth and reject-don't-coerce convention exactly.
 
+**Since the Library Organization + Private Source Storage batch**, `LibrarySourceRecord` also
+carries `cloudUploadState`/`cloudUploadedAt` (see
+`docs/library-and-source-architecture.md`'s "Private source storage architecture"). These sync
+through this exact same path — no new entity, no new route, no schema change to this contract's
+own mechanics. They remain metadata: durable *state about* an original file (whether one has been
+uploaded), never the file's bytes or a local device URI, which is a hard rule this contract has
+always enforced and continues to.
+
 ## Ownership
 
 **Cognito `sub`, from trusted authorizer claims only — never from client input.** Identical rule

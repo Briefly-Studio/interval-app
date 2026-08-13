@@ -1,9 +1,11 @@
 import { useFocusEffect } from "@react-navigation/native";
+import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../src/auth/AuthService";
+import { attachAndUploadSourceFile, isLibrarySourceStorageEnabled } from "../../src/cloud/librarySourceStorage";
 import { EMPTY_SOURCE_FORM_VALUES, toSourcePatch, type SourceFormValues } from "../../src/domain/sourceFormValues";
 import { useTranslation } from "../../src/i18n";
 import { makeId } from "../../src/models/deck";
@@ -13,6 +15,7 @@ import { addLibrarySource } from "../../src/storage/librarySources";
 import { getActiveSourceCollections } from "../../src/storage/sourceCollections";
 import { useTheme } from "@/src/theme";
 import { Button } from "../../src/ui/Button";
+import { Card } from "../../src/ui/Card";
 import { IconButton } from "../../src/ui/IconButton";
 import { Screen } from "../../src/ui/Screen";
 import { SourceDetailsFields } from "../../src/ui/SourceDetailsFields";
@@ -26,6 +29,10 @@ export default function AddLibrarySourceScreen() {
   const [titleTouched, setTitleTouched] = useState(false);
   const [collections, setCollections] = useState<SourceCollectionRecord[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [pickedFile, setPickedFile] = useState<{ uri: string; name: string; mimeType?: string; size?: number } | null>(
+    null
+  );
+  const storageEnabled = isLibrarySourceStorageEnabled();
 
   useFocusEffect(
     useCallback(() => {
@@ -43,20 +50,51 @@ export default function AddLibrarySourceScreen() {
 
   const isValid = values.displayTitle.trim().length > 0;
 
+  const onPickFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    setPickedFile({ uri: asset.uri, name: asset.name ?? "", mimeType: asset.mimeType, size: asset.size });
+    setValues((prev) => ({
+      ...prev,
+      originalName: asset.name || prev.originalName,
+      fileSizeMB:
+        typeof asset.size === "number" ? String(Math.round((asset.size / (1024 * 1024)) * 100) / 100) : prev.fileSizeMB,
+    }));
+  };
+
   const onSave = async () => {
     if (!isValid || submitting) return;
     setSubmitting(true);
     try {
       const now = new Date().toISOString();
+      const extension = pickedFile?.name.includes(".") ? pickedFile.name.split(".").pop() : undefined;
       const source: LibrarySource = {
         id: makeId(),
         createdAt: now,
         processingStatus: "ready",
         lastUsedAt: undefined,
         ...toSourcePatch(values),
+        mimeType: pickedFile?.mimeType,
+        extension,
       };
       const scope = await AuthService.getActiveScope();
       await addLibrarySource(scope, source);
+      if (storageEnabled && pickedFile) {
+        // Awaited here: this only copies the file into Interval's own durable local directory
+        // (fast, local disk, no network) — never the network upload attempt itself, which
+        // attachAndUploadSourceFile still runs in the background without blocking on it. This
+        // must be awaited so a failed durable copy can be surfaced to the user before navigating
+        // away — see src/cloud/librarySourceStorage/index.ts's return-value contract. The source
+        // metadata record above is never rolled back if this fails; only the attachment failed.
+        const attached = await attachAndUploadSourceFile(scope, source.id, {
+          uri: pickedFile.uri,
+          mimeType: pickedFile.mimeType,
+        });
+        if (!attached) {
+          Alert.alert(t("librarySource.form.attachFailedTitle"), t("librarySource.form.attachFailedBody"));
+        }
+      }
       router.back();
     } catch {
       // Never log title/tags/course/semester — only a diagnostic tag. Values stay in the form so
@@ -77,6 +115,27 @@ export default function AddLibrarySourceScreen() {
         </Text>
       </View>
       <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("librarySource.form.addIntro")}</Text>
+
+      {storageEnabled ? (
+        <Card style={[styles.attachCard, { gap: spacing.sm }]}>
+          <Text style={[typography.subheading, { color: colors.textPrimary }]}>
+            {t("librarySource.form.attachFileHeading")}
+          </Text>
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>
+            {t("librarySource.form.attachFileNote")}
+          </Text>
+          <Text style={[typography.bodyMedium, { color: colors.textPrimary }]} numberOfLines={1}>
+            {pickedFile ? pickedFile.name : t("librarySource.form.noFileAttached")}
+          </Text>
+          <Button
+            label={pickedFile ? t("librarySource.form.replaceFileButton") : t("librarySource.form.attachFileButton")}
+            variant="secondary"
+            fullWidth
+            disabled={submitting}
+            onPress={onPickFile}
+          />
+        </Card>
+      ) : null}
 
       <SourceDetailsFields
         values={values}
@@ -102,4 +161,5 @@ export default function AddLibrarySourceScreen() {
 const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center" },
   headerTitle: { flex: 1 },
+  attachCard: {},
 });

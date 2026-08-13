@@ -5,6 +5,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
+import { isLibrarySourceStorageEnabled } from "../src/cloud/librarySourceStorage";
 import { isLibraryMetadataCloudSyncEnabled } from "../src/cloud/sync/libraryMetadataSyncCapability";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { getEnvironmentConfig } from "../src/config/environment";
@@ -29,6 +30,10 @@ export default function DevToolsScreen() {
   const [libraryDirtyCounts, setLibraryDirtyCounts] = useState<{ sources: number; collections: number }>({
     sources: 0,
     collections: 0,
+  });
+  const [sourceStorageCounts, setSourceStorageCounts] = useState<{ pending: number; failed: number }>({
+    pending: 0,
+    failed: 0,
   });
 
   useFocusEffect(
@@ -58,6 +63,10 @@ export default function DevToolsScreen() {
         setLibraryDirtyCounts({
           sources: sources.filter((s) => s.dirty).length,
           collections: collections.filter((c) => c.dirty).length,
+        });
+        setSourceStorageCounts({
+          pending: sources.filter((s) => s.cloudUploadState === "pending").length,
+          failed: sources.filter((s) => s.cloudUploadState === "failed").length,
         });
       })();
       return () => {
@@ -222,6 +231,17 @@ export default function DevToolsScreen() {
         <Text style={[typography.secondary, { color: colors.textSecondary }]}>
           Unsynced Library sources: {libraryDirtyCounts.sources} · Unsynced collections:{" "}
           {libraryDirtyCounts.collections}
+        </Text>
+      </Card>
+
+      <Card style={[styles.toolCard, { gap: spacing.sm }]}>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]}>Library Source Storage</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+          Status: {isLibrarySourceStorageEnabled() ? "Enabled" : "Disabled"} for this build (
+          {environmentLabel}). Original file bytes only — metadata is a separate capability above.
+        </Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+          Pending uploads: {sourceStorageCounts.pending} · Failed uploads: {sourceStorageCounts.failed}
         </Text>
       </Card>
 

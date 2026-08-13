@@ -7,6 +7,7 @@ import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 
 import type { IntervalEnvironmentName } from "./environment-config";
@@ -230,6 +231,99 @@ export class IntervalSyncStack extends cdk.Stack {
       integration: new apigwv2Integrations.HttpLambdaIntegration("SyncPullIntegration", syncPullFunction),
       authorizer: jwtAuthorizer,
     });
+
+    // ---------------------------------------------------------------------
+    // Private original-source storage — DEVELOPMENT ONLY for this batch. See
+    // docs/library-and-source-architecture.md and docs/cdk-infrastructure.md's "Library source
+    // storage" section for the full design record. This entire block is skipped for every other
+    // environmentName — Staging and Production get NO bucket, NO storage Lambda, NO storage IAM
+    // role, and NO storage API routes as a result. This is the same per-environment conditional
+    // idiom already used above for cognitoDeletionProtectionEnabled, just gating resource
+    // creation itself rather than a single property value. `npx cdk synth IntervalStagingStack`
+    // must never show any resource from this block — verify that after any change here.
+    // ---------------------------------------------------------------------
+    if (environmentName === "development") {
+      // Bucket name is deliberately NOT set explicitly, unlike every other named resource in this
+      // stack. S3 bucket names are unique across every AWS account on the entire platform, not
+      // just within this account — a deterministic `${prefix}-library-sources`-style name could
+      // collide with an unrelated bucket some other AWS customer already owns and fail to deploy.
+      // CloudFormation's auto-generated name avoids that risk entirely; the real name is
+      // available after deployment via the LibrarySourceBucketName stack output below.
+      const librarySourceBucket = new s3.Bucket(this, "LibrarySourceBucket", {
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        enforceSSL: true,
+        // Development is a disposable engineering environment by design (see REMOVAL_POLICY_FOR
+        // above) — original source files uploaded here during Development testing are exactly as
+        // disposable as the Development DynamoDB tables and Cognito pool already are.
+        // autoDeleteObjects is required for DESTROY to actually succeed once real objects exist in
+        // the bucket (CloudFormation otherwise refuses to delete a non-empty bucket). This is a
+        // deliberate Development-only choice, not a default that carries over automatically to a
+        // future Staging/Production source-storage rollout — that would need its own explicit
+        // RETAIN decision, exactly like Staging's DynamoDB tables/Cognito pool already have.
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+      });
+      cdk.Tags.of(librarySourceBucket).add("Component", "library-source-storage");
+
+      const librarySourceStorageRole = new iam.Role(this, "LibrarySourceStorageRole", {
+        roleName: names.librarySourceStorageRole,
+        assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+        ],
+      });
+
+      // Least privilege: only PutObject/GetObject, only under this bucket's
+      // users/*/sources/*/original key pattern — the exact shape
+      // backend/lambdas/library-source-storage/index.mjs's objectKeyFor() produces, never a
+      // bucket-wide "*". No DeleteObject (this batch never deletes cloud originals on tombstone —
+      // see "Delete behavior" in docs/library-and-source-architecture.md), no ListBucket (never
+      // lists keys). This role is intentionally separate from syncLambdaRole above — the sync
+      // Lambdas remain responsible for synchronization only; this Lambda receives only the
+      // minimum S3 permissions it needs and nothing else.
+      librarySourceStorageRole.addToPolicy(
+        new iam.PolicyStatement({
+          sid: "LibrarySourceObjectsOnly",
+          actions: ["s3:PutObject", "s3:GetObject"],
+          resources: [librarySourceBucket.arnForObjects("users/*/sources/*/original")],
+        })
+      );
+
+      const librarySourceStorageFunction = new lambda.Function(this, "LibrarySourceStorageFunction", {
+        ...commonLambdaProps,
+        role: librarySourceStorageRole,
+        functionName: names.librarySourceStorage,
+        code: lambda.Code.fromAsset(path.join(__dirname, "../../backend/lambdas/library-source-storage")),
+        environment: {
+          LIBRARY_SOURCE_BUCKET: librarySourceBucket.bucketName,
+        },
+      });
+
+      const librarySourceStorageIntegration = new apigwv2Integrations.HttpLambdaIntegration(
+        "LibrarySourceStorageIntegration",
+        librarySourceStorageFunction
+      );
+
+      // Both routes require the same Cognito JWT authorizer as /sync/push and /sync/pull above —
+      // no unauthenticated route exists here either.
+      httpApi.addRoutes({
+        path: "/library/sources/{sourceId}/upload-url",
+        methods: [apigwv2.HttpMethod.POST],
+        integration: librarySourceStorageIntegration,
+        authorizer: jwtAuthorizer,
+      });
+
+      httpApi.addRoutes({
+        path: "/library/sources/{sourceId}/download-url",
+        methods: [apigwv2.HttpMethod.POST],
+        integration: librarySourceStorageIntegration,
+        authorizer: jwtAuthorizer,
+      });
+
+      new cdk.CfnOutput(this, "LibrarySourceBucketName", { value: librarySourceBucket.bucketName });
+    }
 
     // ---------------------------------------------------------------------
     // Outputs — public identifiers only (matching the existing Production "AWS Resources"

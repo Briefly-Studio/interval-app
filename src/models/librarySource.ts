@@ -56,6 +56,23 @@ export type LibrarySourceRecord = LibrarySource & {
   // DeckRecord/CardRecord/SessionRecord's own field exactly. Never read by any code path itself;
   // kept for diagnostic/shape parity, same as those other entities.
   lastSyncedAt?: string;
+  // Durable, cross-device cloud original-file state — see docs/library-and-source-architecture.md's
+  // "Upload lifecycle/state machine" section. This is the SMALLEST schema that lets another
+  // device know a cloud original exists: absent/undefined means "no upload ever attempted from
+  // any device" (the pre-existing default for every source created before this field existed, and
+  // for any source a user never attaches a file to); "pending" means an upload was queued/attempted
+  // but not yet confirmed; "uploaded" means a device successfully confirmed the original is in
+  // cloud storage; "failed" means the most recent attempt did not succeed. This field is
+  // deliberately generic across devices — a device other than the one that attempted the upload
+  // may see "pending"/"failed" with no way to act on it locally (it never had the local file
+  // bytes), which is expected, not a bug: only cloudUploadState === "uploaded" is actionable
+  // cross-device (see src/cloud/librarySourceStorage/index.ts's requestDownloadUrl). NEVER a
+  // device-local file:// URI — that lives only in src/storage/librarySourceLocalFiles.ts and must
+  // never be added to this type (see that file's header comment for why).
+  cloudUploadState?: "pending" | "uploaded" | "failed";
+  // Set only when cloudUploadState transitions to "uploaded" — mirrors lastSyncedAt's shape/
+  // purpose but marks the cloud-availability event specifically, not the metadata-sync event.
+  cloudUploadedAt?: string;
 };
 
 const SOURCE_TYPES: SourceType[] = ["pdf", "docx", "text", "image", "audio", "pptx", "xlsx"];
@@ -67,6 +84,12 @@ function isSourceType(value: unknown): value is SourceType {
 
 function isStatus(value: unknown): value is SourceProcessingStatus {
   return typeof value === "string" && (STATUSES as string[]).includes(value);
+}
+
+const CLOUD_UPLOAD_STATES = ["pending", "uploaded", "failed"] as const;
+
+function isCloudUploadState(value: unknown): value is NonNullable<LibrarySourceRecord["cloudUploadState"]> {
+  return typeof value === "string" && (CLOUD_UPLOAD_STATES as readonly string[]).includes(value);
 }
 
 // Used for both `collectionIds` and `tags`. Trims each entry and deduplicates — a malformed or
@@ -127,5 +150,7 @@ export function upgradeLibrarySource(raw: any): LibrarySourceRecord {
     deletedAt: normalizeOptionalString(raw?.deletedAt),
     dirty: raw?.dirty === true,
     lastSyncedAt: normalizeOptionalString(raw?.lastSyncedAt),
+    cloudUploadState: isCloudUploadState(raw?.cloudUploadState) ? raw.cloudUploadState : undefined,
+    cloudUploadedAt: normalizeOptionalString(raw?.cloudUploadedAt),
   };
 }

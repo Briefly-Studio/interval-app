@@ -203,6 +203,35 @@ export async function removeLibrarySourceFromCollection(
   return updated;
 }
 
+// Cloud upload-state transition — see src/cloud/librarySourceStorage/index.ts, the only intended
+// caller. Deliberately does NOT touch lastUsedAt the way updateLibrarySource does: this is a
+// background, system-driven state change (an upload attempt succeeding/failing), not a user edit,
+// so it should not count as "using" the source the way an intentional metadata edit does. Still
+// bumps rev/dirty like every other mutation here — this state is durable, cross-device shared
+// state (see LibrarySourceRecord's cloudUploadState field comment) and must sync like any other
+// change.
+export async function updateLibrarySourceCloudState(
+  scope: WorkspaceScope,
+  id: string,
+  state: NonNullable<LibrarySourceRecord["cloudUploadState"]>
+): Promise<LibrarySourceRecord[]> {
+  const all = await getLibrarySources(scope);
+  const now = new Date().toISOString();
+  const updated = all.map((source) => {
+    if (source.id !== id) return source;
+    return {
+      ...source,
+      cloudUploadState: state,
+      cloudUploadedAt: state === "uploaded" ? now : source.cloudUploadedAt,
+      updatedAt: now,
+      rev: source.rev + 1,
+      dirty: true,
+    };
+  });
+  await setLibrarySources(scope, updated);
+  return updated;
+}
+
 // Unassigns a deleted collection from every source that referenced it, without touching the
 // sources themselves otherwise. Used by deleteSourceCollection — see src/storage/sourceCollections.ts.
 export async function unassignCollectionFromAllSources(

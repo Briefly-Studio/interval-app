@@ -10,6 +10,7 @@ import {
   distinctCourses,
   distinctSemesters,
   filterLibrarySources,
+  getUnfiledLibrarySources,
   searchLibrarySources,
   sortLibrarySources,
   type SortOption,
@@ -54,7 +55,6 @@ export default function LibraryScreen() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortOption>("recentlyAdded");
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
-  const [collectionFilter, setCollectionFilter] = useState<string | null>(null);
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
   const [semesterFilter, setSemesterFilter] = useState<string | null>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -75,7 +75,6 @@ export default function LibraryScreen() {
     // another screen while it was selected here. Clear any filter whose value no longer
     // resolves against the freshly-loaded data, every time that data reloads.
     setTypeFilter((prev) => (prev && !active.some((s) => s.sourceType === prev) && !archived.some((s) => s.sourceType === prev) ? null : prev));
-    setCollectionFilter((prev) => (prev && !cols.some((c) => c.id === prev) ? null : prev));
     setCourseFilter((prev) => (prev && !distinctCourses(active).includes(prev) && !distinctCourses(archived).includes(prev) ? null : prev));
     setSemesterFilter((prev) => (prev && !distinctSemesters(active).includes(prev) && !distinctSemesters(archived).includes(prev) ? null : prev));
   }, []);
@@ -106,7 +105,22 @@ export default function LibraryScreen() {
   // scope toggle reachable so the user can switch to the view that does have content.
   const isTrulyEmpty = loaded && totalActiveCount === 0 && totalArchivedCount === 0;
 
-  const baseList = view === "active" ? activeSources : archivedSources;
+  // ROOT LIBRARY ORGANIZATION RULE — see docs/library-and-source-architecture.md's "Root Library
+  // rule": the Active view shows only UNFILED sources (zero active collection memberships); a
+  // filed source lives in its collection's own detail screen instead (app/library/collections/[id].tsx),
+  // never duplicated here. This deliberately does NOT apply to the Archived view — Collection
+  // Detail only ever queries getActiveLibrarySources, so an archived-and-filed source has no other
+  // screen it would remain reachable from if this same rule applied there; Archived intentionally
+  // keeps showing every archived source regardless of collection membership.
+  const unfiledActiveSources = useMemo(
+    () => getUnfiledLibrarySources(activeSources, collections),
+    [activeSources, collections]
+  );
+  const baseList = view === "active" ? unfiledActiveSources : archivedSources;
+  // Distinguishes "you have zero active sources at all" from "every active source is filed into a
+  // collection" — the Active view can be legitimately empty for either reason, and they need
+  // different empty-state copy (see isScopeEmpty's use below).
+  const isAllFiled = view === "active" && totalActiveCount > 0 && unfiledActiveSources.length === 0;
 
   const presentTypes = useMemo(
     () => ALL_SOURCE_TYPES.filter((type) => baseList.some((s) => s.sourceType === type)),
@@ -115,22 +129,25 @@ export default function LibraryScreen() {
   const courses = useMemo(() => distinctCourses(baseList), [baseList]);
   const semesters = useMemo(() => distinctSemesters(baseList), [baseList]);
 
+  // Search/sort/filter operate over the root/unfiled set for the Active view (baseList already
+  // narrowed above) — this is the narrowest interpretation per
+  // docs/library-and-source-architecture.md's "Search/sort/filter" section: there is no existing
+  // product contract for a global cross-collection search from root, so root search stays scoped
+  // to exactly what root shows, matching Collection Detail's own screen-scoped search precedent.
   const filtered = useMemo(() => {
     let list = filterLibrarySources(baseList, {
       sourceType: (typeFilter as any) || undefined,
-      collectionId: collectionFilter || undefined,
       course: courseFilter || undefined,
       semester: semesterFilter || undefined,
     });
     list = searchLibrarySources(list, query);
     return sortLibrarySources(list, sort);
-  }, [baseList, typeFilter, collectionFilter, courseFilter, semesterFilter, query, sort]);
+  }, [baseList, typeFilter, courseFilter, semesterFilter, query, sort]);
 
-  const activeFilterCount = [typeFilter, collectionFilter, courseFilter, semesterFilter].filter(Boolean).length;
+  const activeFilterCount = [typeFilter, courseFilter, semesterFilter].filter(Boolean).length;
   const hasAnyFilter = activeFilterCount > 0 || Boolean(query.trim());
   const clearFilters = () => {
     setTypeFilter(null);
-    setCollectionFilter(null);
     setCourseFilter(null);
     setSemesterFilter(null);
     setQuery("");
@@ -261,23 +278,6 @@ export default function LibraryScreen() {
               </View>
             )}
 
-            {collections.length > 0 && (
-              <View style={{ gap: spacing.xs }}>
-                <Text style={[typography.label, { color: colors.textSecondary }]}>{t("library.filterByCollection")}</Text>
-                <View style={[styles.chipRow, { gap: spacing.xs }]} accessibilityRole="radiogroup">
-                  <FilterChip label={t("library.allCollections")} selected={!collectionFilter} onPress={() => setCollectionFilter(null)} />
-                  {collections.map((collection) => (
-                    <FilterChip
-                      key={collection.id}
-                      label={collection.name}
-                      selected={collectionFilter === collection.id}
-                      onPress={() => setCollectionFilter(collection.id)}
-                    />
-                  ))}
-                </View>
-              </View>
-            )}
-
             {courses.length > 0 && (
               <View style={{ gap: spacing.xs }}>
                 <Text style={[typography.label, { color: colors.textSecondary }]}>{t("library.filterByCourse")}</Text>
@@ -356,11 +356,22 @@ export default function LibraryScreen() {
         ListHeaderComponentStyle={{ marginBottom: spacing.md }}
         ListEmptyComponent={
           isScopeEmpty ? (
-            <EmptyState
-              icon={view === "archived" ? "archive-outline" : "library-outline"}
-              title={view === "archived" ? t("library.archivedEmptyTitle") : t("library.activeEmptyTitle")}
-              description={view === "archived" ? t("library.archivedEmptyDescription") : t("library.activeEmptyDescription")}
-            />
+            isAllFiled ? (
+              <EmptyState icon="albums-outline" title={t("library.allFiledTitle")} description={t("library.allFiledDescription")}>
+                <Button
+                  label={t("library.collectionsButton")}
+                  variant="primary"
+                  fullWidth
+                  onPress={() => router.push({ pathname: "/library/collections" as any })}
+                />
+              </EmptyState>
+            ) : (
+              <EmptyState
+                icon={view === "archived" ? "archive-outline" : "library-outline"}
+                title={view === "archived" ? t("library.archivedEmptyTitle") : t("library.activeEmptyTitle")}
+                description={view === "archived" ? t("library.archivedEmptyDescription") : t("library.activeEmptyDescription")}
+              />
+            )
           ) : isFilteredEmpty ? (
             <EmptyState icon="search-outline" title={t("library.noResultsTitle")} description={t("library.noResultsDescription")}>
               {hasAnyFilter ? <Button label={t("library.clearFiltersButton")} variant="secondary" fullWidth onPress={clearFilters} /> : null}
