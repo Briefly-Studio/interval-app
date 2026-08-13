@@ -1,3 +1,8 @@
+import { File } from "expo-file-system";
+// uploadAsync has no equivalent in the modern expo-file-system API (it only manages local
+// files — see src/storage/librarySourceFileStorage.ts's header comment for the full split
+// rationale) — the actual network PUT to the presigned S3 URL still goes through the legacy
+// module for that reason specifically, not by oversight.
 import * as FileSystem from "expo-file-system/legacy";
 
 import { AuthService } from "../../auth/AuthService";
@@ -37,11 +42,18 @@ async function attemptUpload(
     return;
   }
 
+  // Modern File API for this local size check (matches src/storage/librarySourceFileStorage.ts's
+  // choice and rationale) — local.uri is always Interval's own durable documentDirectory-based
+  // path by this point, never the original picker/cache URI.
   let fileSize: number | undefined;
   try {
-    const info = await FileSystem.getInfoAsync(local.uri);
-    fileSize = info.exists && typeof info.size === "number" ? info.size : undefined;
-  } catch {
+    const file = new File(local.uri);
+    fileSize = file.exists ? file.size : undefined;
+  } catch (error) {
+    if (__DEV__) {
+      const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      console.warn(`[librarySourceStorage] local file size check failed — ${detail}`);
+    }
     fileSize = undefined;
   }
   if (fileSize === undefined) {

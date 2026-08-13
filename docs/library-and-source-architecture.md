@@ -236,26 +236,46 @@ before the next successful upload attempt would have been unrecoverable, silentl
 "local source remains usable, upload may happen later" contract this feature exists to provide.
 
 **Fix:** `src/storage/librarySourceFileStorage.ts` copies the picked file, once, at attach time,
-into an Interval-owned subdirectory of `FileSystem.documentDirectory` (`librarySourceFiles/`) —
+into an Interval-owned subdirectory of the app's Documents directory (`librarySourceFiles/`) —
 not purged by the OS the way Caches is. The destination path is deterministic and extension-less
-(`<documentDirectory>/librarySourceFiles/<sourceId>`, sourceId validated against the same
+(`<Documents>/librarySourceFiles/<sourceId>`, sourceId validated against the same
 `^[a-z0-9_]{1,128}$` pattern used server-side), so repeated attach/retry always overwrites the
 same file rather than accumulating duplicate copies, and a source id can never smuggle a
 path-traversal segment into the destination path. `attachAndUploadSourceFile` now performs this
 copy *before* ever recording `cloudUploadState: "pending"` — if the durable copy cannot be made,
 it returns `false` and leaves `cloudUploadState` untouched (never a false "pending"), and the
 calling screen surfaces this to the user without touching the already-created metadata record.
-`src/storage/librarySourceLocalFiles.ts` now stores this durable `documentDirectory`-based URI,
-never the original cache-directory URI the picker returned. The original DocumentPicker cache copy
-itself is never deleted by this code — only ever read from, once, to make the durable copy.
+`src/storage/librarySourceLocalFiles.ts` now stores this durable, app-owned URI, never the
+original cache-directory URI the picker returned. The original DocumentPicker cache copy itself is
+never deleted by this code — only ever read from, once, to make the durable copy.
+
+**Runtime finding (founder QA, physical device):** the first implementation of the fix above used
+`expo-file-system/legacy`'s Promise-based `getInfoAsync`/`makeDirectoryAsync`/`copyAsync`/
+`deleteAsync` functions, which depend on an older native module (`ExponentFileSystem`). On this
+repo's installed `expo-file-system` (~19.0.21, Expo SDK ~54), that legacy native module is not
+guaranteed present on every runtime the app can run under — when unavailable, the JS layer falls
+back to a do-nothing shim (`ExponentFileSystemShim`) whose directory constants are `null` and whose
+file-manipulation methods don't exist, so every attach attempt failed cleanly (not a crash) with no
+underlying exception ever logged, reproducing exactly the founder-observed "Couldn't attach file"
+failure. `src/storage/librarySourceFileStorage.ts` now uses the modern, synchronous
+`Directory`/`File`/`Paths` classes (native module `"FileSystem"`) instead — this SDK generation's
+actively maintained API, which fully covers directory creation, existence checks, copy, and delete
+with no functional gap for this use case. The one exception is network upload
+(`FileSystem.uploadAsync`, used by `src/cloud/librarySourceStorage/index.ts` for the actual S3
+PUT): the modern API has no upload-transport equivalent, so that one call deliberately remains on
+`expo-file-system/legacy` — a documented, deliberate split by concern (local file management vs.
+network transport), not accidental mixing of the two APIs for the same job. Persistence failures
+now also log a sanitized diagnostic (operation name + error name/message only, never a path or
+filename) to the Metro console in development, so a future failure of this kind is diagnosable
+directly instead of silently returning `false`.
 
 **Missing-file detection:** `isSourceFileAvailableOnThisDevice(sourceId)` checks real on-disk
 presence at the durable path (not merely whether a local-map entry exists) and is what Source
 Detail uses to decide whether Retry can work. If a previously-persisted copy has since disappeared
 by some other means, retry correctly reports `cloudUploadState: "failed"` (via the existing
-`FileSystem.getInfoAsync` check inside `attemptUpload`) rather than hanging or fabricating an
-uploaded state, and Source Detail offers "Attach file" again as the recovery path — re-picking the
-original re-establishes a fresh durable copy under the same idempotent scheme.
+file-existence check inside `attemptUpload`) rather than hanging or fabricating an uploaded state,
+and Source Detail offers "Attach file" again as the recovery path — re-picking the original
+re-establishes a fresh durable copy under the same idempotent scheme.
 
 ### Download / cross-device availability
 
