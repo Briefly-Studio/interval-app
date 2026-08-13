@@ -1,13 +1,13 @@
 # Library and Source Architecture
 
-**Status: mostly still specification only.** The Library Local UI Foundation batch has implemented
-a local-metadata-only Library route, navigation, and CRUD UI (see "Implementation status" below and
-`docs/library-ui-foundation.md` for the full detail) — but no upload code, no extraction pipeline,
-no AI generation, no cloud Library record, and no sharing beyond the existing `.interval`/legacy
-`.briefly` deck file export/import exists in the app today. This document exists to remove
-architectural ambiguity *before* that further implementation begins, per the founder's product
-direction — the sections below still describe future/target architecture, not current behavior,
-except where "Implementation status" says otherwise.
+**Status: substantially implemented in Development; large sections remain specification-only.**
+Local Library metadata/UI, Development-only cross-device metadata sync, Development-only private
+original-file storage (deployed and founder-QA verified), and Development-only source open/preview
+are all implemented today — see "Implementation status" below for the precise current/future
+split. Extraction, OCR, transcription, AI generation, in-platform sharing, and Canvas integration
+remain entirely unimplemented; the sections of this document describing those are still
+future/target architecture, not current behavior, except where "Implementation status" says
+otherwise.
 
 Where this document says "must" or "should," it is a requirement for whenever this is built, not
 a claim about what exists now. See `docs/branch-and-release-policy.md` for why none of this can
@@ -48,18 +48,25 @@ detail (routes, data model, storage keys, accessibility, known limitations, foun
   fields per source (`cloudUploadState`, `cloudUploadedAt` — see "Private source storage" below) —
   still metadata only, still no binary/file content in the synced record itself.
 
-**Implemented now, Development-only (private original-source storage — repository-only, not yet
-deployed):**
+**Implemented now, Development-only (private original-source storage — deployed and founder-QA
+verified):**
 
 - A user can attach an original file to a Library source and have it uploaded to a private,
   per-user S3 location, gated to `INTERVAL_ENV === "development"` via its own separate capability
   check (`src/cloud/librarySourceStorage/capability.ts`) — see "Private source storage
-  architecture" below for the full design. **This is repository implementation only** — no AWS
-  resource has been deployed for this yet; see `docs/cdk-infrastructure.md`'s "Library source
-  storage" section for exact deployment status.
+  architecture" below for the full design. **Deployed to Development and founder-QA verified**:
+  S3 public access blocked, authenticated access only, ownership derived from trusted Cognito
+  `sub`, server-derived object keys, short-lived non-persisted upload/download URLs, and a second
+  Development device on the same account confirmed able to securely access the cloud original —
+  see `docs/cdk-infrastructure.md`'s "Library source storage" section for the deployment record.
 - Explicitly NOT implemented by this: extraction, parsing, OCR, transcription, or any AI
   processing of the uploaded bytes — this batch stops at secure storage and on-demand,
   authenticated availability.
+- **Source open/preview** (Source Preview + Open Original batch): Source Detail now has an "Open
+  original" action — local-first resolution, on-demand cloud fallback with durable local retention,
+  handed off to the OS-native viewer via `expo-sharing`. See "Source open/preview" below for the
+  full architecture. Still explicitly not implemented: any embedded/in-app renderer, extraction,
+  annotation, or editing of the opened file.
 
 **Not implemented (still future work, per this document's other sections):**
 
@@ -75,6 +82,8 @@ deployed):**
 - Hosted/in-platform sharing (§5)
 - Environment separation (§15 Phase 3)
 - Automatic cleanup of orphaned cloud source objects (see "Delete behavior" below)
+- Any embedded/in-app document renderer, annotation, highlighting, or editing of an opened source
+  (see "Source open/preview" below — "Open original" hands off to the OS-native viewer only)
 
 ## Root Library rule
 
@@ -138,10 +147,13 @@ file bytes get their own dedicated authenticated presigned-URL path, entirely se
 client-supplied: `sub` comes only from the trusted JWT authorizer claims (same rule as every other
 backend Lambda — see `CLAUDE.md`'s "Never accept the user ID from the request body or query
 parameters"), and `sourceId` is taken from the URL path and validated server-side against
-`^[a-z0-9_]{1,128}$` (matching `src/utils/id.ts`'s `makeId()` output shape exactly) before it is
-ever concatenated into a key — this is what prevents a path-traversal or cross-namespace key from
-ever being constructed. A client can only ever request a URL scoped to its own `users/<its own
-sub>/...` prefix; there is no request parameter that names a bucket path directly.
+`^[a-z0-9-]{1,128}$` (matching `src/models/deck.ts`'s `makeId()` — the actual generator every
+id-creating call site in this app imports, Library sources included — not `src/utils/id.ts`'s
+unused underscore-based one; see "Local file URI rule and local source file durability" below for
+the incident this correction came from) before it is ever concatenated into a key — this is what
+prevents a path-traversal or cross-namespace key from ever being constructed. A client can only
+ever request a URL scoped to its own `users/<its own sub>/...` prefix; there is no request
+parameter that names a bucket path directly.
 
 ### IAM
 
@@ -238,34 +250,52 @@ before the next successful upload attempt would have been unrecoverable, silentl
 **Fix:** `src/storage/librarySourceFileStorage.ts` copies the picked file, once, at attach time,
 into an Interval-owned subdirectory of the app's Documents directory (`librarySourceFiles/`) —
 not purged by the OS the way Caches is. The destination path is deterministic and extension-less
-(`<Documents>/librarySourceFiles/<sourceId>`, sourceId validated against the same
-`^[a-z0-9_]{1,128}$` pattern used server-side), so repeated attach/retry always overwrites the
-same file rather than accumulating duplicate copies, and a source id can never smuggle a
-path-traversal segment into the destination path. `attachAndUploadSourceFile` now performs this
-copy *before* ever recording `cloudUploadState: "pending"` — if the durable copy cannot be made,
-it returns `false` and leaves `cloudUploadState` untouched (never a false "pending"), and the
-calling screen surfaces this to the user without touching the already-created metadata record.
-`src/storage/librarySourceLocalFiles.ts` now stores this durable, app-owned URI, never the
-original cache-directory URI the picker returned. The original DocumentPicker cache copy itself is
-never deleted by this code — only ever read from, once, to make the durable copy.
+(`<Documents>/librarySourceFiles/<sourceId>`, sourceId validated against the pattern described
+below), so repeated attach/retry always overwrites the same file rather than accumulating
+duplicate copies, and a source id can never smuggle a path-traversal segment into the destination
+path. `attachAndUploadSourceFile` now performs this copy *before* ever recording
+`cloudUploadState: "pending"` — if the durable copy cannot be made, it returns `false` and leaves
+`cloudUploadState` untouched (never a false "pending"), and the calling screen surfaces this to the
+user without touching the already-created metadata record. `src/storage/librarySourceLocalFiles.ts`
+now stores this durable, app-owned URI, never the original cache-directory URI the picker returned.
+The original DocumentPicker cache copy itself is never deleted by this code — only ever read from,
+once, to make the durable copy.
 
-**Runtime finding (founder QA, physical device):** the first implementation of the fix above used
+**Runtime finding #1 (plausible, unconfirmed):** the first implementation of the fix above used
 `expo-file-system/legacy`'s Promise-based `getInfoAsync`/`makeDirectoryAsync`/`copyAsync`/
-`deleteAsync` functions, which depend on an older native module (`ExponentFileSystem`). On this
-repo's installed `expo-file-system` (~19.0.21, Expo SDK ~54), that legacy native module is not
-guaranteed present on every runtime the app can run under — when unavailable, the JS layer falls
-back to a do-nothing shim (`ExponentFileSystemShim`) whose directory constants are `null` and whose
-file-manipulation methods don't exist, so every attach attempt failed cleanly (not a crash) with no
-underlying exception ever logged, reproducing exactly the founder-observed "Couldn't attach file"
-failure. `src/storage/librarySourceFileStorage.ts` now uses the modern, synchronous
-`Directory`/`File`/`Paths` classes (native module `"FileSystem"`) instead — this SDK generation's
-actively maintained API, which fully covers directory creation, existence checks, copy, and delete
-with no functional gap for this use case. The one exception is network upload
+`deleteAsync` functions, which depend on an older native module (`ExponentFileSystem`) that is not
+guaranteed present on every runtime this SDK generation can run under. `src/storage/
+librarySourceFileStorage.ts` was migrated to the modern, synchronous `Directory`/`File`/`Paths`
+classes (native module `"FileSystem"`) as a genuine improvement — this SDK generation's actively
+maintained API — but founder re-test showed the **exact same failure** afterward, proving this was
+not the actual reported bug (execution never reached far enough into either API for the choice
+between them to matter — see finding #2). The one exception is network upload
 (`FileSystem.uploadAsync`, used by `src/cloud/librarySourceStorage/index.ts` for the actual S3
 PUT): the modern API has no upload-transport equivalent, so that one call deliberately remains on
 `expo-file-system/legacy` — a documented, deliberate split by concern (local file management vs.
-network transport), not accidental mixing of the two APIs for the same job. Persistence failures
-now also log a sanitized diagnostic (operation name + error name/message only, never a path or
+network transport), not accidental mixing of the two APIs for the same job.
+
+**Runtime finding #2 (confirmed root cause):** `persistPickedSourceFile`'s source-id validator
+(originally `^[a-z0-9_]{1,128}$`) was written against `src/utils/id.ts`'s `makeId(prefix)` — an
+underscore-based id generator that is **not actually used anywhere in this app**. Every real
+id-generating call site, Library sources included (`app/library/add.tsx`'s
+`id: makeId()`), imports the *other* `makeId()` from `src/models/deck.ts`, which produces
+`<base36 timestamp>-<base36 random>` — containing a hyphen. Verified deterministically (not
+inferred): every id this generator produces fails the original pattern, 100% of the time, because
+of that hyphen. `persistedFile()` therefore returned `null` on its very first line for every real
+Library source, before any filesystem API was ever touched — reproducing the founder-observed
+"Couldn't attach file" failure exactly, and explaining why the finding #1 migration had no visible
+effect. Fixed by widening the pattern to `^[a-z0-9-]{1,128}$` (still deliberately narrow — lowercase
+alphanumeric and hyphen only, still exactly what the real generator produces, still blocking any
+path-traversal or arbitrary character) in both `src/storage/librarySourceFileStorage.ts` and the
+identical validator in `backend/lambdas/library-source-storage/index.mjs` — the Development
+source-storage Lambda was updated and redeployed with this fix during founder QA, confirmed by the
+subsequent successful cross-device secure-retrieval verification. Every early-return path in
+`persistPickedSourceFile` now also logs its exact reason via a
+temporary `[LibraryFileAttach]`-tagged diagnostic (`src/utils/libraryFileAttachLog.ts`) — a
+previous silent `return null` here (with no log at all) is what made this take a dedicated tracing
+mission to find instead of being visible on the first attempt. Persistence failures also log a
+sanitized diagnostic (operation name + error name/message only, never a path or
 filename) to the Metro console in development, so a future failure of this kind is diagnosable
 directly instead of silently returning `false`.
 
@@ -306,6 +336,142 @@ bucket, IAM role, Lambda, and both API routes are defined inside a single
 `if (environmentName === "development")` block in `infra/lib/interval-sync-stack.ts` — see
 `docs/cdk-infrastructure.md`'s "Library source storage" section for the full resource list and the
 confirmation that `IntervalStagingStack`'s synthesized template contains none of it.
+
+## Source open/preview
+
+Added by the Source Preview + Open Original batch, layered entirely on top of the already-deployed
+private source-storage foundation above — no AWS/CDK change was required or made.
+
+### Architecture selected: OS-native viewer handoff, not an embedded renderer
+
+```
+Source Detail
+  → src/cloud/librarySourceStorage/openSource.ts (openSourceOriginal — the only entry point Source
+    Detail calls for this feature)
+  → local-file resolver (src/storage/librarySourceFileStorage.ts — getPersistedSourceFileUri)
+  → cloud source storage service (src/cloud/librarySourceStorage/index.ts — downloadSourceOriginal,
+    only reached if no local copy exists)
+  → platform open/preview adapter (src/domain/sourceViewer.ts — openSourceFile)
+```
+
+`openSourceFile` hands a local file to `expo-sharing`'s `Sharing.shareAsync(uri, { mimeType, UTI,
+dialogTitle })` — the exact same package and pattern this app already uses for deck export
+(`app/deck/[id]/export.tsx`), already installed, already proven on this SDK, zero new dependency.
+On iOS this presents `UIActivityViewController`, which offers an inline preview of the file before
+the user picks an action. On Android it presents the `ACTION_SEND` chooser — a "share/open with"
+flow rather than a dedicated "view" intent, but the same installed apps (Files, Drive, Acrobat,
+gallery apps) handle both for common document/image types, so the practical user-visible outcome —
+pick an app, see the file — is equivalent. This was a deliberate choice against a bespoke embedded
+PDF/document renderer: it satisfies the product requirement ("I uploaded this source, I can open
+it here") with no new dependency, no native-module risk, and confirmed Expo Go compatibility,
+matching this batch's explicit preference for "a dependable cross-platform first implementation
+over an over-engineered embedded viewer." An embedded in-app viewer remains a possible future
+enhancement, not built here.
+
+**Founder QA incident and fix — file extension required, hints alone are not enough.** The first
+implementation handed `Sharing.shareAsync` the canonical durable path directly — deliberately
+extensionless (`librarySourceFiles/<sourceId>`, see "Local file URI rule and local source file
+durability" above). Founder QA on physical iPhone and Simulator proved this insufficient: iOS's
+share sheet / Quick Look determines file type primarily from the file extension on the URL itself,
+not from the accompanying `mimeType`/`UTI` hints — the source displayed as a generic "File"/"data"
+named after the bare source id, and could not be previewed as a PDF. Fix: `openSourceFile` now
+asks `src/storage/librarySourceFileStorage.ts`'s `prepareViewerCopy(sourceId, extension)` for a
+short-lived, extension-bearing COPY of the durable original — `<Cache>/librarySourceViewerCopies/
+<sourceId>.<safeExtension>` — created fresh (idempotent, overwriting any stale copy for that
+source id) on every "Open original" tap, and hands *that* copy's URI to `Sharing.shareAsync`
+instead, alongside the same MIME/UTI hints as before (both are now used together, not one or the
+other). The canonical durable file is never renamed, moved, or modified — `prepareViewerCopy` only
+ever reads from it. If no safe extension can be established for a source's type (see "File type
+behavior" below), the original extensionless canonical path is used as a graceful fallback exactly
+as before, rather than failing "Open original" outright.
+
+### Local-first resolution
+
+`getPersistedSourceFileUri(sourceId)` is checked first, always. If this device already has the
+durable local copy (written by either `attachAndUploadSourceFile` or a previous
+`downloadSourceOriginal` — see below, same canonical path either way), the file opens immediately
+with no network request of any kind — no presigned URL is generated unless genuinely needed.
+
+### Cloud fallback and retention decision
+
+If no local copy exists: the source must have `cloudUploadState === "uploaded"` and the
+Development-only source-storage capability must be enabled, or the action reports "unavailable"
+without attempting any network call. Otherwise, `downloadSourceOriginal` requests a fresh
+presigned GET, downloads to a temporary cache staging location, and — **the deliberate retention
+decision** — commits the result into Interval's durable, app-owned local directory via the exact
+same `persistPickedSourceFile` idempotent-copy step local attach uses, at the exact same
+canonical source-id-derived path. This means a source opened once on a cloud-only device becomes
+locally available for every future open on that device, including offline — matching this
+repository's offline-first philosophy (per this batch's own "strong preference": a deliberately
+opened cloud source is worth retaining locally so future opens don't repeat the download). This is
+NOT automatic/background downloading — it only ever happens as the direct result of an explicit
+user tap on "Open original," never during sync or on a schedule.
+
+**Known, accepted limitation, not solved here:** there is no local-storage eviction/lifecycle
+policy for these retained originals. A device that opens many cloud-only sources over time will
+accumulate their durable local copies indefinitely. This is deliberately deferred future work
+(consistent with this batch's own explicit instruction not to build one), not an oversight — a
+future storage-management pass (e.g. LRU eviction, a visible storage-usage setting) is a distinct,
+separate mission.
+
+### Download staging and integrity
+
+Downloads land in a temporary `Paths.cache`-based staging directory
+(`librarySourceDownloads/<sourceId>`, modern `File.downloadFileAsync`) first, never directly at the
+canonical durable path. Only a *fully completed* download is committed via `persistPickedSourceFile`
+(which itself only deletes any existing durable copy once the new bytes are confirmed present at
+the staging path) — a failed or partial download can never overwrite a known-good existing durable
+copy, and never fabricates a successful local original. The staging file is removed after commit
+either way (success or failure), so a failed attempt does not accumulate cache growth beyond the
+one attempted file.
+
+Separately, `librarySourceViewerCopies/<sourceId>.<extension>` (also `Paths.cache`-based) holds the
+short-lived, extension-bearing copy created on each "Open original" tap (see "Founder QA incident
+and fix" above) — a different directory from the download-staging one above, neither of which is
+the canonical durable store. `prepareViewerCopy` removes any other file already staged for that
+exact source id (any leftover extension) before creating the new one, so at most one viewer copy
+ever exists per source id — no uncontrolled duplicate accumulation. Both cache directories are
+OS-purgeable by design; only `librarySourceFiles/` (Documents-based) is the durable original.
+
+### File type behavior
+
+Reuses the existing `SourceType` union — no new types, no claimed support beyond what's realistic.
+Each type maps to a MIME/UTI hint AND (where a safe one exists) a viewer-copy extension:
+
+| SourceType | Extension used | Notes |
+|---|---|---|
+| `pdf` | `pdf` | |
+| `docx` | `docx` or `doc` | Chosen from the source's actual captured MIME type (`application/msword` → `doc`), not from sourceType alone — a picked legacy `.doc` file is still manually categorized as "docx" in the metadata form. |
+| `text` | `txt` | |
+| `pptx` | `pptx` | |
+| `xlsx` | `xlsx` | |
+| `image` | `jpg`/`png`/`heic` | Only for a recognized captured MIME type (`IMAGE_MIME_EXTENSIONS` in `src/domain/sourceViewer.ts`); an unrecognized image MIME type gets no extension rather than a guessed one. |
+| `audio` / unrecognized | none | No safe extension exists — falls back to the plain canonical (extensionless) path, MIME/UTI hints only. Audio has no attach path yet anyway (see "Supported input scope"). |
+
+The extension is always chosen from this small, hardcoded, trusted table — **never** derived from
+`originalName` or any other user/picker-supplied string, which is exactly what would let
+unvalidated text reach a filesystem path. Any other/unrecognized case falls back to a generic
+`application/octet-stream`/`public.data` hint, handed to the OS the same way — the OS decides
+whether it has a capable app, exactly the behavior a "hand off to the native viewer" strategy is
+supposed to have.
+
+### Error states
+
+Six distinct, user-facing reasons (`src/cloud/librarySourceStorage/openSource.ts`'s
+`OpenSourceErrorReason`): `unavailable` (no local copy, cloud original never uploaded — nothing to
+open, only reachable if the UI's own `canOpenOriginal` gate is somehow bypassed), `offline-no-local`
+(cloud original should exist but the network request failed), `access-denied` (401/403 from the
+download-url request), `not-found` (404 — cloud object missing despite metadata saying uploaded),
+`download-failed` (any other download/commit failure), `unsupported-viewer` (`expo-sharing`
+reports unavailable, or no compatible app), and `handoff-failed` (the share/open call itself threw).
+Each maps to its own precise EN/ES string — never a single generic "Something went wrong."
+
+### Independent of upload state
+
+`canOpenOriginal` in `app/library/[id]/index.tsx` is `hasLocalFile || source.cloudUploadState ===
+"uploaded"` — never gated on upload state alone. A source with a local copy but
+`cloudUploadState: "pending"` or `"failed"` remains fully openable; a failed cloud upload never
+blocks opening the local original. Retry Upload remains a separate, independent action.
 
 ## 1. What the Library is
 

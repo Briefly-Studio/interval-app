@@ -28,15 +28,18 @@ Staging/Beta is the same environment as Development's counterpart for *external 
 validation before Production — it is not a fourth environment, and it is not an internal detail
 of Development.
 
-**New since that milestone closed, not yet deployed:** the Library Organization + Private Source
-Storage batch added a Development-only S3 bucket, dedicated IAM role, Lambda, and two API routes
-for private original-source-file storage — defined in `infra/lib/interval-sync-stack.ts`, confirmed
-by `cdk synth`/`cdk diff` to be additive-only for Development and completely absent from Staging's
-synthesized template, but **not yet deployed to either environment**. See "Library source storage"
-below for the full design and "Development resource names" above for the exact new resource
-names. `IntervalDevelopmentStack` will show a real, non-empty diff the next time
-`cdk diff IntervalDevelopmentStack` is run against the live account — that is expected and is
-exactly this new, undeployed addition, not drift.
+**New since that milestone closed, deployed to Development and founder-QA verified:** the Library
+Organization + Private Source Storage batch added a Development-only S3 bucket, dedicated IAM
+role, Lambda, and two API routes for private original-source-file storage — defined in
+`infra/lib/interval-sync-stack.ts`, confirmed by `cdk synth`/`cdk diff` to be additive-only for
+Development and completely absent from Staging's synthesized template. **This is now deployed to
+`IntervalDevelopmentStack` and founder-QA verified end-to-end**: S3 public access blocked,
+authenticated-only access, ownership derived from trusted Cognito `sub`, server-derived object
+keys, short-lived non-persisted upload/download URLs, and a second Development device on the same
+account confirmed able to securely retrieve the cloud original. See "Library source storage" below
+for the full design. **Staging and Production remain untouched** — the Development-only
+conditional in `interval-sync-stack.ts` means `IntervalStagingStack` has none of this, and no
+Production resource of any kind exists for it.
 
 ## Architecture
 
@@ -77,10 +80,10 @@ automatically from CloudShell's own authenticated session; nothing here needs to
 
 ## Development resource names
 
-Eight original sync-path application resources, per `docs/environment-separation-plan.md` §4's
-naming standard, plus three Library-source-storage resources added by the Library Organization +
-Private Source Storage batch (see "Library source storage" below) — **defined in this repository,
-not yet deployed**:
+Eleven application resources, per `docs/environment-separation-plan.md` §4's naming standard for
+the original eight, plus three Library-source-storage resources added by the Library Organization
++ Private Source Storage batch (see "Library source storage" below) — **all deployed and
+founder-QA verified**:
 
 | Resource | Name |
 |---|---|
@@ -92,9 +95,9 @@ not yet deployed**:
 | Cognito user pool | `interval-dev-user-pool` |
 | Cognito app client | `interval-dev-mobile` |
 | IAM role (shared, both sync Lambdas) | `interval-dev-sync-lambda-role` |
-| Lambda (library source storage) | `interval-dev-library-source-storage` — **not yet deployed** |
-| IAM role (library source storage only) | `interval-dev-library-source-storage-role` — **not yet deployed** |
-| S3 bucket (library source originals) | CloudFormation-auto-generated, no fixed name — see "Library source storage" below — **not yet deployed** |
+| Lambda (library source storage) | `interval-dev-library-source-storage` |
+| IAM role (library source storage only) | `interval-dev-library-source-storage-role` |
+| S3 bucket (library source originals) | CloudFormation-auto-generated, no fixed name — see "Library source storage" below |
 
 CloudFormation stack name: **`IntervalDevelopmentStack`**.
 
@@ -103,9 +106,10 @@ CloudFormation stack name: **`IntervalDevelopmentStack`**.
 Added to `infra/lib/interval-sync-stack.ts` by the Library Organization + Private Source Storage
 batch — see `docs/library-and-source-architecture.md`'s "Private source storage architecture" for
 the full design record (object-key ownership, IAM reasoning, upload state machine, delete
-behavior). **Repository-defined, not yet deployed** — `cdk synth`/`cdk diff` confirm the shape
-below; no `cdk deploy` has run for this batch (see this document's own CloudShell procedure for
-what the founder runs next).
+behavior). **Deployed to `IntervalDevelopmentStack` and founder-QA verified** — S3 public access
+blocked, authenticated-only access, trusted-Cognito-`sub` ownership, server-derived object keys,
+short-lived non-persisted upload/download URLs, and secure cross-device retrieval all confirmed
+against the live Development environment.
 
 **Development-only, by construction.** All three resources — the S3 bucket, its dedicated IAM
 role, and the storage Lambda plus its two API routes — are defined inside a single
@@ -350,7 +354,7 @@ together (the JWT authorizer, Lambda invoke permissions for API Gateway, the IAM
 to the shared role, the API's default stage, and CDK's own bootstrap-version metadata resource).
 Verified directly against both synthesized templates — see "Local validation" below. This now
 includes the Development-only S3 bucket/Lambda/IAM role/routes described in "Library source
-storage" above — repository-defined, not yet deployed.
+storage" above — deployed to Development and founder-QA verified.
 
 ## What CDK does not manage
 

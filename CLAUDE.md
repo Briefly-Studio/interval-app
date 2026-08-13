@@ -84,13 +84,19 @@ For anything not covered directly in this file, these are the authoritative docu
    document's own status line and "Production grandfathering" section.
 7. `docs/platform-scope.md` — currently supported platforms and beta boundaries.
 8. `docs/accessibility-foundation.md` — accessibility requirements, current and future.
-9. `docs/library-and-source-architecture.md` — future Library, source, document/audio intake,
-   sharing, and AI draft architecture. **Specification only — not implemented.**
+9. `docs/library-and-source-architecture.md` — Library and source architecture. **Substantially
+    implemented in Development**: local metadata/UI, Development-only cross-device metadata sync,
+    Development-only private original-file storage (deployed, founder-QA verified), and
+    Development-only source open/preview are all real today — see the document's own
+    "Implementation status" section for the exact current/future split. Extraction, OCR, AI
+    generation, in-platform sharing, and Canvas integration remain specification-only.
 10. `docs/library-ui-foundation.md` — the implemented local-only Library UI foundation.
-11. `docs/library-cross-device-diagnosis.md` — code-verified root cause of Library metadata not
-    appearing across devices on the same account (expected: local-only, no sync exists).
-12. `docs/library-cloud-sync-contract.md` — the required future shape of Library metadata cloud
-    sync. **Specification only — not implemented.**
+11. `docs/library-cross-device-diagnosis.md` — historical diagnosis document. Accurate when
+    written (Library metadata had no transport mechanism at all); now superseded for Development
+    builds, where Library metadata sync is implemented and founder-QA verified — still accurate
+    as written for Staging, Production, and guests, where Library metadata remains local-only.
+12. `docs/library-cloud-sync-contract.md` — the Library metadata cloud sync contract.
+    **Implemented and founder-QA verified end-to-end in Development.**
 13. `docs/canvas-companion-spec.md` — future Canvas integration and reminder architecture.
     **Specification only — not implemented.**
 14. `docs/sync-invariants.md` — current offline-first sync invariants.
@@ -195,6 +201,27 @@ and deployed. Guardrails when touching this area:
   `docs/library-and-source-architecture.md`'s "Delete behavior"). See that same doc's "Private
   source storage architecture" section before changing object-key derivation, IAM scope, or the
   upload state machine.
+- **Source open/preview (`src/cloud/librarySourceStorage/openSource.ts`,
+  `src/domain/sourceViewer.ts`)**: Source Detail's "Open original" action must go through
+  `openSourceOriginal` only — never let a screen call `downloadSourceOriginal`, `expo-sharing`, or
+  raw filesystem APIs directly. Local resolution always comes first (`getPersistedSourceFileUri`);
+  a cloud download only happens on an explicit user tap, never automatically during sync. A
+  cloud-downloaded original is deliberately committed to the SAME canonical
+  `src/storage/librarySourceFileStorage.ts` path local attach uses (not a second directory) so it
+  becomes durably available for future offline opens — see
+  `docs/library-and-source-architecture.md`'s "Source open/preview" section for the retention
+  reasoning and its known, deferred eviction-policy limitation. Never gate the "Open original"
+  action on `cloudUploadState === "uploaded"` alone — a source with a local copy must remain
+  openable regardless of upload state. Viewer handoff uses `expo-sharing` (already installed,
+  already used by `app/deck/[id]/export.tsx`) — do not add a PDF-rendering or WebView-based
+  dependency for this without a concrete, founder-approved need. The canonical durable file stays
+  extensionless (`librarySourceFiles/<sourceId>`) — do not hand its URI to `Sharing.shareAsync`
+  directly; iOS's share sheet/Quick Look determines file type primarily from the URL's extension,
+  not from `mimeType`/`UTI` hints alone (founder-QA-proven). `openSourceFile` must always route
+  through `prepareViewerCopy` (`src/storage/librarySourceFileStorage.ts`) to get a short-lived,
+  extension-bearing copy first; never rename/move the canonical file itself, and never derive the
+  extension from `originalName` or any other user-supplied string — only from the small, hardcoded
+  table in `src/domain/sourceViewer.ts`.
 
 - `LibrarySourceRecord` (`src/models/librarySource.ts`) is metadata only. Never add a field that
   could hold a file URI, binary content, extracted text, or AI-generated content without an
@@ -215,8 +242,8 @@ and deployed. Guardrails when touching this area:
   explicit founder approval — this is the single centralized gate; do not add a second, scattered
   `INTERVAL_ENV` check elsewhere for this feature. Source binaries/content are still never synced
   anywhere — only the metadata fields already on `LibrarySourceRecord`/`SourceCollectionRecord`
-  (private source-file storage is separate work — see the "Private source storage" guardrail below
-  once that batch lands).
+  (private source-file storage is separate work, implemented and deployed — see the "Private
+  source storage" guardrail above).
 
 ### Deck Collections (local-only foundation)
 
@@ -247,39 +274,26 @@ and deployed. Guardrails when touching this area:
 
 ## AWS Resources
 
-Region:
+Named by resource/role, not by live identifier — live IDs are unnecessary coupling that goes
+stale easily and are never required to work in this repository; retrieve them from the deployed
+stack outputs (`docs/cdk-infrastructure.md`) or `.env` when actually needed, never from this file.
 
-- us-east-2
+Region (all environments): `us-east-2`.
 
-API Gateway HTTP API:
+**Production baseline** (grandfathered, not CDK-managed — see "Environment Safety" below):
 
-- API ID: 4oge9e46jf
-- stage: prod
+- API Gateway HTTP API: `IntervalSyncApi`, stage `prod`, routes `POST /sync/push` and
+  `GET /sync/pull`
+- Lambda functions: `IntervalSyncPush`, `IntervalSyncPull`
+- DynamoDB tables: `Interval_Records`, `Interval_Changes`
+- Cognito user pool: `IntervalUserPool`; app client: `IntervalMobile` (no client secret)
 
-Routes:
+Development and Staging resource names follow the same shape with `interval-dev-*`/
+`interval-staging-*` prefixes — see `docs/cdk-infrastructure.md`'s "Development resource names"
+and "Staging resource names" sections for the complete, current list.
 
-- POST /sync/push
-- GET /sync/pull
-
-Lambda functions:
-
-- IntervalSyncPush
-- IntervalSyncPull
-
-DynamoDB tables:
-
-- Interval_Records
-- Interval_Changes
-
-Cognito:
-
-- user pool: IntervalUserPool
-- pool ID: us-east-2_UwGRm5dye
-- app client: IntervalMobile
-- app client ID: 2bjbtn3qbdrcsa9k60095p5lto
-- no client secret
-
-Do not hardcode deployment URLs, credentials, tokens, or secrets.
+Do not hardcode deployment URLs, account IDs, ARNs, bucket names, credentials, tokens, or secrets
+anywhere in this repository.
 
 ## Current Backend Task Status
 
@@ -292,14 +306,19 @@ claims (HTTP API JWT: `event.requestContext.authorizer.jwt.claims.sub`; REST API
 `event.requestContext.authorizer.claims.sub`), never from the request body or query
 parameters, and no `U#public` references remain in the source.
 
-This confirms the source code, not the deployed behavior. Whether the Lambda code
-currently deployed to `IntervalSyncPush`/`IntervalSyncPull` matches this repository's
-source has not been verified here, since that would require inspecting live AWS
-resources. Do not assume the deployed functions match this source until that is
-checked separately.
+**Development and Staging: verified, not just source-confirmed.** Both stacks' Lambdas are
+packaged directly from this repository's `backend/lambdas/**` source via CDK (`lambda.Code.fromAsset`),
+so deployed code is this source by construction, and the authenticated sync flow (fresh account,
+sign-up/sign-in, deck/card creation, repeated Force Resync, cross-device convergence on physical
+phone + Simulator) has been founder-QA verified end-to-end against both environments. The Library
+source-storage Lambda's source-id validator was corrected and redeployed to Development during
+founder QA (see "Library" below) — do not assume any other repository source change to
+`backend/lambdas/**` is automatically live in Development/Staging without a redeploy.
 
-The authenticated sync flow still needs to be validated end-to-end against the
-deployed backend.
+**Production is a separate question.** Production is not CDK-managed and was never deployed from
+this repository's `backend/lambdas/**` source — whether its live Lambda code matches this
+repository's source has not been verified here, since that would require inspecting live
+Production AWS resources. Do not assume Production's deployed functions match this source.
 
 Never accept the user ID from the request body or query parameters.
 
@@ -350,15 +369,18 @@ grandfathering"). None of this blocked closing out the three-environment milesto
 - Read-only AWS inspection (`get`/`describe`/`list` calls) may be used freely to verify live state;
   mutating calls (`create-*`/`update-*`/`delete-*`/`put-*`/deploy) require the explicit approval
   above.
-- Never assume a deployed Lambda matches this repository's `backend/lambdas/**` source — that has
-  not been verified end-to-end (see "Current Backend Task Status").
+- Never assume Production's deployed Lambda matches this repository's `backend/lambdas/**`
+  source — that has not been verified end-to-end and Production is not CDK-managed, so there is no
+  build-time guarantee either (see "Current Backend Task Status"). Development and Staging don't
+  have this problem — their Lambdas are packaged directly from this repository's source by CDK.
 - Future environment-specific values (table names, pool IDs, bucket names) come from configuration
   injected per environment, never from a code fork or an environment-specific branch of logic.
-- Library (`app/library/**`) private source-file storage is repository-implemented and
-  Development-only (see "Library" guardrails above and `docs/library-and-source-architecture.md`'s
-  "Private source storage architecture") — Staging and Production remain local metadata only.
-  Widening source storage or metadata sync beyond Development requires explicit founder approval,
-  every time, same as any other environment-boundary change in this file.
+- Library (`app/library/**`) private source-file storage is implemented, deployed, and founder-QA
+  verified in Development only (see "Library" guardrails above and
+  `docs/library-and-source-architecture.md`'s "Private source storage architecture") — Staging and
+  Production remain local metadata only, with no source-storage AWS resource of any kind. Widening
+  source storage or metadata sync beyond Development requires explicit founder approval, every
+  time, same as any other environment-boundary change in this file.
 
 ## Current Known Technical Debt
 
@@ -372,10 +394,6 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   accepted beta risk, not a solved problem — see docs/sync-invariants.md's "no conflict
   UI for concurrent multi-device edits" section for the full explanation and what a
   future resolution could involve.
-- README carries a disclaimer pointing readers to this file and `docs/` for current
-  details (fixed this batch), but its own Features/Project Structure sections still
-  describe an earlier version of the app rather than being fully rewritten. Some
-  Briefly naming remains elsewhere (storage keys, filenames, comments).
 - Production AWS infrastructure is not yet managed through Infrastructure as Code, and this
   remains true by design (see "Production grandfathering" in `docs/cdk-infrastructure.md`) — the
   Development and Staging CDK stacks (`infra/`) are both deployed and live, but Production is not
@@ -390,20 +408,34 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   is manual founder QA plus local static checks (`tsc`, lint, `cdk synth`), not automated tests.
 - `expo-doctor` reports a known, accepted 17/18 due to 8 packages sitting one SDK patch version
   behind — tracked, not a regression each time it's re-confirmed.
-- Whether the deployed Lambda functions match the source in `backend/lambdas/` has not been verified end-to-end.
+- Whether Production's deployed Lambda functions match this repository's `backend/lambdas/`
+  source has not been verified end-to-end (Production is not CDK-managed, so there is no
+  build-time guarantee the way there is for Development/Staging — see "Current Backend Task
+  Status" above). Development and Staging are not affected by this — their Lambdas are packaged
+  directly from this repository's source and have been founder-QA verified end-to-end.
 - Library metadata (sources and collections) cross-device sync is implemented and founder-QA
   verified, but **Development-only** — a Staging or Production build (and every guest) still sees
   local-only Library metadata, the same account showing different Library contents on different
   devices, exactly as originally diagnosed (`docs/library-cross-device-diagnosis.md`,
   `docs/library-cloud-sync-contract.md`). Widening past Development requires explicit founder
-  approval. Original source-file bytes are separately Development-only and repository-only (not
-  yet deployed) — see `docs/library-and-source-architecture.md`'s "Private source storage
-  architecture".
+  approval. Private original-file storage is likewise Development-only, but is **deployed and
+  founder-QA verified there** (not repository-only) — see `docs/library-and-source-architecture.md`'s
+  "Private source storage architecture". Retained local/cloud-downloaded source files have no
+  storage-eviction policy yet — a device that opens many cloud-only sources accumulates their
+  local copies indefinitely; deferred future work, not a defect.
 - Deck ordering was previously non-deterministic across devices (storage-array-order dependent —
   see `docs/deck-ordering.md`); now fixed for Home via a canonical comparator. Deck Collections
   (`docs/deck-collections.md`) remain local-only in every environment, including Development
   (unlike Library metadata above, which now syncs in Development) — same device sees the same
   organization, a second device signed into the same account does not yet, anywhere.
+- Library source "Open original" hands the file to the OS-native share/viewer surface
+  (`expo-sharing`) rather than rendering it in-app — there is no embedded/in-app PDF (or other
+  document) reader implemented. Founder QA has confirmed a PDF can be retrieved and handed to iOS
+  as a real, correctly-typed `.pdf`, but broader QA of this flow has not yet passed, and this
+  should not be described as complete until it does. The current development QA runtime is Expo
+  Go, which does not support arbitrary native modules — a true in-app document viewer would likely
+  require migrating to an Expo Development Build, which is a possible future direction under
+  consideration but has **not** been implemented or approved.
 
 ## Accessibility Guardrails
 
@@ -445,6 +477,12 @@ settings, or any new interactive control. Short version for every future change:
 13. Show diffs before committing.
 14. Do not commit or push unless explicitly instructed.
 15. Do not modify unrelated files.
+16. For feature/fix work (not documentation-only changes), founder runtime QA must pass before
+    committing — passing `tsc`/lint is a baseline, not a substitute. The required workflow:
+    implement → static validation → founder/reviewer inspects the diff → founder runtime QA →
+    any bugs found return to implementation → founder QA passes → only then commit → only then
+    push → deploy only when actually required. Do not suggest or perform a commit merely because
+    TypeScript and lint passed.
 
 ## Commit Authorship
 
