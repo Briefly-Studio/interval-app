@@ -1,17 +1,22 @@
 import type { CardRecord } from "../../models/card";
 import type { DeckRecord } from "../../models/deck";
+import type { LibrarySourceRecord } from "../../models/librarySource";
 import type { SessionRecord } from "../../models/session";
+import type { SourceCollectionRecord } from "../../models/sourceCollection";
 import type { Change, EntityType } from "./types";
 
 import { AuthService } from "../../auth/AuthService";
 import { getCardsAll, setCards } from "../../storage/cards";
 import { getDecksAll, setDecks } from "../../storage/decks";
 import { getDeviceId } from "../../storage/device";
+import { getLibrarySources, setLibrarySources } from "../../storage/librarySources";
 import { getSessions, setSessions } from "../../storage/sessions";
+import { getSourceCollections, setSourceCollections } from "../../storage/sourceCollections";
 import { getSyncCursor, setSyncCursor } from "../../storage/sync";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import { sameScope } from "../../storage/workspaceScope";
 import { getSyncDiagnosticCode, isSyncNetworkError, pullChanges, pushChanges } from "./http";
+import { isLibraryMetadataCloudSyncEnabled } from "./libraryMetadataSyncCapability";
 import {
   getSyncState,
   markSyncNeedsAttention,
@@ -97,6 +102,16 @@ async function applyChanges(scope: WorkspaceScope, rawChanges: unknown[]): Promi
   const deckChanges = ordered.filter((c) => c.entity === "deck");
   const cardChanges = ordered.filter((c) => c.entity === "card");
   const sessionChanges = ordered.filter((c) => c.entity === "session");
+  // Gated so that, even if a Library change somehow arrived in a pull response while this
+  // environment has Library metadata cloud sync disabled (see libraryMetadataSyncCapability.ts),
+  // it is silently ignored rather than applied — this is the pull-side half of the Development-
+  // only rollout boundary; collectDirty below is the push-side half.
+  const librarySourceChanges = isLibraryMetadataCloudSyncEnabled()
+    ? ordered.filter((c) => c.entity === "librarySource")
+    : [];
+  const sourceCollectionChanges = isLibraryMetadataCloudSyncEnabled()
+    ? ordered.filter((c) => c.entity === "sourceCollection")
+    : [];
 
   if (deckChanges.length) {
     const decks = await getDecksAll(scope);
@@ -204,6 +219,70 @@ async function applyChanges(scope: WorkspaceScope, rawChanges: unknown[]): Promi
     await setSessions(scope, Array.from(byId.values()));
   }
 
+  if (librarySourceChanges.length) {
+    const sources = await getLibrarySources(scope);
+    const byId = new Map(sources.map((s) => [s.id, s]));
+
+    for (const ch of librarySourceChanges) {
+      const incoming = ch.record as LibrarySourceRecord;
+      const existing = byId.get(ch.id);
+      if (!incomingWins(existing, toRev(incoming.rev), ch.ts)) continue;
+
+      if (ch.op === "delete") {
+        const deletedAt = incoming.deletedAt ?? ch.ts;
+        byId.set(ch.id, {
+          ...incoming,
+          deletedAt,
+          updatedAt: ch.ts,
+          dirty: false,
+          lastSyncedAt: now,
+        });
+        continue;
+      }
+
+      byId.set(ch.id, {
+        ...incoming,
+        deletedAt: undefined,
+        dirty: false,
+        lastSyncedAt: now,
+      });
+    }
+
+    await setLibrarySources(scope, Array.from(byId.values()));
+  }
+
+  if (sourceCollectionChanges.length) {
+    const collections = await getSourceCollections(scope);
+    const byId = new Map(collections.map((c) => [c.id, c]));
+
+    for (const ch of sourceCollectionChanges) {
+      const incoming = ch.record as SourceCollectionRecord;
+      const existing = byId.get(ch.id);
+      if (!incomingWins(existing, toRev(incoming.rev), ch.ts)) continue;
+
+      if (ch.op === "delete") {
+        const deletedAt = incoming.deletedAt ?? ch.ts;
+        byId.set(ch.id, {
+          ...incoming,
+          deletedAt,
+          updatedAt: ch.ts,
+          dirty: false,
+          lastSyncedAt: now,
+        });
+        continue;
+      }
+
+      byId.set(ch.id, {
+        ...incoming,
+        deletedAt: undefined,
+        dirty: false,
+        lastSyncedAt: now,
+      });
+    }
+
+    await setSourceCollections(scope, Array.from(byId.values()));
+  }
+
   return rejected;
 }
 
@@ -246,6 +325,36 @@ async function collectDirty(scope: WorkspaceScope): Promise<Change[]> {
       record: session,
       ts: session.updatedAt,
     });
+  }
+
+  // Gated so a Staging/Production-pointed build can never even collect Library metadata for
+  // push, regardless of anything a dirty flag on disk says — this is the primary, structural half
+  // of the Development-only rollout boundary (see libraryMetadataSyncCapability.ts and
+  // applyChanges above for the pull-side counterpart).
+  if (isLibraryMetadataCloudSyncEnabled()) {
+    const sources = await getLibrarySources(scope);
+    for (const source of sources) {
+      if (!source.dirty) continue;
+      changes.push({
+        id: source.id,
+        entity: "librarySource",
+        op: source.deletedAt ? "delete" : "upsert",
+        record: source,
+        ts: source.updatedAt,
+      });
+    }
+
+    const collections = await getSourceCollections(scope);
+    for (const collection of collections) {
+      if (!collection.dirty) continue;
+      changes.push({
+        id: collection.id,
+        entity: "sourceCollection",
+        op: collection.deletedAt ? "delete" : "upsert",
+        record: collection,
+        ts: collection.updatedAt,
+      });
+    }
   }
 
   return changes;
@@ -291,14 +400,36 @@ async function markClean(
     return;
   }
 
-  // entity === "session"
-  const sessions = await getSessions(scope);
-  const updated = sessions.map((session) => {
-    const ackedRev = acknowledged.get(session.id);
-    if (ackedRev === undefined || toRev(session.rev) !== ackedRev) return session;
-    return { ...session, dirty: false, lastSyncedAt: now };
+  if (entity === "session") {
+    const sessions = await getSessions(scope);
+    const updated = sessions.map((session) => {
+      const ackedRev = acknowledged.get(session.id);
+      if (ackedRev === undefined || toRev(session.rev) !== ackedRev) return session;
+      return { ...session, dirty: false, lastSyncedAt: now };
+    });
+    await setSessions(scope, updated);
+    return;
+  }
+
+  if (entity === "librarySource") {
+    const sources = await getLibrarySources(scope);
+    const updated = sources.map((source) => {
+      const ackedRev = acknowledged.get(source.id);
+      if (ackedRev === undefined || toRev(source.rev) !== ackedRev) return source;
+      return { ...source, dirty: false, lastSyncedAt: now };
+    });
+    await setLibrarySources(scope, updated);
+    return;
+  }
+
+  // entity === "sourceCollection"
+  const collections = await getSourceCollections(scope);
+  const updated = collections.map((collection) => {
+    const ackedRev = acknowledged.get(collection.id);
+    if (ackedRev === undefined || toRev(collection.rev) !== ackedRev) return collection;
+    return { ...collection, dirty: false, lastSyncedAt: now };
   });
-  await setSessions(scope, updated);
+  await setSourceCollections(scope, updated);
 }
 
 async function runSync(): Promise<void> {
@@ -373,6 +504,11 @@ async function runSync(): Promise<void> {
       await markClean(scope, "deck", acknowledgedFor("deck"));
       await markClean(scope, "card", acknowledgedFor("card"));
       await markClean(scope, "session", acknowledgedFor("session"));
+      // No capability check needed here: when Library metadata sync is disabled, collectDirty
+      // never included these entities in `outgoing`, so acknowledgedFor(...) is naturally empty
+      // and markClean's own `if (acknowledged.size === 0) return;` guard makes this a no-op.
+      await markClean(scope, "librarySource", acknowledgedFor("librarySource"));
+      await markClean(scope, "sourceCollection", acknowledgedFor("sourceCollection"));
     }
   }
 

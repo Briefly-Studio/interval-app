@@ -1,14 +1,16 @@
 import type { CardRecord } from "../../models/card";
 import type { DeckRecord } from "../../models/deck";
+import type { LibrarySourceRecord } from "../../models/librarySource";
 import type { SessionRecord } from "../../models/session";
+import type { SourceCollectionRecord } from "../../models/sourceCollection";
 
-export type EntityType = "deck" | "card" | "session";
+export type EntityType = "deck" | "card" | "session" | "librarySource" | "sourceCollection";
 
 export type Change = {
   id: string;
   entity: EntityType;
   op: "upsert" | "delete";
-  record: DeckRecord | CardRecord | SessionRecord;
+  record: DeckRecord | CardRecord | SessionRecord | LibrarySourceRecord | SourceCollectionRecord;
   ts: string;
 };
 

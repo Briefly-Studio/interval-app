@@ -1,5 +1,15 @@
 # Library Cross-Device Behavior: Diagnosis
 
+**Historical document — superseded for Development builds.** This diagnosis was accurate when
+written: at that time Library metadata had no transport mechanism at all. That is no longer true —
+`docs/library-cloud-sync-contract.md`'s implementation now wires `librarySource`/
+`sourceCollection` into `src/cloud/sync/SyncService.ts`, gated to `INTERVAL_ENV === "development"`
+only (see `src/cloud/sync/libraryMetadataSyncCapability.ts`), and has since been founder-QA
+verified end-to-end in Development (see that contract doc's status note for the full checklist).
+For a Development-configured, signed-in build, cross-device Library metadata visibility now works
+the same way decks/cards already do. For Staging and Production builds, and for guests, everything
+below remains exactly correct and unchanged: Library metadata is still fully local-only there.
+
 ## Founder-observed behavior
 
 Device A, signed into an account, has Library sources and collections. Device B, signed into the

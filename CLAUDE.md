@@ -170,14 +170,20 @@ area:
   (`src/storage/libraryKeys.ts`), scoped through the existing `scopedKey(WorkspaceScope, ...)`
   mechanism — same guest-vs-`user:<sub>` local partitioning as decks/cards. Do not bypass this
   scoping or introduce a device-wide Library store.
-- There is no cloud Library record, no `ownerId`, and no Cognito authorization check anywhere in
-  this code. Do not add one without following `docs/library-and-source-architecture.md` §18's
-  account/guest boundary.
-- Do not wire Library storage into `src/cloud/sync/**` — no Library sync protocol exists or is
-  approved yet (see `docs/library-and-source-architecture.md` §12 and
-  `docs/library-cloud-sync-contract.md` for the specification a future implementation must follow).
-  This is why the same signed-in account currently sees different Library contents on different
-  devices — expected, not a bug; see `docs/library-cross-device-diagnosis.md`.
+- There is no cloud Library record with a separate `ownerId` field — ownership is Cognito `sub`
+  from trusted authorizer claims only, exactly like decks/cards/sessions, never from client input.
+- **Library metadata cloud sync (`librarySource`/`sourceCollection`) is implemented and
+  founder-QA verified end-to-end in Development** (physical iPhone via Expo Go + iOS Simulator —
+  see `docs/library-cloud-sync-contract.md`'s status note for the full verified checklist), gated
+  Development-only, in `src/cloud/sync/SyncService.ts`/`types.ts`/`validateChange.ts` plus
+  `src/cloud/sync/libraryMetadataSyncCapability.ts`. No backend Lambda or AWS resource changed for
+  this feature (the existing sync backend was already entity-agnostic). Do not widen
+  `ALLOWED_ENVIRONMENTS` in `libraryMetadataSyncCapability.ts` beyond `development` without
+  explicit founder approval — this is the single centralized gate; do not add a second, scattered
+  `INTERVAL_ENV` check elsewhere for this feature. Source binaries/content are still never synced
+  anywhere — only the metadata fields already on `LibrarySourceRecord`/`SourceCollectionRecord`
+  (private source-file storage is separate work — see the "Private source storage" guardrail below
+  once that batch lands).
 
 ### Deck Collections (local-only foundation)
 

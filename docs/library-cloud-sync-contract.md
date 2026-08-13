@@ -1,12 +1,31 @@
 # Library Cloud Sync Contract
 
-**Status: specification only — not implemented.** No cloud Library persistence exists anywhere in
-this repository today. This document defines how Library metadata cross-device sync **must**
-work once it is actually built, which itself requires Development AWS infrastructure to exist
-first (`docs/environment-separation-plan.md`). It resolves the "a dedicated protocol is likely
-needed" item `docs/library-and-source-architecture.md` §12 flagged but left open, for the metadata
-layer specifically — see "What this contract explicitly does not cover" below for what it does
-not resolve.
+**Status: implemented and founder-QA verified end-to-end in Development.** The client-side sync
+engine (`src/cloud/sync/**`) and local model layer (`src/models/librarySource.ts`,
+`src/models/sourceCollection.ts`) handle `librarySource`/`sourceCollection` exactly as this
+contract specifies, gated behind `src/cloud/sync/libraryMetadataSyncCapability.ts` so it is only
+active when `INTERVAL_ENV === "development"` (see "Rollout gate" and "Implementation status"
+below). No backend Lambda code changed (it was already entity-agnostic — see "No direct Production
+experimentation" below), and no AWS resource was created, modified, or deployed for this feature —
+it runs entirely against the pre-existing, already-deployed `IntervalDevelopmentStack`.
+
+**Founder QA verification (Development, physical iPhone via Expo Go + iOS Simulator):** Dev Tools
+correctly reported the Development environment and an Enabled sync capability; the Library source
+dirty count transitioned correctly after sync; source metadata created on one device appeared on
+the other; source rename, archive/unarchive, and delete/restore all propagated cross-device;
+source collections and collection membership synchronized correctly; deleting a collection did not
+delete its underlying sources; an offline mutation converged correctly after reconnect; repeated
+Force Resync succeeded; ordinary deck/card/session sync remained healthy throughout; account
+isolation remained intact; source binaries/content were not synced (none exist yet — see
+`docs/library-and-source-architecture.md` for the follow-on storage batch); and no unexpected
+Staging or Production Library cloud sync occurred. This is the feature's Development rollout
+gate working as designed, verified against real devices, not just repository inspection.
+
+This document defines how Library metadata cross-device sync works. It resolves the "a dedicated
+protocol is likely needed" item `docs/library-and-source-architecture.md` §12 flagged but left
+open, for the metadata layer specifically: the implementation reuses the existing
+`/sync/push`/`/sync/pull` routes rather than a dedicated protocol — see "What this contract
+explicitly does not cover" below for what remains genuinely unresolved.
 
 ## Why this document exists now
 
@@ -37,6 +56,28 @@ same collections, same collection membership, same deletions — the same cross-
 guarantee `docs/sync-invariants.md` already provides for decks/cards/sessions, applied to this new
 entity family rather than reinvented for it.
 
+## Rollout gate (Development-only for this batch)
+
+Library metadata cloud sync is enabled only when `isLibraryMetadataCloudSyncEnabled()`
+(`src/cloud/sync/libraryMetadataSyncCapability.ts`) returns true — currently only when
+`getEnvironmentConfig().environment === "development"`. This is the single, centralized decision
+point; nothing else in the codebase independently checks `INTERVAL_ENV` for this feature. It gates
+exactly two call sites in `src/cloud/sync/SyncService.ts`:
+
+- `collectDirty` — a Staging/Production-pointed build never collects dirty Library records for
+  push in the first place. This is the primary, structural protection: no Library metadata can
+  ever leave the device unless this returns true at push time.
+- `applyChanges` — if a Library change somehow arrived in a pull response while disabled, it is
+  silently ignored (not written locally, not logged as a warning) rather than applied. Defense in
+  depth alongside the push-side gate, not the primary mechanism.
+
+`markClean` needs no separate gate: when the capability is off, `collectDirty` never included
+Library entities in the outgoing push, so the acknowledged-revisions map for those entities is
+always empty, and `markClean`'s own early-return on an empty map makes it a no-op naturally.
+
+Enabling Staging and, later, Production is expected to be a small, deliberate, founder-approved
+change to `ALLOWED_ENVIRONMENTS` in that one file — not a rewrite of this feature.
+
 ## Entities
 
 Two new syncable entity types, alongside the existing `deck` / `card` / `session`:
@@ -45,6 +86,12 @@ Two new syncable entity types, alongside the existing `deck` / `card` / `session
 - `sourceCollection` — one row per `SourceCollectionRecord`, including collection membership
   (`LibrarySourceRecord.collectionIds`, which travels as part of the source's own record, the same
   way it already works locally — no separate join-table entity needed).
+
+Both entities reuse the existing `/sync/push`/`/sync/pull` HTTP contract and `Change` envelope
+(`src/cloud/sync/types.ts`) — no new route, no new request/response shape. `EntityType` was
+extended to include both; `validateChange.ts` gained shallow shape validators for each
+(`isLibrarySourceRecordShape`/`isSourceCollectionRecordShape`), matching the existing
+deck/card/session validators' depth and reject-don't-coerce convention exactly.
 
 ## Ownership
 
@@ -90,6 +137,20 @@ well for decks/cards. A metadata edit made offline queues (`dirty: true`, alread
 purpose) and syncs on the next successful `runSync`, using the same push/pull/apply/cursor shape
 `SyncService.ts` already implements — not a new mechanism.
 
+## Local migration
+
+No dedicated migration function was needed. Every mutation function in
+`src/storage/librarySources.ts` and `src/storage/sourceCollections.ts` already set `dirty: true`
+and correctly bumped `rev`/`updatedAt` on every write, from an earlier Library batch written for
+future sync-readiness — and nothing has ever cleared `dirty` before this implementation. That
+means every pre-existing local Library record, on any device, is already correctly flagged as
+needing its first sync the moment sync is enabled — no separate one-time migration pass is
+required. The only model-layer change was adding `lastSyncedAt?: string` to both
+`LibrarySourceRecord` and `SourceCollectionRecord` (matching the field decks/cards/sessions
+already have) and extending `upgradeLibrarySource`/`upgradeSourceCollection` to read it back —
+both functions reconstruct their return object field-by-field rather than spreading raw input, so
+this had to be added explicitly or the field would be silently stripped on every storage read.
+
 ## Guest behavior
 
 **Unaffected — guests keep exactly what they have today.** Local-only Library metadata for a
@@ -109,14 +170,18 @@ or should be read as quietly deciding.
 
 ## No direct Production experimentation
 
-Per this mission's and `CLAUDE.md`'s standing rules: implementing anything in this contract means
-new DynamoDB access patterns (or a new table), a new/extended Lambda, and a schema this repository
-has never deployed before. None of that touches the existing Production `Interval_Records`/
-`Interval_Changes` tables' deck/card/session data — but even so, per
-`docs/environment-separation-plan.md`, this work is sequenced to happen against a **Development**
-environment first, once one exists, never developed or tested directly against the live Production
-backend. This document specifies the contract the future implementation must satisfy; it does not
-authorize building or deploying it.
+Per this mission's and `CLAUDE.md`'s standing rules: this work was sequenced to happen against a
+**Development** environment, never developed or tested directly against the live Production
+backend. In the end, **no backend Lambda source change was required at all**: `PK = U#<sub>` and
+the Records/Changes table `SK` shapes in `backend/lambdas/sync-push/index.mjs` and
+`sync-pull/index.mjs` are already entity-agnostic — `entity` is just string-interpolated into the
+sort key with no allowlist anywhere — so `librarySource`/`sourceCollection` changes flow through
+the existing `/sync/push`/`/sync/pull` Lambdas and the existing `Interval_Records`/
+`Interval_Changes` tables unmodified. No new table, no new access pattern, no new Lambda, and
+consequently **no CDK/infrastructure change and no redeployment of `IntervalDevelopmentStack`**
+is required for this feature to work once the Development-gated client code above reaches a
+Development build. This document specified the contract; this section now also records that the
+implementation satisfying it required zero backend changes.
 
 ## What this contract explicitly does not cover
 
@@ -124,8 +189,9 @@ authorize building or deploying it.
 - Server-side extraction, AI generation, or Canvas synchronization (§7–§10 of the architecture
   doc) — all depend on binary storage existing first, which this contract does not provide.
 - Guest-to-account adoption/migration mechanics (§18 of the architecture doc, explicitly open).
-- Whether Library sync uses the *same* `/sync/push`/`/sync/pull` routes as decks/cards or a
-  dedicated protocol — `docs/library-and-source-architecture.md` §12 already flags that forcing
-  large binaries into the existing small-delta change-log model is likely the wrong fit for
-  *files*, but metadata-only records are much closer in shape to what that model already handles
-  well. Which approach to take is a future implementation-phase decision, not resolved here.
+- **Resolved by this implementation:** Library sync uses the *same* `/sync/push`/`/sync/pull`
+  routes as decks/cards, not a dedicated protocol — metadata-only records turned out to fit the
+  existing small-delta change-log model without modification, exactly as this document's original
+  "much closer in shape" note anticipated. This resolution applies to metadata only; it says
+  nothing about how a future binary/file-upload path should work, which remains a separate,
+  unresolved question (`docs/library-and-source-architecture.md` §7/§11/§12).

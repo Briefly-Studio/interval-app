@@ -1,12 +1,21 @@
 import type { CardRecord } from "../../models/card";
 import type { DeckRecord } from "../../models/deck";
+import type { LibrarySourceRecord } from "../../models/librarySource";
 import type { SessionRecord } from "../../models/session";
+import type { SourceCollectionRecord } from "../../models/sourceCollection";
 import type { Change, EntityType } from "./types";
 
-const ENTITY_TYPES: readonly EntityType[] = ["deck", "card", "session"];
+const ENTITY_TYPES: readonly EntityType[] = ["deck", "card", "session", "librarySource", "sourceCollection"];
 const OPS: readonly Change["op"][] = ["upsert", "delete"];
 const DIFFICULTIES: readonly string[] = ["easy", "medium", "hard"];
 const MODES: readonly string[] = ["review", "quiz"];
+// Duplicated from src/models/librarySource.ts's private SOURCE_TYPES/STATUSES rather than
+// imported, matching this file's existing DIFFICULTIES/MODES precedent (validateChange
+// deliberately keeps its own local copy of every enum it checks, rather than importing from the
+// model layer, so this file's shape-validation stays self-contained and easy to audit in one
+// place).
+const SOURCE_TYPES: readonly string[] = ["pdf", "docx", "text", "image", "audio", "pptx", "xlsx"];
+const SOURCE_STATUSES: readonly string[] = ["ready", "needsReview", "archived"];
 
 // Diagnostic-only — safe to log. Never carries record content (front/back/title), tokens, or
 // any other personal data, only the entity type, the change id, and a fixed rejection reason.
@@ -72,6 +81,39 @@ function isSessionRecordShape(record: unknown): record is SessionRecord {
   );
 }
 
+// Metadata-only shape check — same shallow depth as the other validators above. Deliberately does
+// not validate every optional field (mimeType, pageCount, etc.); only the fields this app relies
+// on structurally (id, required strings, enums, array fields, rev/updatedAt) are checked.
+function isLibrarySourceRecordShape(record: unknown): record is LibrarySourceRecord {
+  if (!record || typeof record !== "object") return false;
+  const r = record as Record<string, unknown>;
+  return (
+    isNonEmptyString(r.id) &&
+    typeof r.displayTitle === "string" &&
+    typeof r.sourceType === "string" &&
+    SOURCE_TYPES.includes(r.sourceType) &&
+    isNonEmptyString(r.createdAt) &&
+    typeof r.processingStatus === "string" &&
+    SOURCE_STATUSES.includes(r.processingStatus) &&
+    Array.isArray(r.collectionIds) &&
+    Array.isArray(r.tags) &&
+    isFiniteNumber(r.rev) &&
+    isNonEmptyString(r.updatedAt)
+  );
+}
+
+function isSourceCollectionRecordShape(record: unknown): record is SourceCollectionRecord {
+  if (!record || typeof record !== "object") return false;
+  const r = record as Record<string, unknown>;
+  return (
+    isNonEmptyString(r.id) &&
+    typeof r.name === "string" &&
+    isNonEmptyString(r.createdAt) &&
+    isFiniteNumber(r.rev) &&
+    isNonEmptyString(r.updatedAt)
+  );
+}
+
 /**
  * Validates one raw pulled change before it is ever applied to local storage.
  *
@@ -120,7 +162,11 @@ export function validateChange(raw: unknown): ValidationResult {
       ? isDeckRecordShape(record)
       : entityType === "card"
         ? isCardRecordShape(record)
-        : isSessionRecordShape(record);
+        : entityType === "session"
+          ? isSessionRecordShape(record)
+          : entityType === "librarySource"
+            ? isLibrarySourceRecordShape(record)
+            : isSourceCollectionRecordShape(record);
 
   if (!recordIsValid) {
     return { ok: false, rejected: { entity, id, reason: `malformed-${entityType}-record` } };

@@ -5,11 +5,14 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
+import { isLibraryMetadataCloudSyncEnabled } from "../src/cloud/sync/libraryMetadataSyncCapability";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { getEnvironmentConfig } from "../src/config/environment";
 import { resetDevLibraryFixtures, seedDevLibraryFixtures } from "../src/domain/librarySeed";
 import { useTranslation } from "../src/i18n";
 import { ForceResyncUnsyncedChangesError, forceFullResyncPrep, resetLocalData } from "../src/storage/devReset";
+import { getLibrarySources } from "../src/storage/librarySources";
+import { getSourceCollections } from "../src/storage/sourceCollections";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { useTheme } from "@/src/theme";
 import { Button } from "../src/ui/Button";
@@ -23,6 +26,10 @@ export default function DevToolsScreen() {
   const { colors, spacing, typography } = useTheme();
   const [scope, setScope] = useState<WorkspaceScope>({ kind: "guest" });
   const isGuest = scope.kind === "guest";
+  const [libraryDirtyCounts, setLibraryDirtyCounts] = useState<{ sources: number; collections: number }>({
+    sources: 0,
+    collections: 0,
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -38,6 +45,26 @@ export default function DevToolsScreen() {
   );
 
   useEffect(() => onWorkspaceChanged(setScope), []);
+
+  // Diagnostic-only — counts, never source titles/tags/content. Recomputed on focus/scope change
+  // so this reflects the current workspace, not a stale one left over from before switching
+  // accounts.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      (async () => {
+        const [sources, collections] = await Promise.all([getLibrarySources(scope), getSourceCollections(scope)]);
+        if (!alive) return;
+        setLibraryDirtyCounts({
+          sources: sources.filter((s) => s.dirty).length,
+          collections: collections.filter((c) => c.dirty).length,
+        });
+      })();
+      return () => {
+        alive = false;
+      };
+    }, [scope])
+  );
 
   if (!__DEV__) {
     return (
@@ -184,6 +211,18 @@ export default function DevToolsScreen() {
             );
           }}
         />
+      </Card>
+
+      <Card style={[styles.toolCard, { gap: spacing.sm }]}>
+        <Text style={[typography.subheading, { color: colors.textPrimary }]}>Library Metadata Cloud Sync</Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+          Status: {isLibraryMetadataCloudSyncEnabled() ? "Enabled" : "Disabled"} for this build (
+          {environmentLabel}). Metadata only — never source files/content.
+        </Text>
+        <Text style={[typography.secondary, { color: colors.textSecondary }]}>
+          Unsynced Library sources: {libraryDirtyCounts.sources} · Unsynced collections:{" "}
+          {libraryDirtyCounts.collections}
+        </Text>
       </Card>
 
       <Card style={[styles.toolCard, { gap: spacing.sm }]}>

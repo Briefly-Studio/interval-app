@@ -28,12 +28,26 @@ detail (routes, data model, storage keys, accessibility, known limitations, foun
 - Collection create/rename/delete (deleting a collection never deletes its sources)
 - Accessibility and English/Spanish localization for all of the above
 
+**Implemented now, Development-only (metadata cloud sync):**
+
+- Library source metadata and source-collection metadata (including collection membership) sync
+  across devices for an authenticated account, via the existing `/sync/push`/`/sync/pull` engine —
+  see `docs/library-cloud-sync-contract.md` for the full contract and
+  `src/cloud/sync/libraryMetadataSyncCapability.ts` for the rollout gate. Enabled only when
+  `INTERVAL_ENV === "development"`; Staging and Production builds, and guests, see unchanged
+  local-only Library behavior. **Founder-QA verified end-to-end in Development** (physical iPhone
+  via Expo Go + iOS Simulator) — see that contract doc's status note for the full verified
+  checklist.
+- Still explicitly not covered by this: source binaries/content (never synced, no field exists for
+  it), guest-to-account adoption, and anything below.
+
 **Not implemented (still future work, per this document's other sections):**
 
 - Actual file/audio intake (no upload, no file picker)
-- Cloud Library records and authenticated source ownership
+- Cloud Library records with binary/file content, or authenticated source ownership beyond
+  metadata
 - Guest-to-account source adoption (§18)
-- Library sync across devices
+- Library metadata sync in Staging or Production (Development-only for now)
 - Extraction, OCR, or transcription
 - AI generation of any kind
 - Canvas integration

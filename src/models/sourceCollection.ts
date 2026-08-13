@@ -12,7 +12,15 @@ export type SourceCollectionRecord = SourceCollection & {
   rev: number;
   updatedAt: string;
   deletedAt?: string;
+  // `dirty` is now read by src/cloud/sync/SyncService.ts (see docs/library-cloud-sync-contract.md)
+  // — but only when Library metadata cloud sync is enabled for the current environment. See
+  // src/models/librarySource.ts's matching field comment for the full explanation; the same
+  // reasoning applies here (every mutation in src/storage/sourceCollections.ts already sets this
+  // true, nothing has ever cleared it, so no separate migration step was needed).
   dirty?: boolean;
+  // Set by SyncService after a push is acknowledged or a pull applies this record. Never read by
+  // any code path itself; kept for diagnostic/shape parity with the other synced entities.
+  lastSyncedAt?: string;
 };
 
 // Same defensive-normalization convention as upgradeLibrarySource — malformed stored records
@@ -30,5 +38,6 @@ export function upgradeSourceCollection(raw: any): SourceCollectionRecord {
     updatedAt,
     deletedAt: typeof raw?.deletedAt === "string" && raw.deletedAt ? raw.deletedAt : undefined,
     dirty: raw?.dirty === true,
+    lastSyncedAt: typeof raw?.lastSyncedAt === "string" && raw.lastSyncedAt ? raw.lastSyncedAt : undefined,
   };
 }

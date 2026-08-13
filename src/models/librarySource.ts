@@ -45,11 +45,17 @@ export type LibrarySourceRecord = LibrarySource & {
   updatedAt: string;
   archivedAt?: string;
   deletedAt?: string;
-  // Preparation for future local mutation consistency only — there is no cloud Library sync in
-  // this batch, so `dirty` is never read by any sync path. Kept for shape-parity with
-  // DeckRecord/CardRecord so a future sync integration (if ever built) doesn't require a schema
-  // migration just to add it.
+  // `dirty` is now read by src/cloud/sync/SyncService.ts (see docs/library-cloud-sync-contract.md)
+  // — but only when Library metadata cloud sync is enabled for the current environment (currently
+  // `development` only, see src/cloud/sync/libraryMetadataSyncCapability.ts). Every local mutation
+  // in src/storage/librarySources.ts already sets this true and nothing has ever cleared it before
+  // now, so every pre-existing local record is already correctly flagged for its first sync — no
+  // separate migration step was needed for this field.
   dirty?: boolean;
+  // Set by SyncService after a push is acknowledged or a pull applies this record — matches
+  // DeckRecord/CardRecord/SessionRecord's own field exactly. Never read by any code path itself;
+  // kept for diagnostic/shape parity, same as those other entities.
+  lastSyncedAt?: string;
 };
 
 const SOURCE_TYPES: SourceType[] = ["pdf", "docx", "text", "image", "audio", "pptx", "xlsx"];
@@ -120,5 +126,6 @@ export function upgradeLibrarySource(raw: any): LibrarySourceRecord {
     archivedAt: normalizeOptionalString(raw?.archivedAt),
     deletedAt: normalizeOptionalString(raw?.deletedAt),
     dirty: raw?.dirty === true,
+    lastSyncedAt: normalizeOptionalString(raw?.lastSyncedAt),
   };
 }
