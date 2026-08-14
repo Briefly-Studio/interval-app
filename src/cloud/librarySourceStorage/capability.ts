@@ -2,16 +2,21 @@ import { getEnvironmentConfig } from "../../config/environment";
 
 // Centralized rollout gate for private original Library source-file storage — deliberately a
 // SEPARATE capability from src/cloud/sync/libraryMetadataSyncCapability.ts, even though both
-// currently resolve to the same "development" allow-list. Metadata sync and original-file storage
-// are independent capabilities (see docs/library-and-source-architecture.md's "Environment
-// boundary" note) — Staging or Production could someday get metadata sync enabled well before
+// currently resolve to the same "development"/"staging" allow-list. Metadata sync and
+// original-file storage are independent capabilities (see docs/library-and-source-architecture.md's
+// "Environment boundary" note) — Production could someday get metadata sync enabled well before
 // source storage, or vice versa, and coupling the two gates would make that impossible without a
 // rewrite. Do not merge this with isLibraryMetadataCloudSyncEnabled().
+//
+// Staging enablement matches the corresponding infra/lib/interval-sync-stack.ts source-storage
+// block (Development + Staging, Production excluded) — see docs/cdk-infrastructure.md's "Library
+// source storage" section. Widening to "production" requires both this array AND a deliberate,
+// separate, founder-approved infrastructure decision — never one without the other.
 //
 // The only call sites are meant to be src/cloud/librarySourceStorage/index.ts's
 // requestUploadUrl/requestDownloadUrl — route any new call site through this function rather than
 // adding a second, scattered INTERVAL_ENV check.
-const ALLOWED_ENVIRONMENTS: readonly string[] = ["development"];
+const ALLOWED_ENVIRONMENTS: readonly string[] = ["development", "staging"];
 
 /**
  * Whether private original-source-file cloud storage (upload/download URL requests) is enabled

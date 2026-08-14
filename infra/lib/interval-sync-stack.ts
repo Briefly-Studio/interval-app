@@ -233,37 +233,43 @@ export class IntervalSyncStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // Private original-source storage — DEVELOPMENT ONLY for this batch. See
+    // Private original-source storage — Development AND Staging. See
     // docs/library-and-source-architecture.md and docs/cdk-infrastructure.md's "Library source
     // storage" section for the full design record. This entire block is skipped for every other
-    // environmentName — Staging and Production get NO bucket, NO storage Lambda, NO storage IAM
-    // role, and NO storage API routes as a result. This is the same per-environment conditional
-    // idiom already used above for cognitoDeletionProtectionEnabled, just gating resource
-    // creation itself rather than a single property value. `npx cdk synth IntervalStagingStack`
-    // must never show any resource from this block — verify that after any change here.
+    // environmentName — Production gets NO bucket, NO storage Lambda, NO storage IAM role, and NO
+    // storage API routes as a result (Production is never instantiated by this stack at all — see
+    // this file's class comment — so this exclusion is unreachable in practice, not a real
+    // decision point). This is the same per-environment conditional idiom already used above for
+    // cognitoDeletionProtectionEnabled, just gating resource creation itself rather than a single
+    // property value. `npx cdk synth IntervalStagingStack` must show these resources named
+    // `interval-staging-*`/CloudFormation-auto-generated, completely independent of Development's
+    // — verify that after any change here.
     // ---------------------------------------------------------------------
-    if (environmentName === "development") {
+    if (environmentName === "development" || environmentName === "staging") {
       // Bucket name is deliberately NOT set explicitly, unlike every other named resource in this
       // stack. S3 bucket names are unique across every AWS account on the entire platform, not
       // just within this account — a deterministic `${prefix}-library-sources`-style name could
       // collide with an unrelated bucket some other AWS customer already owns and fail to deploy.
       // CloudFormation's auto-generated name avoids that risk entirely; the real name is
       // available after deployment via the LibrarySourceBucketName stack output below.
+      //
+      // Lifecycle reuses the exact same `removalPolicy` this stack already computed above
+      // (REMOVAL_POLICY_FOR) rather than a second, bucket-specific decision — DESTROY for
+      // Development (disposable engineering environment, same reasoning as its DynamoDB
+      // tables/Cognito pool), RETAIN for Staging (real external beta-tester original files must
+      // not be silently deleted as a side effect of routine infrastructure work or an accidental
+      // `cdk destroy`, matching Staging's DynamoDB tables/Cognito pool — see "Staging
+      // removal/deletion policy" in docs/cdk-infrastructure.md). autoDeleteObjects is only valid,
+      // and only needed, alongside DESTROY (CDK requires this pairing; RETAIN with
+      // autoDeleteObjects: true is a synth-time error) — Staging's bucket is therefore left with
+      // its default autoDeleteObjects: false, matching its RETAIN posture.
       const librarySourceBucket = new s3.Bucket(this, "LibrarySourceBucket", {
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
         encryption: s3.BucketEncryption.S3_MANAGED,
         enforceSSL: true,
-        // Development is a disposable engineering environment by design (see REMOVAL_POLICY_FOR
-        // above) — original source files uploaded here during Development testing are exactly as
-        // disposable as the Development DynamoDB tables and Cognito pool already are.
-        // autoDeleteObjects is required for DESTROY to actually succeed once real objects exist in
-        // the bucket (CloudFormation otherwise refuses to delete a non-empty bucket). This is a
-        // deliberate Development-only choice, not a default that carries over automatically to a
-        // future Staging/Production source-storage rollout — that would need its own explicit
-        // RETAIN decision, exactly like Staging's DynamoDB tables/Cognito pool already have.
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
+        removalPolicy,
+        autoDeleteObjects: removalPolicy === cdk.RemovalPolicy.DESTROY,
       });
       cdk.Tags.of(librarySourceBucket).add("Component", "library-source-storage");
 

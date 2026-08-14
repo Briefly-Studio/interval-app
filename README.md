@@ -33,10 +33,11 @@ cross-device sync, and account ownership on top of that — it is never required
 - Offline-first sync for decks, cards, and study sessions once signed in — local changes queue and
   sync when a connection is available, and converge correctly across devices
 - Library metadata sync (sources and collections, including cross-device collection membership) —
-  currently enabled for internal Development testing only, not yet in the public beta build
+  enabled for internal Development testing and the Staging/Beta environment; not yet enabled in
+  Production
 - Private original-file storage for Library sources — upload a source's original file to
   authenticated, per-account private cloud storage, and securely retrieve it on another
-  signed-in device — also currently limited to internal Development testing
+  signed-in device — also enabled for Development and Staging/Beta, not yet Production
 
 **Accessibility and localization**
 - English and Spanish throughout, including accessibility labels and hints

@@ -1,13 +1,14 @@
 # Library and Source Architecture
 
-**Status: substantially implemented in Development; large sections remain specification-only.**
-Local Library metadata/UI, Development-only cross-device metadata sync, Development-only private
-original-file storage (deployed and founder-QA verified), and Development-only source open/preview
-are all implemented today — see "Implementation status" below for the precise current/future
-split. Extraction, OCR, transcription, AI generation, in-platform sharing, and Canvas integration
-remain entirely unimplemented; the sections of this document describing those are still
-future/target architecture, not current behavior, except where "Implementation status" says
-otherwise.
+**Status: substantially implemented in Development and Staging; large sections remain
+specification-only.** Local Library metadata/UI (every environment/guest), cross-device metadata
+sync, private original-file storage (deployed and founder-QA verified), and source open/preview
+are all implemented today in both Development and Staging — see "Implementation status" below for
+the precise current/future split. Production remains grandfathered and has not received cloud
+metadata sync or private source storage. Extraction, OCR, transcription, AI generation,
+in-platform sharing, and Canvas integration remain entirely unimplemented; the sections of this
+document describing those are still future/target architecture, not current behavior, except
+where "Implementation status" says otherwise.
 
 Where this document says "must" or "should," it is a requirement for whenever this is built, not
 a claim about what exists now. See `docs/branch-and-release-policy.md` for why none of this can
@@ -34,47 +35,53 @@ detail (routes, data model, storage keys, accessibility, known limitations, foun
   is a pure local UI/organization change with no environment gating — every build and every guest
   sees it identically.
 
-**Implemented now, Development-only (metadata cloud sync):**
+**Implemented now, Development and Staging (metadata cloud sync):**
 
 - Library source metadata and source-collection metadata (including collection membership) sync
   across devices for an authenticated account, via the existing `/sync/push`/`/sync/pull` engine —
   see `docs/library-cloud-sync-contract.md` for the full contract and
-  `src/cloud/sync/libraryMetadataSyncCapability.ts` for the rollout gate. Enabled only when
-  `INTERVAL_ENV === "development"`; Staging and Production builds, and guests, see unchanged
-  local-only Library behavior. **Founder-QA verified end-to-end in Development** (physical iPhone
-  via Expo Go + iOS Simulator) — see that contract doc's status note for the full verified
+  `src/cloud/sync/libraryMetadataSyncCapability.ts` for the rollout gate. Enabled when
+  `INTERVAL_ENV === "development"` or `"staging"`; Production builds and guests see unchanged
+  local-only Library behavior. **Founder-QA verified end-to-end in both Development** (physical
+  iPhone via Expo Go/Development Build + iOS Simulator) **and Staging** (identical checklist
+  against the live Staging backend) — see that contract doc's status note for the full verified
   checklist.
 - As of the Library Organization + Private Source Storage batch, this also carries two new durable
   fields per source (`cloudUploadState`, `cloudUploadedAt` — see "Private source storage" below) —
   still metadata only, still no binary/file content in the synced record itself.
 
-**Implemented now, Development-only (private original-source storage — deployed and founder-QA
-verified):**
+**Implemented now, Development and Staging (private original-source storage — deployed and
+founder-QA verified in both):**
 
 - A user can attach an original file to a Library source and have it uploaded to a private,
-  per-user S3 location, gated to `INTERVAL_ENV === "development"` via its own separate capability
-  check (`src/cloud/librarySourceStorage/capability.ts`) — see "Private source storage
-  architecture" below for the full design. **Deployed to Development and founder-QA verified**:
-  S3 public access blocked, authenticated access only, ownership derived from trusted Cognito
-  `sub`, server-derived object keys, short-lived non-persisted upload/download URLs, and a second
-  Development device on the same account confirmed able to securely access the cloud original —
-  see `docs/cdk-infrastructure.md`'s "Library source storage" section for the deployment record.
+  per-user S3 location, gated to `INTERVAL_ENV === "development"` or `"staging"` via its own
+  separate capability check (`src/cloud/librarySourceStorage/capability.ts`) — see "Private source
+  storage architecture" below for the full design. **Deployed to Development and Staging and
+  founder-QA verified in both**: S3 public access blocked, authenticated access only, ownership
+  derived from trusted Cognito `sub`, server-derived object keys, short-lived non-persisted
+  upload/download URLs, and a second device on the same account (per environment) confirmed able
+  to securely access the cloud original — see `docs/cdk-infrastructure.md`'s "Library source
+  storage" section for the deployment record. Staging's bucket uses `RETAIN` lifecycle protection
+  instead of Development's disposable `DESTROY` — see that same document's "Staging
+  removal/deletion policy".
 - Explicitly NOT implemented by this: extraction, parsing, OCR, transcription, or any AI
   processing of the uploaded bytes — this batch stops at secure storage and on-demand,
   authenticated availability.
 - **Source open/preview** (Source Preview + Open Original batch): Source Detail now has an "Open
   original" action — local-first resolution, on-demand cloud fallback with durable local retention,
-  handed off to the OS-native viewer via `expo-sharing`. See "Source open/preview" below for the
-  full architecture. Still explicitly not implemented: any embedded/in-app renderer, extraction,
-  annotation, or editing of the opened file.
+  handed off to the OS-native viewer via `expo-sharing`. Available in both Development and Staging
+  (it depends on the same source-storage capability gate above). See "Source open/preview" below
+  for the full architecture. Still explicitly not implemented: any embedded/in-app renderer,
+  extraction, annotation, or editing of the opened file.
 
 **Not implemented (still future work, per this document's other sections):**
 
-- File intake, extraction, or processing outside a Development build (Staging/Production source
-  storage remains unimplemented and undeployed by design — see "Environment boundary" below)
+- File intake, extraction, or processing in Production (Production source storage remains
+  unimplemented and undeployed by design — see "Environment boundary" below)
 - Cloud Library records with authenticated source ownership beyond what's described above
 - Guest-to-account source adoption (§18)
-- Library metadata sync in Staging or Production (Development-only for now)
+- Library metadata sync in Production (Production is excluded by design; widening to it requires
+  a separate, explicit founder-approved decision)
 - Extraction, OCR, or transcription of any uploaded original file
 - AI generation of any kind
 - Canvas integration
@@ -125,15 +132,16 @@ Deck Collections precedent (`docs/deck-collections.md`, `src/domain/deckCollecti
 
 ## Private source storage architecture
 
-Implemented by the Library Organization + Private Source Storage batch, Development-only (see
-"Environment boundary" below). Selected architecture:
+Implemented by the Library Organization + Private Source Storage batch (originally
+Development-only), then extended to Staging by the Staging Library Feature Parity batch — see
+"Environment boundary" below. Selected architecture:
 
 ```
 authenticated mobile app
   → JWT-protected HTTP API route (POST /library/sources/{sourceId}/upload-url or /download-url)
   → dedicated library-source-storage Lambda (backend/lambdas/library-source-storage/index.mjs)
   → short-lived presigned S3 PutObject/GetObject URL
-  → private S3 bucket (Development only)
+  → private S3 bucket (Development and Staging, independently provisioned per environment)
 ```
 
 This matches the architecture this document originally anticipated in §12/§11, confirmed rather
@@ -328,14 +336,16 @@ file objects either way — deleting a collection only ever unassigns membership
 ### Environment boundary
 
 Gated independently from Library metadata sync, via its own capability function
-(`src/cloud/librarySourceStorage/capability.ts`'s `isLibrarySourceStorageEnabled`), currently also
-resolving to `development`-only but deliberately a *separate* allow-list from
+(`src/cloud/librarySourceStorage/capability.ts`'s `isLibrarySourceStorageEnabled`), resolving to
+`development`/`staging` but deliberately a *separate* allow-list from
 `libraryMetadataSyncCapability.ts` — metadata sync and source storage are independent capabilities
-that could be enabled for Staging/Production on different schedules. The Development-only S3
-bucket, IAM role, Lambda, and both API routes are defined inside a single
-`if (environmentName === "development")` block in `infra/lib/interval-sync-stack.ts` — see
-`docs/cdk-infrastructure.md`'s "Library source storage" section for the full resource list and the
-confirmation that `IntervalStagingStack`'s synthesized template contains none of it.
+that could be enabled for Production on different schedules from each other. The S3 bucket, IAM
+role, Lambda, and both API routes for Development and Staging are defined inside a single
+`if (environmentName === "development" || environmentName === "staging")` block in
+`infra/lib/interval-sync-stack.ts`, each stack getting its own fully independent set of these
+resources — see `docs/cdk-infrastructure.md`'s "Library source storage" section for the full
+resource list and deployment record. Production is excluded because this CDK app never
+instantiates a Production stack at all, not by a third conditional branch.
 
 ## Source open/preview
 
@@ -395,8 +405,9 @@ with no network request of any kind — no presigned URL is generated unless gen
 ### Cloud fallback and retention decision
 
 If no local copy exists: the source must have `cloudUploadState === "uploaded"` and the
-Development-only source-storage capability must be enabled, or the action reports "unavailable"
-without attempting any network call. Otherwise, `downloadSourceOriginal` requests a fresh
+source-storage capability must be enabled for the current environment (Development or Staging), or
+the action reports "unavailable" without attempting any network call. Otherwise,
+`downloadSourceOriginal` requests a fresh
 presigned GET, downloads to a temporary cache staging location, and — **the deliberate retention
 decision** — commits the result into Interval's durable, app-owned local directory via the exact
 same `persistPickedSourceFile` idempotent-copy step local attach uses, at the exact same

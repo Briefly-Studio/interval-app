@@ -28,18 +28,27 @@ Staging/Beta is the same environment as Development's counterpart for *external 
 validation before Production — it is not a fourth environment, and it is not an internal detail
 of Development.
 
-**New since that milestone closed, deployed to Development and founder-QA verified:** the Library
-Organization + Private Source Storage batch added a Development-only S3 bucket, dedicated IAM
-role, Lambda, and two API routes for private original-source-file storage — defined in
-`infra/lib/interval-sync-stack.ts`, confirmed by `cdk synth`/`cdk diff` to be additive-only for
-Development and completely absent from Staging's synthesized template. **This is now deployed to
-`IntervalDevelopmentStack` and founder-QA verified end-to-end**: S3 public access blocked,
+**Library Organization + Private Source Storage, deployed to Development and founder-QA
+verified:** this batch added an S3 bucket, dedicated IAM role, Lambda, and two API routes for
+private original-source-file storage — defined in `infra/lib/interval-sync-stack.ts`. **Deployed
+to `IntervalDevelopmentStack` and founder-QA verified end-to-end**: S3 public access blocked,
 authenticated-only access, ownership derived from trusted Cognito `sub`, server-derived object
 keys, short-lived non-persisted upload/download URLs, and a second Development device on the same
 account confirmed able to securely retrieve the cloud original. See "Library source storage" below
-for the full design. **Staging and Production remain untouched** — the Development-only
-conditional in `interval-sync-stack.ts` means `IntervalStagingStack` has none of this, and no
-Production resource of any kind exists for it.
+for the full design.
+
+**Staging Library Feature Parity, deployed to Staging and founder-QA verified:** a later batch
+extended the identical Library metadata cloud sync and private source-storage capability to
+Staging — reusing the exact same `IntervalSyncStack` construct and conditional (now
+`development || staging`), with Staging's own independently-provisioned bucket/IAM
+role/Lambda/routes and its `RETAIN` lifecycle posture (see "Staging removal/deletion policy"
+below) instead of Development's disposable `DESTROY`. **Deployed to `IntervalStagingStack`
+(`UPDATE_COMPLETE`) and founder-QA verified end-to-end**, using the identical checklist as
+Development: metadata sync (source/collection create, rename, membership, archive/unarchive,
+delete/restore, offline convergence), source upload, cross-device cloud retrieval, and
+Development/Staging isolation all confirmed. **Production remains untouched** — Production is
+never instantiated by this CDK app at all, so it has none of this, and this batch changed nothing
+about that.
 
 ## Architecture
 
@@ -104,58 +113,69 @@ CloudFormation stack name: **`IntervalDevelopmentStack`**.
 ## Library source storage
 
 Added to `infra/lib/interval-sync-stack.ts` by the Library Organization + Private Source Storage
-batch — see `docs/library-and-source-architecture.md`'s "Private source storage architecture" for
-the full design record (object-key ownership, IAM reasoning, upload state machine, delete
-behavior). **Deployed to `IntervalDevelopmentStack` and founder-QA verified** — S3 public access
-blocked, authenticated-only access, trusted-Cognito-`sub` ownership, server-derived object keys,
+batch, originally Development-only, then extended to Staging by the Staging Library Feature
+Parity batch — see `docs/library-and-source-architecture.md`'s "Private source storage
+architecture" for the full design record (object-key ownership, IAM reasoning, upload state
+machine, delete behavior). **Deployed to both `IntervalDevelopmentStack` and
+`IntervalStagingStack`, and founder-QA verified in both** — S3 public access blocked,
+authenticated-only access, trusted-Cognito-`sub` ownership, server-derived object keys,
 short-lived non-persisted upload/download URLs, and secure cross-device retrieval all confirmed
-against the live Development environment.
+against both live environments.
 
-**Development-only, by construction.** All three resources — the S3 bucket, its dedicated IAM
-role, and the storage Lambda plus its two API routes — are defined inside a single
-`if (environmentName === "development")` block inside `IntervalSyncStack`'s constructor, the same
-per-environment conditional idiom already used for `cognitoDeletionProtectionEnabled`. There is no
-separate stack class for this — `IntervalStagingStack` instantiates the exact same
-`IntervalSyncStack` construct, so the conditional is what keeps Staging from getting any of it.
-**Verified, not assumed:** `npx cdk synth IntervalStagingStack` contains zero references to any
-`LibrarySource*` logical ID — see "Local validation" below for the exact command run.
+**Development and Staging, by construction; Production excluded.** All three resources — the S3
+bucket, its dedicated IAM role, and the storage Lambda plus its two API routes — are defined
+inside a single `if (environmentName === "development" || environmentName === "staging")` block
+inside `IntervalSyncStack`'s constructor, the same per-environment conditional idiom already used
+for `cognitoDeletionProtectionEnabled`. There is no separate stack class for this — each stack
+instantiates the exact same `IntervalSyncStack` construct with its own independent set of these
+resources (no bucket, role, Lambda, or route is shared between Development and Staging), and
+Production is excluded because this CDK app never instantiates a Production stack at all, not
+because of a third conditional branch.
 
 - **S3 bucket** — deliberately has **no explicit `bucketName`** (unlike every other named
   resource in this project). S3 bucket names are unique across every AWS account on the entire
   platform, not just this one — a deterministic `interval-dev-library-sources`-style name could
   collide with an unrelated bucket some other AWS customer already owns and fail to deploy.
   CloudFormation's auto-generated name avoids that risk entirely; the real name is available after
-  deployment via the stack's `LibrarySourceBucketName` output.
+  deployment via each stack's own `LibrarySourceBucketName` output.
   - `BlockPublicAccess.BLOCK_ALL` (all four sub-settings true), `ObjectOwnership.BUCKET_OWNER_ENFORCED`
     (ACLs disabled entirely), `BucketEncryption.S3_MANAGED` (SSE-S3/AES256 — the AWS-managed
     default; no concrete reason for a customer-managed KMS key exists for this batch), `enforceSSL:
     true` (CDK auto-adds a bucket policy denying any non-TLS request). Not a static website, not
-    fronted by any CloudFront distribution.
-  - `removalPolicy: DESTROY` + `autoDeleteObjects: true` — Development is a disposable engineering
-    environment by design (same reasoning as `REMOVAL_POLICY_FOR.development` above); original
-    files uploaded here during Development testing are exactly as disposable as the Development
-    DynamoDB tables/Cognito pool already are. This is a Development-only choice — a future
-    Staging/Production source-storage rollout would need its own explicit `RETAIN` decision,
-    exactly like Staging's DynamoDB tables/Cognito pool already have.
-- **IAM role** (`interval-dev-library-source-storage-role`) — dedicated to this one Lambda, never
-  shared with `SyncLambdaRole`. Only permissions beyond standard Lambda logging:
-  `s3:PutObject`/`s3:GetObject`, scoped to `<bucket-arn>/users/*/sources/*/original` — never a
-  bucket-wide or account-wide `Resource: "*"`. No `s3:DeleteObject` (this batch never deletes cloud
-  originals), no `s3:ListBucket` (never lists keys).
-- **Lambda** (`interval-dev-library-source-storage`) — packages
-  `backend/lambdas/library-source-storage/index.mjs` directly via `lambda.Code.fromAsset(...)`,
-  same convention as the two sync Lambdas; same `nodejs24.x` runtime, ARM64 architecture. Receives
-  the bucket name via a `LIBRARY_SOURCE_BUCKET` environment variable set from the bucket's own
-  synthesized name — never hardcoded.
+    fronted by any CloudFront distribution. Identical in both stacks.
+  - **Lifecycle differs by environment, reusing the stack's existing `removalPolicy` variable —
+    no second, bucket-specific lifecycle decision.** Development: `removalPolicy: DESTROY` +
+    `autoDeleteObjects: true` (disposable engineering environment, same reasoning as
+    `REMOVAL_POLICY_FOR.development` above). Staging: `removalPolicy: RETAIN` +
+    `autoDeleteObjects: false` (real external beta-tester original files must not be silently
+    deleted as a side effect of routine infrastructure work or an accidental `cdk destroy`,
+    matching Staging's DynamoDB tables/Cognito pool — see "Staging removal/deletion policy"
+    below). `autoDeleteObjects` is only valid, and only needed, alongside `DESTROY` — CDK itself
+    rejects `RETAIN` combined with `autoDeleteObjects: true` at synth time.
+- **IAM role** (`interval-dev-library-source-storage-role` / `interval-staging-library-source-storage-role`)
+  — dedicated to that stack's own Lambda, never shared with `SyncLambdaRole` and never shared
+  across environments. Only permissions beyond standard Lambda logging: `s3:PutObject`/`s3:GetObject`,
+  scoped to that stack's own `<bucket-arn>/users/*/sources/*/original` — never a bucket-wide or
+  account-wide `Resource: "*"`, never a cross-environment bucket ARN. No `s3:DeleteObject` (this
+  batch never deletes cloud originals), no `s3:ListBucket` (never lists keys).
+- **Lambda** (`interval-dev-library-source-storage` / `interval-staging-library-source-storage`)
+  — packages `backend/lambdas/library-source-storage/index.mjs` directly via
+  `lambda.Code.fromAsset(...)`, same convention as the two sync Lambdas; same `nodejs24.x`
+  runtime, ARM64 architecture. Receives the bucket name via a `LIBRARY_SOURCE_BUCKET` environment
+  variable set from that stack's own bucket's synthesized name — never hardcoded, never pointed at
+  another environment's bucket.
 - **API routes** — `POST /library/sources/{sourceId}/upload-url` and
-  `POST /library/sources/{sourceId}/download-url`, added to the same `HttpApi` as `/sync/push`/
-  `/sync/pull`, behind the identical Cognito JWT authorizer. No unauthenticated route exists for
-  either.
+  `POST /library/sources/{sourceId}/download-url`, added to that stack's own `HttpApi` alongside
+  `/sync/push`/`/sync/pull`, behind that same stack's Cognito JWT authorizer (so a Development
+  token is rejected by Staging's routes and vice versa, identically to the sync routes). No
+  unauthenticated route exists for either.
 
 ## Staging resource names
 
-Same eight resource types, `interval-staging-*` names, a fully independent set of AWS resources
-from Development's — no table, pool, function, or role is shared between the two stacks:
+Same eleven resource types as Development (the original eight plus the three Library-source-storage
+resources — see "Library source storage" above), `interval-staging-*` names, a fully independent
+set of AWS resources from Development's — no table, pool, function, role, or bucket is shared
+between the two stacks. **All eleven are deployed and founder-QA verified:**
 
 | Resource | Name |
 |---|---|
@@ -166,7 +186,10 @@ from Development's — no table, pool, function, or role is shared between the t
 | DynamoDB (changes) | `interval-staging-changes` |
 | Cognito user pool | `interval-staging-user-pool` |
 | Cognito app client | `interval-staging-mobile` |
-| IAM role (shared, both Lambdas) | `interval-staging-sync-lambda-role` |
+| IAM role (shared, both sync Lambdas) | `interval-staging-sync-lambda-role` |
+| Lambda (library source storage) | `interval-staging-library-source-storage` |
+| IAM role (library source storage only) | `interval-staging-library-source-storage-role` |
+| S3 bucket (library source originals) | CloudFormation-auto-generated, no fixed name — see "Library source storage" above |
 
 CloudFormation stack name: **`IntervalStagingStack`**.
 
@@ -352,18 +375,19 @@ Everything in "Development resource names" and "Staging resource names" above, a
 plus the minimal CloudFormation/CDK support constructs each stack needs to wire its own resources
 together (the JWT authorizer, Lambda invoke permissions for API Gateway, the IAM policy attached
 to the shared role, the API's default stage, and CDK's own bootstrap-version metadata resource).
-Verified directly against both synthesized templates — see "Local validation" below. This now
-includes the Development-only S3 bucket/Lambda/IAM role/routes described in "Library source
-storage" above — deployed to Development and founder-QA verified.
+Verified directly against both synthesized templates — see "Local validation" below. This includes
+the S3 bucket/Lambda/IAM role/routes described in "Library source storage" above — deployed to
+both Development and Staging and founder-QA verified in both.
 
 ## What CDK does not manage
 
 - **Production.** Not imported, not referenced, not modeled as a stack. Continues to be managed
   exactly as it is today, outside IaC, until a separate, explicit, founder-approved decision
   changes that.
-- **S3 in Staging or Production.** The Library source storage bucket described above exists only
-  inside Development's `if (environmentName === "development")` block — Staging and Production get
-  none of it, verified by synth (see "Local validation").
+- **S3 in Production.** The Library source storage bucket described above exists only inside the
+  `if (environmentName === "development" || environmentName === "staging")` block — Production
+  gets none of it, and never will unless this CDK app ever instantiates a Production stack, which
+  it deliberately does not.
 - Anything else outside the resources named above: no AI/transcription infrastructure, no Canvas
   integration, no notification infrastructure, no hosted-sharing infrastructure. All explicitly
   out of scope and not present anywhere in `infra/`.
@@ -514,6 +538,25 @@ Post-deployment verification for Staging follows the same read-only command shap
 above, substituting `interval-staging-*` table/API/function names and the `IntervalStagingStack`
 stack name.
 
+## Staging Library Feature Parity deployment record
+
+A follow-up batch extended Development's already-deployed Library metadata cloud sync and private
+source-storage capability to `IntervalStagingStack`, reusing the identical `IntervalSyncStack`
+construct (see "Library source storage" above) rather than any new stack or Lambda code. Founder
+reviewed the live `cdk diff IntervalStagingStack` before deploying and confirmed it was additive
+only — new `LibrarySource*` resources (bucket, bucket policy, IAM role/policy, Lambda, two API
+routes/integrations/permissions) with zero deletions and zero modifications to any pre-existing
+Staging resource (DynamoDB tables, Cognito pool/client, sync Lambdas/routes/role all unchanged).
+**Deployed via `npx cdk deploy IntervalStagingStack` — `UPDATE_COMPLETE`.** Read-only
+post-deployment verification confirmed the new bucket, Lambda, and both routes exist, and that the
+pre-existing Staging DynamoDB tables/Cognito pool/core sync routes were unaffected. Founder runtime
+QA against the live Staging backend passed: Library source metadata create/rename, collection
+create/membership/deletion-without-source-deletion, archive/unarchive, delete/restore, offline
+mutation and reconnect convergence, a second Staging client observing metadata changes, PDF/
+document attach, Staging upload, cross-device cloud retrieval, durable local persistence, and Open
+Original all confirmed working, with Development and Production both confirmed isolated
+throughout.
+
 ## Rollback / removal
 
 **Development** — `interval-dev-*` resources are fully disposable by design (`DESTROY` removal
@@ -526,13 +569,15 @@ npx cdk destroy IntervalDevelopmentStack
 This deletes the 8 named Development resources, including their data, and their CDK/
 CloudFormation support constructs.
 
-**Staging** — `interval-staging-*` DynamoDB tables and the Cognito user pool use `RETAIN` (see
-"Staging removal/deletion policy" above), so `cdk destroy IntervalStagingStack` removes the stack
-and its non-retained resources (Lambdas, API Gateway, IAM role) but **leaves the
-`interval-staging-records`/`interval-staging-changes` tables and `interval-staging-user-pool`
-behind**, orphaned from CloudFormation. Actually deleting that retained data/those identities
-afterward requires a separate, explicit, manual AWS console/CLI action — this is intentional, not
-a bug, given real external beta-tester data may exist there by then.
+**Staging** — `interval-staging-*` DynamoDB tables, the Cognito user pool, and the Library source
+bucket all use `RETAIN` (see "Staging removal/deletion policy" above), so `cdk destroy
+IntervalStagingStack` removes the stack and its non-retained resources (Lambdas, API Gateway, IAM
+roles) but **leaves the `interval-staging-records`/`interval-staging-changes` tables,
+`interval-staging-user-pool`, and the Library source bucket (with any original files already
+uploaded to it) behind**, orphaned from CloudFormation. Actually deleting that retained data/those
+identities afterward requires a separate, explicit, manual AWS console/CLI action — this is
+intentional, not a bug, given real external beta-tester data and original files may exist there by
+then.
 
 Neither command can affect Production, which this project has no reference to at all — and
 neither command has been run as part of this mission.
