@@ -6,13 +6,19 @@ import { AuthService } from "../../../src/auth/AuthService";
 import { useTranslation } from "../../../src/i18n";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
 import type { SourceCollectionRecord } from "../../../src/models/sourceCollection";
-import { getActiveLibrarySources, removeLibrarySourceFromCollection } from "../../../src/storage/librarySources";
+import {
+  archiveLibrarySource,
+  getActiveLibrarySources,
+  removeLibrarySourceFromCollection,
+  softDeleteLibrarySource,
+} from "../../../src/storage/librarySources";
 import { getActiveSourceCollections, softDeleteSourceCollection, updateSourceCollection } from "../../../src/storage/sourceCollections";
 import { useTheme } from "@/src/theme";
 import { Button } from "../../../src/ui/Button";
 import { EmptyState } from "../../../src/ui/EmptyState";
 import { IconButton } from "../../../src/ui/IconButton";
 import { Screen } from "../../../src/ui/Screen";
+import { showSourceActionsSheet } from "../../../src/ui/sourceActionsSheet";
 import { SourceCard } from "../../../src/ui/SourceCard";
 import { TextField } from "../../../src/ui/TextField";
 
@@ -130,6 +136,57 @@ export default function SourceCollectionDetailScreen() {
     }
   };
 
+  const confirmDeleteSource = (source: LibrarySourceRecord) => {
+    if (mutating) return;
+    Alert.alert(t("librarySource.detail.deleteTitle"), t("librarySource.detail.deleteBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("librarySource.detail.deleteAction"),
+        style: "destructive",
+        onPress: async () => {
+          setMutating(true);
+          try {
+            const scope = await AuthService.getActiveScope();
+            await softDeleteLibrarySource(scope, source.id);
+            await load();
+          } catch {
+            Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
+          } finally {
+            setMutating(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  // Every source shown here comes from getActiveLibrarySources (see `load` above), so it is never
+  // archived — isArchived is always false and onRestore is consequently unreachable, but both are
+  // still required by the shared sheet's shape (see src/ui/sourceActionsSheet.ts).
+  const onSourceLongPress = (source: LibrarySourceRecord) => {
+    showSourceActionsSheet({
+      t,
+      onEdit: () => router.push({ pathname: "/library/[id]/edit" as any, params: { id: source.id } }),
+      onChooseCollections: () => router.push({ pathname: "/library/[id]/collections" as any, params: { id: source.id } }),
+      onRemoveFromCollection: () => onRemoveSource(source),
+      isArchived: false,
+      onArchive: async () => {
+        if (mutating) return;
+        setMutating(true);
+        try {
+          const scope = await AuthService.getActiveScope();
+          await archiveLibrarySource(scope, source.id);
+          await load();
+        } catch {
+          Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
+        } finally {
+          setMutating(false);
+        }
+      },
+      onRestore: () => {},
+      onDelete: () => confirmDeleteSource(source),
+    });
+  };
+
   if (loaded && !collection) {
     return (
       <Screen>
@@ -190,6 +247,7 @@ export default function SourceCollectionDetailScreen() {
               source={item}
               collections={allCollections}
               onPress={() => router.push({ pathname: "/library/[id]" as any, params: { id: item.id } })}
+              onLongPress={() => onSourceLongPress(item)}
             />
             <Button
               label={t("sourceCollections.detail.removeFromCollectionAction")}

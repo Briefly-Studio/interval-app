@@ -16,7 +16,7 @@ import { IconButton } from "../../../src/ui/IconButton";
 import { Screen } from "../../../src/ui/Screen";
 
 // A dedicated, focused screen for changing which collections a source belongs to — separate from
-// the full Edit Source Details form. Reachable directly from Source Details' "Manage collections"
+// the full Edit Source Details form. Reachable directly from Source Details' "Choose collections"
 // action. Its own useFocusEffect reload means creating a new collection from here (via "+ New
 // collection" -> Create Collection -> back) returns to this exact screen with the new collection
 // already available to check, without losing the source context — see

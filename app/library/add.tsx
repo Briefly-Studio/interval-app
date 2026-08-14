@@ -7,6 +7,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 import { AuthService } from "../../src/auth/AuthService";
 import { attachAndUploadSourceFile, isLibrarySourceStorageEnabled } from "../../src/cloud/librarySourceStorage";
 import { EMPTY_SOURCE_FORM_VALUES, toSourcePatch, type SourceFormValues } from "../../src/domain/sourceFormValues";
+import { detectSourceTypeFromFile, extensionFromFileName } from "../../src/domain/sourceTypeDetection";
 import { useTranslation } from "../../src/i18n";
 import { makeId } from "../../src/models/deck";
 import type { LibrarySource } from "../../src/models/librarySource";
@@ -30,9 +31,15 @@ export default function AddLibrarySourceScreen() {
   const [titleTouched, setTitleTouched] = useState(false);
   const [collections, setCollections] = useState<SourceCollectionRecord[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [pickedFile, setPickedFile] = useState<{ uri: string; name: string; mimeType?: string; size?: number } | null>(
-    null
-  );
+  const [pickedFile, setPickedFile] = useState<
+    { uri: string; name: string; mimeType?: string; size?: number; extension?: string } | null
+  >(null);
+  // True once a picked file's type was confidently detected from its MIME type/extension (see
+  // src/domain/sourceTypeDetection.ts) — locks the type chips so the declared sourceType can never
+  // be manually set to contradict the actual attached file (the exact founder-QA-reported bug:
+  // picking a .docx while leaving "PDF" selected). Stays false for a file whose type can't be
+  // confidently detected, in which case manual selection remains the source of truth as before.
+  const [typeLockedByFile, setTypeLockedByFile] = useState(false);
   const storageEnabled = isLibrarySourceStorageEnabled();
 
   useFocusEffect(
@@ -63,12 +70,16 @@ export default function AddLibrarySourceScreen() {
       uriPresent: !!asset.uri,
       mimeTypePresent: !!asset.mimeType,
     });
-    setPickedFile({ uri: asset.uri, name: asset.name ?? "", mimeType: asset.mimeType, size: asset.size });
+    const extension = extensionFromFileName(asset.name);
+    const detectedType = detectSourceTypeFromFile({ mimeType: asset.mimeType, extension });
+    setPickedFile({ uri: asset.uri, name: asset.name ?? "", mimeType: asset.mimeType, size: asset.size, extension });
+    setTypeLockedByFile(!!detectedType);
     setValues((prev) => ({
       ...prev,
       originalName: asset.name || prev.originalName,
       fileSizeMB:
         typeof asset.size === "number" ? String(Math.round((asset.size / (1024 * 1024)) * 100) / 100) : prev.fileSizeMB,
+      sourceType: detectedType ?? prev.sourceType,
     }));
   };
 
@@ -77,7 +88,6 @@ export default function AddLibrarySourceScreen() {
     setSubmitting(true);
     try {
       const now = new Date().toISOString();
-      const extension = pickedFile?.name.includes(".") ? pickedFile.name.split(".").pop() : undefined;
       const source: LibrarySource = {
         id: makeId(),
         createdAt: now,
@@ -85,7 +95,7 @@ export default function AddLibrarySourceScreen() {
         lastUsedAt: undefined,
         ...toSourcePatch(values),
         mimeType: pickedFile?.mimeType,
-        extension,
+        extension: pickedFile?.extension,
       };
       const scope = await AuthService.getActiveScope();
       await addLibrarySource(scope, source);
@@ -160,6 +170,7 @@ export default function AddLibrarySourceScreen() {
         titleTouched={titleTouched}
         onTitleBlur={() => setTitleTouched(true)}
         editable={!submitting}
+        sourceTypeLocked={typeLockedByFile}
       />
 
       <Button

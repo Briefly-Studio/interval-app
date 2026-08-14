@@ -441,7 +441,7 @@ Each type maps to a MIME/UTI hint AND (where a safe one exists) a viewer-copy ex
 | SourceType | Extension used | Notes |
 |---|---|---|
 | `pdf` | `pdf` | |
-| `docx` | `docx` or `doc` | Chosen from the source's actual captured MIME type (`application/msword` → `doc`), not from sourceType alone — a picked legacy `.doc` file is still manually categorized as "docx" in the metadata form. |
+| `docx` | `docx` or `doc` | Chosen from the source's actual captured MIME type (`application/msword` → `doc`), not from sourceType alone — a picked legacy `.doc` file is automatically detected and categorized as `docx` at attach/save time (see "Source type detection" below), not left to manual selection. |
 | `text` | `txt` | |
 | `pptx` | `pptx` | |
 | `xlsx` | `xlsx` | |
@@ -454,6 +454,19 @@ unvalidated text reach a filesystem path. Any other/unrecognized case falls back
 `application/octet-stream`/`public.data` hint, handed to the OS the same way — the OS decides
 whether it has a capable app, exactly the behavior a "hand off to the native viewer" strategy is
 supposed to have.
+
+### Source type detection (inbound)
+
+`src/domain/sourceTypeDetection.ts` is the mirror image of the outbound table above: given a
+physical file's captured MIME type (preferred) or file extension (fallback), it answers "which
+`SourceType` is this file actually?" — used to keep a source's declared `sourceType` from
+contradicting the file attached to it. A confidently-detected type is auto-selected at
+attach/save time (Add, Source Detail's attach-file action, and a self-heal on opening Edit for an
+already-attached source) and the manual type picker becomes read-only for as long as that
+detection holds; a file whose type can't be confidently detected leaves manual selection as the
+only source of truth, unchanged from prior behavior. This module is deliberately separate from,
+and never imported by, the outbound `VIEWER_HINTS` table above — the two answer different
+questions and evolving one must never silently change the other.
 
 ### Error states
 

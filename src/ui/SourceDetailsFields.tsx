@@ -16,6 +16,12 @@ type SourceDetailsFieldsProps = {
   titleTouched: boolean;
   onTitleBlur: () => void;
   editable: boolean;
+  /** True when `values.sourceType` was confidently detected from an attached file's MIME
+   * type/extension (see src/domain/sourceTypeDetection.ts) — the type chips become read-only so
+   * the declared type can never be manually set to contradict the actual file. Omit/false for
+   * metadata-only sources or files whose type couldn't be confidently detected, where manual
+   * selection remains the only source of truth. */
+  sourceTypeLocked?: boolean;
 };
 
 // Shared field renderer for Add Source Details and Edit Source Details — a "dumb" controlled
@@ -23,7 +29,15 @@ type SourceDetailsFieldsProps = {
 // logic, per this repository's existing per-screen form convention (see app/create-deck.tsx,
 // app/deck/[id]/add-card.tsx). Every field here is metadata only — there is no file picker, no
 // upload progress, no AWS key field, and no AI generation control anywhere in this form.
-export function SourceDetailsFields({ values, onChange, collections, titleTouched, onTitleBlur, editable }: SourceDetailsFieldsProps) {
+export function SourceDetailsFields({
+  values,
+  onChange,
+  collections,
+  titleTouched,
+  onTitleBlur,
+  editable,
+  sourceTypeLocked = false,
+}: SourceDetailsFieldsProps) {
   const { t } = useTranslation();
   const { colors, spacing, typography } = useTheme();
 
@@ -56,9 +70,15 @@ export function SourceDetailsFields({ values, onChange, collections, titleTouche
                 label={t(SOURCE_TYPE_LABEL_KEYS[type])}
                 selected={values.sourceType === type}
                 onPress={() => onChange({ sourceType: type })}
+                disabled={sourceTypeLocked}
               />
             ))}
           </View>
+          {sourceTypeLocked ? (
+            <Text style={[typography.caption, { color: colors.textSecondary }]}>
+              {t("librarySource.form.typeDetectedNote")}
+            </Text>
+          ) : null}
         </View>
 
         <TextField

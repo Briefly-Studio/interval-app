@@ -4,6 +4,7 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import { EMPTY_SOURCE_FORM_VALUES, sourceToFormValues, toSourcePatch, type SourceFormValues } from "../../../src/domain/sourceFormValues";
+import { detectSourceTypeFromFile } from "../../../src/domain/sourceTypeDetection";
 import { useTranslation } from "../../../src/i18n";
 import type { SourceCollectionRecord } from "../../../src/models/sourceCollection";
 import { getLibrarySources, updateLibrarySource } from "../../../src/storage/librarySources";
@@ -29,6 +30,12 @@ export default function EditLibrarySourceScreen() {
   const [loaded, setLoaded] = useState(false);
   const [found, setFound] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // True when the loaded source has an attached file whose MIME type/extension confidently maps
+  // to a SourceType (see src/domain/sourceTypeDetection.ts) — the type chips become read-only in
+  // that case, since the source of truth is the actual attached file, not a manual pick. A source
+  // with no attached file (metadata-only) or an unrecognized file type keeps the chips freely
+  // selectable, exactly as before.
+  const [sourceTypeLocked, setSourceTypeLocked] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -40,7 +47,16 @@ export default function EditLibrarySourceScreen() {
         const source = all.find((s) => s.id === id);
         if (!alive) return;
         if (source) {
-          setValues(sourceToFormValues(source));
+          const detectedType = detectSourceTypeFromFile({ mimeType: source.mimeType, extension: source.extension });
+          setValues({
+            ...sourceToFormValues(source),
+            // Self-heals a previously-mismatched type (e.g. a source saved as "PDF" before this
+            // fix existed, but whose attached file is actually a .docx) the next time it's opened
+            // for editing — the detected type from the real file always wins over a stale stored
+            // value once evidence is confident.
+            sourceType: detectedType ?? source.sourceType,
+          });
+          setSourceTypeLocked(!!detectedType);
           setFound(true);
         } else {
           setFound(false);
@@ -98,6 +114,7 @@ export default function EditLibrarySourceScreen() {
         titleTouched={titleTouched}
         onTitleBlur={() => setTitleTouched(true)}
         editable={!submitting}
+        sourceTypeLocked={sourceTypeLocked}
       />
 
       <Button

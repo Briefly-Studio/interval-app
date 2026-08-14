@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../src/auth/AuthService";
 import { onWorkspaceChanged } from "../../src/auth/authSignal";
@@ -19,7 +19,13 @@ import { ALL_SOURCE_TYPES, SOURCE_TYPE_LABEL_KEYS } from "../../src/domain/libra
 import { useTranslation } from "../../src/i18n";
 import type { LibrarySourceRecord } from "../../src/models/librarySource";
 import type { SourceCollectionRecord } from "../../src/models/sourceCollection";
-import { getActiveLibrarySources, getArchivedLibrarySources } from "../../src/storage/librarySources";
+import {
+  archiveLibrarySource,
+  getActiveLibrarySources,
+  getArchivedLibrarySources,
+  restoreLibrarySource,
+  softDeleteLibrarySource,
+} from "../../src/storage/librarySources";
 import { getActiveSourceCollections } from "../../src/storage/sourceCollections";
 import { useTheme } from "@/src/theme";
 import { Button } from "../../src/ui/Button";
@@ -28,6 +34,7 @@ import { FilterChip } from "../../src/ui/FilterChip";
 import { IconButton } from "../../src/ui/IconButton";
 import { Screen } from "../../src/ui/Screen";
 import { SecondaryAction } from "../../src/ui/SecondaryAction";
+import { showSourceActionsSheet } from "../../src/ui/sourceActionsSheet";
 import { SourceCard } from "../../src/ui/SourceCard";
 import { TextField } from "../../src/ui/TextField";
 
@@ -97,6 +104,67 @@ export default function LibraryScreen() {
   // showing the previous account's Library while it stays focused and nothing navigates. Library
   // is this app's closest analog to those two "hub" screens.
   useEffect(() => onWorkspaceChanged(() => load()), [load]);
+
+  const [sourceActionBusy, setSourceActionBusy] = useState(false);
+
+  const confirmDeleteSource = (source: LibrarySourceRecord) => {
+    if (sourceActionBusy) return;
+    Alert.alert(t("librarySource.detail.deleteTitle"), t("librarySource.detail.deleteBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("librarySource.detail.deleteAction"),
+        style: "destructive",
+        onPress: async () => {
+          setSourceActionBusy(true);
+          try {
+            const scope = await AuthService.getActiveScope();
+            await softDeleteLibrarySource(scope, source.id);
+            await load();
+          } catch {
+            Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
+          } finally {
+            setSourceActionBusy(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const onSourceLongPress = (source: LibrarySourceRecord) => {
+    showSourceActionsSheet({
+      t,
+      onEdit: () => router.push({ pathname: "/library/[id]/edit" as any, params: { id: source.id } }),
+      onChooseCollections: () => router.push({ pathname: "/library/[id]/collections" as any, params: { id: source.id } }),
+      isArchived: !!source.archivedAt,
+      onArchive: async () => {
+        if (sourceActionBusy) return;
+        setSourceActionBusy(true);
+        try {
+          const scope = await AuthService.getActiveScope();
+          await archiveLibrarySource(scope, source.id);
+          await load();
+        } catch {
+          Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
+        } finally {
+          setSourceActionBusy(false);
+        }
+      },
+      onRestore: async () => {
+        if (sourceActionBusy) return;
+        setSourceActionBusy(true);
+        try {
+          const scope = await AuthService.getActiveScope();
+          await restoreLibrarySource(scope, source.id);
+          await load();
+        } catch {
+          Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
+        } finally {
+          setSourceActionBusy(false);
+        }
+      },
+      onDelete: () => confirmDeleteSource(source),
+    });
+  };
 
   const totalActiveCount = activeSources.length;
   const totalArchivedCount = archivedSources.length;
@@ -383,6 +451,7 @@ export default function LibraryScreen() {
             source={item}
             collections={collections}
             onPress={() => router.push({ pathname: "/library/[id]" as any, params: { id: item.id } })}
+            onLongPress={() => onSourceLongPress(item)}
           />
         )}
       />

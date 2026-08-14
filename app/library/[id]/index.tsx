@@ -18,10 +18,17 @@ import {
 } from "../../../src/cloud/librarySourceStorage/openSource";
 import { formatAudioDuration, formatFileSize } from "../../../src/domain/librarySourceFormat";
 import { SOURCE_TYPE_LABEL_KEYS, STATUS_LABEL_KEYS } from "../../../src/domain/librarySourceLabels";
+import { detectSourceTypeFromFile, extensionFromFileName } from "../../../src/domain/sourceTypeDetection";
 import { useTranslation } from "../../../src/i18n";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
 import type { SourceCollectionRecord } from "../../../src/models/sourceCollection";
-import { archiveLibrarySource, getLibrarySources, restoreLibrarySource, softDeleteLibrarySource } from "../../../src/storage/librarySources";
+import {
+  archiveLibrarySource,
+  getLibrarySources,
+  restoreLibrarySource,
+  softDeleteLibrarySource,
+  updateLibrarySource,
+} from "../../../src/storage/librarySources";
 import { getActiveSourceCollections } from "../../../src/storage/sourceCollections";
 import { logLibraryFileAttach } from "../../../src/utils/libraryFileAttachLog";
 import { useTheme } from "@/src/theme";
@@ -165,6 +172,19 @@ export default function LibrarySourceDetailScreen() {
       logLibraryFileAttach("detail.tsx: attach result", { attached });
       if (!attached) {
         Alert.alert(t("librarySource.detail.actionFailedTitle"), t("librarySource.detail.actionFailedBody"));
+      } else {
+        // Keep the record's declared type/MIME/extension in sync with the file that was actually
+        // just attached — this is the exact case founder QA flagged (a source could previously be
+        // declared "PDF" while a later-attached file was really a .docx). Only overrides
+        // sourceType when detection is confident; an unrecognized file type leaves the existing
+        // sourceType untouched rather than guessing.
+        const extension = extensionFromFileName(asset.name);
+        const detectedType = detectSourceTypeFromFile({ mimeType: asset.mimeType, extension });
+        await updateLibrarySource(scope, source.id, {
+          mimeType: asset.mimeType,
+          extension,
+          ...(detectedType ? { sourceType: detectedType } : {}),
+        });
       }
       await load();
     } catch (error) {
