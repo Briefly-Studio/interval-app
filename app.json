@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.anonymous.briefly-app",
       "supportsTablet": true,
       "infoPlist": {
         "CFBundleDocumentTypes": [
@@ -27,6 +28,7 @@
       }
     },
     "android": {
+      "package": "com.anonymous.brieflyapp",
       "adaptiveIcon": {
         "backgroundColor": "#0F7A75",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

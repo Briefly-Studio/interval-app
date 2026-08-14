@@ -170,6 +170,8 @@ breakdown.
   requirements and current status
 - [`docs/branch-and-release-policy.md`](docs/branch-and-release-policy.md) — branch and release
   policy
+- [`docs/development-build-workflow.md`](docs/development-build-workflow.md) — Expo Development
+  Build setup and daily development workflow
 
 ---
 
@@ -187,9 +189,10 @@ npx expo start
 required, without any real credentials or endpoints. Environment configuration determines which
 backend the app talks to when signed in — it has no effect on offline/local-only usage.
 
-Current development QA runs on Expo Go (physical device and Simulator). A migration to an Expo
-Development Build — needed for certain native capabilities beyond what Expo Go supports — is under
-consideration but has not happened yet.
+Interval's development native runtime is an Expo Development Build, founder-QA verified on iOS
+Simulator and physical iPhone. See
+[`docs/development-build-workflow.md`](docs/development-build-workflow.md) for the full setup,
+build/install steps, and daily workflow.
 
 ---
 

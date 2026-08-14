@@ -103,6 +103,9 @@ For anything not covered directly in this file, these are the authoritative docu
 15. `docs/deck-ordering.md` — the implemented canonical, deterministic deck ordering rule.
 16. `docs/deck-collections.md` — the implemented local-only Deck Collections foundation.
 17. `docs/v3-beta-release-checklist.md` — current verification/QA state.
+18. `docs/development-build-workflow.md` — the Expo Development Build migration. **Founder-QA
+    verified on iOS Simulator and physical iPhone** — this is now the active development native
+    runtime; see that document for the full record and EAS Build's separate, still-inactive status.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -432,10 +435,16 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   (`expo-sharing`) rather than rendering it in-app — there is no embedded/in-app PDF (or other
   document) reader implemented. Founder QA has confirmed a PDF can be retrieved and handed to iOS
   as a real, correctly-typed `.pdf`, but broader QA of this flow has not yet passed, and this
-  should not be described as complete until it does. The current development QA runtime is Expo
-  Go, which does not support arbitrary native modules — a true in-app document viewer would likely
-  require migrating to an Expo Development Build, which is a possible future direction under
-  consideration but has **not** been implemented or approved.
+  should not be described as complete until it does. A true in-app document viewer would need a
+  native module Expo Go itself cannot provide — Interval's development native runtime is now an
+  Expo Development Build (see `docs/development-build-workflow.md`, founder-QA verified), which
+  removes that specific constraint, but building the viewer itself remains separate, unstarted
+  future work.
+- EAS Build is prepared (`eas.json`) but not yet linked to an Expo account/project — that step
+  requires interactive founder action (`eas login`, `eas init`) and was deliberately not performed
+  autonomously; local builds (`npx expo run:ios`) remain the founder-QA-verified path for both
+  physical iPhone and Simulator. Do not run `eas login`/`eas init` against an assumed or default
+  account.
 
 ## Accessibility Guardrails
 
