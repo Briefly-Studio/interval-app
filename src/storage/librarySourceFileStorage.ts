@@ -181,6 +181,7 @@ export async function getPersistedSourceFileUri(sourceId: string): Promise<strin
 }
 
 const VIEWER_COPY_DIR_NAME = "librarySourceViewerCopies";
+const EXPORT_COPY_DIR_NAME = "librarySourceExports";
 
 // Extension charset kept intentionally tiny. This is only ever called with a value from
 // src/domain/sourceViewer.ts's own small, hardcoded SourceType/MIME → extension table — never
@@ -190,9 +191,18 @@ const VIEWER_COPY_DIR_NAME = "librarySourceViewerCopies";
 // SAFE_SOURCE_ID's own "defense in depth" reasoning — this function must never be usable to
 // construct an arbitrary path even if a future caller passes something unexpected.
 const SAFE_EXTENSION = /^[a-z0-9]{1,10}$/;
+const SAFE_STAGED_FILENAME = /^[a-zA-Z0-9][a-zA-Z0-9._ -]{0,120}$/;
 
 function viewerCopyDirectory(): Directory {
   return new Directory(Paths.cache, VIEWER_COPY_DIR_NAME);
+}
+
+function exportCopyDirectory(): Directory {
+  return new Directory(Paths.cache, EXPORT_COPY_DIR_NAME);
+}
+
+function exportCopyDirectoryForSource(sourceId: string): Directory {
+  return new Directory(exportCopyDirectory(), sourceId);
 }
 
 /**
@@ -239,6 +249,35 @@ export async function prepareViewerCopy(sourceId: string, extension: string): Pr
     return dest.exists ? dest.uri : null;
   } catch (error) {
     logPersistenceError("prepareViewerCopy", error);
+    return null;
+  }
+}
+
+export async function prepareExportCopy(sourceId: string, fileName: string): Promise<string | null> {
+  try {
+    if (!SAFE_SOURCE_ID.test(sourceId) || !SAFE_STAGED_FILENAME.test(fileName) || !fileName.includes(".")) return null;
+
+    const source = persistedFile(sourceId);
+    if (!source || !source.exists) return null;
+
+    const dir = exportCopyDirectoryForSource(sourceId);
+    dir.create({ intermediates: true, idempotent: true });
+
+    try {
+      for (const entry of dir.list()) {
+        entry.delete();
+      }
+    } catch {
+      // Best-effort cleanup of older export copies for this source — never block the copy.
+    }
+
+    const dest = new File(dir, fileName);
+    if (dest.exists) dest.delete();
+    source.copy(dest);
+
+    return dest.exists ? dest.uri : null;
+  } catch (error) {
+    logPersistenceError("prepareExportCopy", error);
     return null;
   }
 }
