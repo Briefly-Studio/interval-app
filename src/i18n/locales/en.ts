@@ -5,6 +5,8 @@ const en = {
     back: "Back",
     cancel: "Cancel",
     close: "Close",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
   },
   // Shown app-wide on web in place of the entire app this beta — see app/_layout.tsx and
   // docs/platform-scope.md. Deliberately says "not available in this beta", never "broken" or
@@ -51,10 +53,11 @@ const en = {
     notSignedInDescription: "Sign in to view and manage your account.",
     signIn: "Sign in",
     fallbackName: "there",
+    // English/Spanish (and any future locale's) own names for themselves live in
+    // src/i18n/localeRegistry.ts, not here — a locale's endonym is never translated per the
+    // active UI language, so it does not belong in a translation resource.
     languageOptions: {
       system: "System default",
-      english: "English",
-      espanol: "Español",
     },
     appearanceOptions: {
       system: "System",
@@ -156,6 +159,16 @@ const en = {
     restoringWorkspace: "Restoring your workspace…",
     emailLabel: "Email",
     emailPlaceholder: "you@example.com",
+    // Labels for the live sign-up/change-password requirements checklist — see
+    // src/auth/passwordPolicy.ts. Kept as their own leaves (not a single plural/list string) so
+    // each requirement can independently show its own met/unmet state.
+    passwordRequirements: {
+      minLength: "At least {{minLength}} characters",
+      lowercase: "A lowercase letter",
+      uppercase: "An uppercase letter",
+      number: "A number",
+      symbol: "A symbol (e.g. ! @ # $ %)",
+    },
     signIn: {
       title: "Welcome back.",
       subtitle: "Continue studying where you left off.",
@@ -182,6 +195,13 @@ const en = {
       backToSignInButton: "Back to sign in",
       submitButton: "Confirm",
     },
+  },
+  // Compact elapsed-time formatting shared by study-session summaries (history, review results,
+  // quiz results) — see src/domain/sessionFormat.ts's formatDuration(). Deliberately abbreviated
+  // (not "3 minutes 45 seconds") to fit inline in a result summary row.
+  duration: {
+    minutesSeconds: "{{minutes}}m {{seconds}}s",
+    secondsOnly: "{{seconds}}s",
   },
   // Pluralization foundation example (see src/i18n/index.ts's plural()). Not wired into a
   // screen yet — demonstrated via tests only, per this batch's scope.
@@ -797,6 +817,25 @@ const en = {
     invalidFileError: "Invalid export file",
     failedTitle: "Import failed",
     failedGenericBody: "Unable to read or parse the file.",
+    // Suffix appended to an imported deck's title when a deck with the same title already
+    // exists locally — see src/domain/openFileHandler.ts. Joined with a space by the caller
+    // ("{title} " + this), not embedded with leading whitespace in the string itself.
+    importedTitleSuffix: "(Imported)",
+    // Shown while the "Open with Interval" deep-link import is in progress — see app/_layout.tsx.
+    importingOverlay: "Importing deck…",
+    // Errors from the deck-import validation/parsing pipeline (src/domain/openFileHandler.ts,
+    // src/domain/deckPortability.ts) — surfaced verbatim in an Alert's body, so each one is its
+    // own leaf rather than a single generic message.
+    errors: {
+      fileReadFailed: "Unable to read the file.",
+      invalidDeckFile: "This file is not a valid Interval deck file.",
+      invalidJson: "Invalid JSON payload.",
+      invalidPayload: "Invalid payload structure.",
+      unsupportedVersion: "Unsupported payload version.",
+      invalidDeckMetadata: "Deck metadata is missing or invalid.",
+      invalidCardsList: "Cards list is missing or invalid.",
+      invalidCardData: "Card data is missing or invalid.",
+    },
   },
   deckDetail: {
     loading: "Loading…",

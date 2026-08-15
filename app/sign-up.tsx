@@ -24,9 +24,9 @@ function nameFieldError(t: TranslateFn, value: string, touched: boolean, field: 
   return undefined;
 }
 
-function PasswordChecklist({ password }: { password: string }) {
+function PasswordChecklist({ password, t }: { password: string; t: TranslateFn }) {
   const { colors, spacing, typography } = useTheme();
-  const requirements = useMemo(() => getPasswordRequirements(), []);
+  const requirements = useMemo(() => getPasswordRequirements(t), [t]);
 
   return (
     <View style={[styles.checklist, { gap: spacing.xs }]}>
@@ -143,7 +143,7 @@ export default function SignUpScreen() {
           isPassword
           editable={!loading}
         />
-        {passwordTouched ? <PasswordChecklist password={password} /> : null}
+        {passwordTouched ? <PasswordChecklist password={password} t={t} /> : null}
         {errorText ? <Text style={[typography.caption, { color: colors.danger }]}>{errorText}</Text> : null}
       </Card>
 

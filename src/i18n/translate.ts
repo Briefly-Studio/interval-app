@@ -46,10 +46,15 @@ export function translate(language: Locale, key: TranslationKey, params?: Transl
   return interpolate(leaf, params);
 }
 
+// Full CLDR category, not collapsed to one/other — Intl.PluralRules#select already returns
+// exactly the category set src/i18n/types.ts's PluralForms models (zero/one/two/few/many/other).
+// English and Spanish only ever populate `one`/`other`, so `select` can currently only ever
+// return one of those two for them in practice — this function's job is simply to stop discarding
+// whatever a future locale's plural rules (Russian's few/many, Arabic's zero/one/two/few/many)
+// actually need.
 function selectPluralForm(language: Locale, count: number): keyof PluralForms {
   try {
-    const form = new Intl.PluralRules(language).select(count);
-    return form === "one" ? "one" : "other";
+    return new Intl.PluralRules(language).select(count);
   } catch {
     return count === 1 ? "one" : "other";
   }
@@ -62,6 +67,9 @@ export function pluralize(language: Locale, key: TranslationKey, count: number, 
     return key;
   }
   const form = selectPluralForm(language, count);
+  // A given key's PluralForms entry may not populate every category a locale's rules can select
+  // (e.g. an English/Spanish entry only ever has one/other) — `other` is required on every entry
+  // and is always a safe, correct fallback for a category that entry didn't need to distinguish.
   const template = leaf[form] ?? leaf.other;
   return interpolate(template, { count, ...params });
 }

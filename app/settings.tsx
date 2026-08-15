@@ -11,6 +11,7 @@ import { formatSyncTime } from "../src/cloud/sync/formatSyncTime";
 import { SYNC_STATUS_KEYS } from "../src/cloud/sync/syncStatusCopy";
 import { useSyncState } from "../src/cloud/sync/useSyncState";
 import { useTranslation } from "../src/i18n";
+import { LOCALE_REGISTRY } from "../src/i18n/localeRegistry";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { useTheme } from "@/src/theme";
 import { Button } from "../src/ui/Button";
@@ -73,11 +74,12 @@ export default function SettingsScreen() {
 
   // "system" shows the plain "System default" label rather than the resolved language, matching
   // the product requirement that this row reflects the user's *preference*, not the language
-  // currently in effect.
+  // currently in effect. Any specific locale shows its own native name (its endonym — see
+  // src/i18n/localeRegistry.ts) — this generalizes to any future enabled locale without this
+  // screen ever needing another special case.
   const languageSubtitle = useMemo(() => {
     if (preference === "system") return t("settings.languageOptions.system");
-    if (preference === "es") return t("settings.languageOptions.espanol");
-    return t("settings.languageOptions.english");
+    return LOCALE_REGISTRY[preference].nativeName;
   }, [preference, t]);
 
   const appearanceSubtitle = useMemo(() => {

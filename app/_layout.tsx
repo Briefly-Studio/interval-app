@@ -91,23 +91,24 @@ export default function Layout() {
       if (!fileUri) return;
       setImporting(true);
       try {
-        const newDeckId = await handleIncomingFile(fileUri);
+        const newDeckId = await handleIncomingFile(fileUri, t);
         router.replace(`/deck/${newDeckId}`);
       } catch (error) {
         Alert.alert(
-          "Import failed",
-          error instanceof Error ? error.message : "This file is not a valid Interval deck."
+          t("importDeck.failedTitle"),
+          error instanceof Error ? error.message : t("importDeck.errors.invalidDeckFile")
         );
       } finally {
         setImporting(false);
       }
     },
-    [router]
+    [router, t]
   );
 
-  // Fire-and-forget: English (the only supported language so far) is already the correct
-  // in-memory default before this resolves, so there is nothing to gate startup on — this just
-  // reconciles the stored preference for the Settings/Language UI.
+  // Fire-and-forget: English is already the correct in-memory default before this resolves (see
+  // src/i18n/index.ts), so there is nothing to gate startup on — this just reconciles the stored
+  // preference (which may resolve to Spanish or any other enabled locale) for the Settings/
+  // Language UI and every t()/plural() call made before this completes.
   useEffect(() => {
     initI18n();
   }, []);
@@ -238,7 +239,7 @@ export default function Layout() {
       </Stack>
       {importing && (
         <View style={styles.importOverlay}>
-          <Text style={styles.importText}>Importing deck…</Text>
+          <Text style={styles.importText}>{t("importDeck.importingOverlay")}</Text>
         </View>
       )}
       {/* Gated on the canonical store's isInitialized, not just showBrandStartup — BrandStartup

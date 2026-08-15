@@ -16,8 +16,18 @@ export function isLanguagePreference(value: unknown): value is LanguagePreferenc
   return value === "system" || (typeof value === "string" && isSupportedLocale(value));
 }
 
+// Full CLDR plural category set (https://cldr.unicode.org/index/cldr-spec/plural-rules) —
+// exactly the categories `Intl.PluralRules#select` can return. `other` is the only universally
+// required category (every locale's plural rules define it); the rest are optional because most
+// locales don't use all of them — English/Spanish only ever populate `one`/`other`, and existing
+// entries stay exactly as they are. A future locale that needs `few`/`many` (Russian) or the full
+// set including `zero`/`two` (Arabic) can supply only the categories its own plural rules require.
 export type PluralForms = {
-  one: string;
+  zero?: string;
+  one?: string;
+  two?: string;
+  few?: string;
+  many?: string;
   other: string;
 };
 
@@ -27,8 +37,10 @@ export type TranslationTree = {
   [key: string]: TranslationValue | TranslationTree;
 };
 
+const PLURAL_CATEGORY_KEYS = ["zero", "one", "two", "few", "many", "other"] as const;
+
 function isTranslationValue(node: TranslationValue | TranslationTree): node is TranslationValue {
-  return typeof node === "string" || (typeof node === "object" && ("one" in node || "other" in node));
+  return typeof node === "string" || (typeof node === "object" && PLURAL_CATEGORY_KEYS.some((key) => key in node));
 }
 
 export { isTranslationValue };

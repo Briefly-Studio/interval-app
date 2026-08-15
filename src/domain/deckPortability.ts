@@ -1,4 +1,5 @@
 import { AuthService } from "../auth/AuthService";
+import type { TranslateFn } from "../i18n/translateFn";
 import { type CardRecord, type Difficulty, upgradeCard } from "../models/card";
 import { type DeckRecord, makeId, upgradeDeck } from "../models/deck";
 import { getCards, setCards } from "../storage/cards";
@@ -45,18 +46,18 @@ export async function exportDeckToJson(deckId: string): Promise<string> {
   return JSON.stringify(payload);
 }
 
-export async function importDeckFromJson(payload: string): Promise<string> {
+export async function importDeckFromJson(payload: string, t: TranslateFn): Promise<string> {
   const scope = await AuthService.getActiveScope();
 
   let data: unknown;
   try {
     data = JSON.parse(payload);
   } catch {
-    throw new Error("Invalid JSON payload.");
+    throw new Error(t("importDeck.errors.invalidJson"));
   }
 
   if (!data || typeof data !== "object") {
-    throw new Error("Invalid payload structure.");
+    throw new Error(t("importDeck.errors.invalidPayload"));
   }
 
   const parsed = data as {
@@ -71,7 +72,7 @@ export async function importDeckFromJson(payload: string): Promise<string> {
   };
 
   if (parsed.version !== 1) {
-    throw new Error("Unsupported payload version.");
+    throw new Error(t("importDeck.errors.unsupportedVersion"));
   }
 
   const title = parsed.deck?.title;
@@ -80,11 +81,11 @@ export async function importDeckFromJson(payload: string): Promise<string> {
     typeof title !== "string" ||
     (typeof createdAt !== "string" && typeof createdAt !== "number")
   ) {
-    throw new Error("Deck metadata is missing or invalid.");
+    throw new Error(t("importDeck.errors.invalidDeckMetadata"));
   }
 
   if (!Array.isArray(parsed.cards)) {
-    throw new Error("Cards list is missing or invalid.");
+    throw new Error(t("importDeck.errors.invalidCardsList"));
   }
 
   const deckId = makeId();
@@ -101,7 +102,7 @@ export async function importDeckFromJson(payload: string): Promise<string> {
 
   const newCards: CardRecord[] = parsed.cards.map((card) => {
     if (typeof card.front !== "string" || typeof card.back !== "string") {
-      throw new Error("Card data is missing or invalid.");
+      throw new Error(t("importDeck.errors.invalidCardData"));
     }
 
     const difficulty =

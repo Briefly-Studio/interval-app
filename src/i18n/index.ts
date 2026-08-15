@@ -16,10 +16,12 @@ type I18nState = {
   preference: LanguagePreference;
 };
 
-// English is the only supported language in this batch, so the very first render is already
-// correct — initI18n() below only needs to reconcile the *stored preference* (for Settings'
-// selection UI) in the background; nothing here can block or flash incorrect content on
-// startup.
+// English is always a correct starting point (the authoritative fallback locale — see
+// src/i18n/translate.ts), so the very first render is already correct even before the real
+// preference/device-language resolution below finishes — initI18n() only needs to reconcile the
+// *stored preference* (which may resolve to Spanish or any other enabled locale — see
+// src/i18n/localeRegistry.ts) in the background; nothing here can block or flash incorrect
+// content on startup.
 let state: I18nState = { language: FALLBACK_LOCALE, preference: "system" };
 let initialized = false;
 

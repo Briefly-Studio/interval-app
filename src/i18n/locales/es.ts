@@ -7,6 +7,8 @@ const es = {
     back: "Atrás",
     cancel: "Cancelar",
     close: "Cerrar",
+    showPassword: "Mostrar contraseña",
+    hidePassword: "Ocultar contraseña",
   },
   webUnsupported: {
     title: "Aún no disponible en la web",
@@ -50,10 +52,10 @@ const es = {
     notSignedInDescription: "Inicia sesión para ver y administrar tu cuenta.",
     signIn: "Iniciar sesión",
     fallbackName: "alguien",
+    // English/Spanish (and any future locale's) own names for themselves live in
+    // src/i18n/localeRegistry.ts, not here.
     languageOptions: {
       system: "Predeterminado del sistema",
-      english: "English",
-      espanol: "Español",
     },
     appearanceOptions: {
       system: "Sistema",
@@ -155,6 +157,13 @@ const es = {
     restoringWorkspace: "Restaurando tu espacio de trabajo…",
     emailLabel: "Correo electrónico",
     emailPlaceholder: "tu@ejemplo.com",
+    passwordRequirements: {
+      minLength: "Al menos {{minLength}} caracteres",
+      lowercase: "Una letra minúscula",
+      uppercase: "Una letra mayúscula",
+      number: "Un número",
+      symbol: "Un símbolo (p. ej. ! @ # $ %)",
+    },
     signIn: {
       title: "Bienvenido de nuevo.",
       subtitle: "Continúa estudiando donde lo dejaste.",
@@ -181,6 +190,10 @@ const es = {
       backToSignInButton: "Volver a iniciar sesión",
       submitButton: "Confirmar",
     },
+  },
+  duration: {
+    minutesSeconds: "{{minutes}}m {{seconds}}s",
+    secondsOnly: "{{seconds}}s",
   },
   history: {
     loading: "Cargando…",
@@ -790,6 +803,18 @@ const es = {
     invalidFileError: "Archivo de exportación no válido",
     failedTitle: "Error al importar",
     failedGenericBody: "No se pudo leer ni procesar el archivo.",
+    importedTitleSuffix: "(Importado)",
+    importingOverlay: "Importando mazo…",
+    errors: {
+      fileReadFailed: "No se pudo leer el archivo.",
+      invalidDeckFile: "Este archivo no es un mazo de Interval válido.",
+      invalidJson: "Carga JSON no válida.",
+      invalidPayload: "Estructura de datos no válida.",
+      unsupportedVersion: "Versión de datos no compatible.",
+      invalidDeckMetadata: "Los metadatos del mazo faltan o no son válidos.",
+      invalidCardsList: "La lista de tarjetas falta o no es válida.",
+      invalidCardData: "Los datos de la tarjeta faltan o no son válidos.",
+    },
   },
   deckDetail: {
     loading: "Cargando…",
