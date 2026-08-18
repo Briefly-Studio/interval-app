@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
+import { formatDuration } from "../../../src/domain/sessionFormat";
 import { useTranslation } from "../../../src/i18n";
 import { type SessionRecord, upgradeSession } from "../../../src/models/session";
 import { addSession } from "../../../src/storage/sessions";
@@ -11,14 +12,6 @@ import { Card } from "../../../src/ui/Card";
 import { ResultMetric } from "../../../src/ui/ResultMetric";
 import { Screen } from "../../../src/ui/Screen";
 import { useTheme } from "@/src/theme";
-
-const formatDuration = (startedAt: number, finishedAt: number) => {
-  const diff = Math.max(0, finishedAt - startedAt);
-  const totalSeconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-};
 
 export default function ReviewResults() {
   const router = useRouter();
@@ -41,8 +34,8 @@ export default function ReviewResults() {
   const finishedAt = toNumber(params.finishedAt, Date.now());
 
   const durationText = useMemo(
-    () => formatDuration(startedAt, finishedAt),
-    [startedAt, finishedAt]
+    () => formatDuration(startedAt, finishedAt, t),
+    [startedAt, finishedAt, t]
   );
 
   const sessionLogged = useRef(false);

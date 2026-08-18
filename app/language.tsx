@@ -1,29 +1,32 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useTranslation, type LanguagePreference } from "../src/i18n";
+import { ENABLED_LOCALES, LOCALE_REGISTRY } from "../src/i18n/localeRegistry";
 import { useTheme } from "@/src/theme";
 import { Card } from "../src/ui/Card";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 
-// English and Spanish are the supported languages today — System default, English, or an
-// explicit Español override. No flags, no country ties: language and country are deliberately
-// decoupled per the localization spec.
-const OPTIONS: {
-  value: LanguagePreference;
-  labelKey: "settings.languageOptions.system" | "settings.languageOptions.english" | "settings.languageOptions.espanol";
-}[] = [
-  { value: "system", labelKey: "settings.languageOptions.system" },
-  { value: "en", labelKey: "settings.languageOptions.english" },
-  { value: "es", labelKey: "settings.languageOptions.espanol" },
-];
-
 export default function LanguageScreen() {
   const router = useRouter();
   const { t, preference, setLanguagePreference } = useTranslation();
   const { colors, iconSizes, spacing, touchTarget, typography } = useTheme();
+
+  // System default first, then every currently-enabled locale (ENABLED_LOCALES —
+  // src/i18n/localeRegistry.ts) in its own native name — no flags, no country ties: language and
+  // country are deliberately decoupled per the localization spec. Adding a future locale here
+  // requires no change to this screen at all: it appears automatically once its registry entry
+  // is flipped to enabled: true.
+  const options = useMemo(
+    () => [
+      { value: "system" as LanguagePreference, label: t("settings.languageOptions.system") },
+      ...ENABLED_LOCALES.map((code) => ({ value: code as LanguagePreference, label: LOCALE_REGISTRY[code].nativeName })),
+    ],
+    [t]
+  );
 
   return (
     <Screen>
@@ -33,7 +36,7 @@ export default function LanguageScreen() {
       </View>
 
       <Card style={styles.rowGroup}>
-        {OPTIONS.map((option, index) => {
+        {options.map((option, index) => {
           const selected = preference === option.value;
           return (
             <View key={option.value}>
@@ -42,14 +45,14 @@ export default function LanguageScreen() {
                 onPress={() => setLanguagePreference(option.value)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}
-                accessibilityLabel={t(option.labelKey)}
+                accessibilityLabel={option.label}
                 style={({ pressed }) => [
                   styles.row,
                   { minHeight: touchTarget.min, paddingVertical: spacing.sm },
                   pressed && { backgroundColor: colors.surfaceMuted },
                 ]}
               >
-                <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{t(option.labelKey)}</Text>
+                <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{option.label}</Text>
                 {selected ? <Ionicons name="checkmark" size={iconSizes.md} color={colors.accent} /> : null}
               </Pressable>
             </View>

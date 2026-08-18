@@ -7,6 +7,7 @@ import { AuthService } from "../src/auth/AuthService";
 import { getAuthDiagnosticCode, getChangePasswordErrorKind } from "../src/auth/authErrors";
 import { getPasswordRequirements, isPasswordValid } from "../src/auth/passwordPolicy";
 import { useTranslation } from "../src/i18n";
+import type { TranslateFn } from "../src/i18n/translateFn";
 import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { useTheme } from "@/src/theme";
 import { Button } from "../src/ui/Button";
@@ -21,9 +22,9 @@ import { TextField } from "../src/ui/TextField";
 // here locally rather than editing sign-up.tsx to export it. Both read from the same canonical
 // getPasswordRequirements()/isPasswordValid() in src/auth/passwordPolicy.ts, so the requirements
 // themselves never drift — only this presentation snippet is duplicated.
-function PasswordChecklist({ password }: { password: string }) {
+function PasswordChecklist({ password, t }: { password: string; t: TranslateFn }) {
   const { colors, spacing, typography } = useTheme();
-  const requirements = useMemo(() => getPasswordRequirements(), []);
+  const requirements = useMemo(() => getPasswordRequirements(t), [t]);
 
   return (
     <View style={[styles.checklist, { gap: spacing.xs }]}>
@@ -195,7 +196,7 @@ export default function ChangePasswordScreen() {
           isPassword
           editable={!submitting}
         />
-        {newPasswordTouched ? <PasswordChecklist password={newPassword} /> : null}
+        {newPasswordTouched ? <PasswordChecklist password={newPassword} t={t} /> : null}
         <TextField
           label={t("changePassword.confirmPasswordLabel")}
           value={confirmPassword}

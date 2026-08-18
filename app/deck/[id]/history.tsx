@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
+import { formatDuration, formatTimestamp } from "../../../src/domain/sessionFormat";
 import { useTranslation } from "../../../src/i18n";
 import type { Deck } from "../../../src/models/deck";
 import type { StudySession } from "../../../src/models/session";
@@ -14,20 +15,6 @@ import { IconButton } from "../../../src/ui/IconButton";
 import { Screen } from "../../../src/ui/Screen";
 import { SessionCard } from "../../../src/ui/SessionCard";
 import { useTheme } from "@/src/theme";
-
-// `language` is the active, explicitly-resolved app language (see src/i18n/index.ts) — never
-// the device's raw locale — so date formatting stays consistent with whatever language the user
-// has actually selected, even when it differs from the device's own locale.
-const formatTimestamp = (value: number, language: string) =>
-  new Date(value).toLocaleString(language, { dateStyle: "short", timeStyle: "short" });
-
-const formatDuration = (startedAt: number, finishedAt: number) => {
-  const diff = Math.max(0, finishedAt - startedAt);
-  const totalSeconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-};
 
 export default function DeckHistoryScreen() {
   const router = useRouter();
@@ -149,7 +136,7 @@ export default function DeckHistoryScreen() {
             return (
               <SessionCard
                 title={parts.join(" • ")}
-                subtitle={`${formatTimestamp(item.finishedAt, language)} • ${formatDuration(item.startedAt, item.finishedAt)}`}
+                subtitle={`${formatTimestamp(item.finishedAt, language)} • ${formatDuration(item.startedAt, item.finishedAt, t)}`}
               />
             );
           }}

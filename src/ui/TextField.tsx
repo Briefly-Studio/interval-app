@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 
+import { useTranslation } from "../i18n";
 import { IconButton } from "./IconButton";
 import { useTheme } from "@/src/theme";
 
@@ -13,6 +14,7 @@ type TextFieldProps = Omit<TextInputProps, "style"> & {
 
 export function TextField({ label, error, isPassword, ...inputProps }: TextFieldProps) {
   const { colors, radii, spacing, typography, touchTarget } = useTheme();
+  const { t } = useTranslation();
   const [revealed, setRevealed] = useState(false);
   const isMultiline = !!inputProps.multiline;
 
@@ -47,7 +49,7 @@ export function TextField({ label, error, isPassword, ...inputProps }: TextField
         {isPassword && (
           <IconButton
             name={revealed ? "eye-off-outline" : "eye-outline"}
-            accessibilityLabel={revealed ? "Hide password" : "Show password"}
+            accessibilityLabel={revealed ? t("common.hidePassword") : t("common.showPassword")}
             onPress={() => setRevealed((value) => !value)}
             variant="ghost"
             size={18}

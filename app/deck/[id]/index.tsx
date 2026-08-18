@@ -34,7 +34,7 @@ const DIFFICULTY_LABEL_KEYS: Record<(typeof DIFFICULTY_FILTERS)[number], Transla
 
 export default function DeckDetails() {
   const router = useRouter();
-  const { t, plural } = useTranslation();
+  const { t, plural, language } = useTranslation();
   const { colors, iconSizes, spacing, touchTarget, typography } = useTheme();
 
   const params = useLocalSearchParams();
@@ -328,13 +328,13 @@ export default function DeckDetails() {
                   {t("deckDetail.studyHistoryRow", { count: sessions.length })}
                 </Text>
                 <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                  {formatTimestamp(lastSession.finishedAt)} •{" "}
+                  {formatTimestamp(lastSession.finishedAt, language)} •{" "}
                   {lastSession.mode === "quiz"
                     ? `${t("history.sessionModeQuiz")} • ${
                         typeof lastSession.percent === "number" ? `${lastSession.percent}% • ` : ""
                       }`
                     : `${t("history.sessionModeReview")} • `}
-                  {plural("history.cardsCount", lastSession.total)} • {formatDuration(lastSession.startedAt, lastSession.finishedAt)}
+                  {plural("history.cardsCount", lastSession.total)} • {formatDuration(lastSession.startedAt, lastSession.finishedAt, t)}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={iconSizes.sm} color={colors.textSecondary} />

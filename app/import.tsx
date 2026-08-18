@@ -58,7 +58,7 @@ export default function ImportDeckScreen() {
         throw new Error(t("importDeck.invalidFileError"));
       }
 
-      const newDeckId = await importDeckFromJson(cleaned);
+      const newDeckId = await importDeckFromJson(cleaned, t);
       Alert.alert(t("importDeck.importedTitle"), t("importDeck.importedBody"));
       router.replace(`/deck/${newDeckId}`);
     } catch (error) {
