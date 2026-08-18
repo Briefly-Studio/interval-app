@@ -18,6 +18,7 @@ import {
 } from "../../../src/cloud/librarySourceStorage/openSource";
 import { formatAudioDuration, formatFileSize } from "../../../src/domain/librarySourceFormat";
 import { SOURCE_TYPE_LABEL_KEYS, STATUS_LABEL_KEYS } from "../../../src/domain/librarySourceLabels";
+import { hasEmbeddedSourcePreview } from "../../../src/domain/sourcePreview";
 import { detectSourceTypeFromFile, extensionFromFileName } from "../../../src/domain/sourceTypeDetection";
 import { useTranslation } from "../../../src/i18n";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
@@ -308,6 +309,7 @@ export default function LibrarySourceDetailScreen() {
   // gate this on cloudUploadState === "uploaded" alone (see
   // docs/library-and-source-architecture.md's "Source open/preview" section).
   const canOpenOriginal = hasLocalFile || source.cloudUploadState === "uploaded";
+  const canPreview = canOpenOriginal && hasEmbeddedSourcePreview(source);
   const openButtonLabel =
     fileBusy && openStage === "downloading"
       ? t("librarySource.detail.downloadingOriginal")
@@ -363,14 +365,25 @@ export default function LibrarySourceDetailScreen() {
           </Text>
 
           {canOpenOriginal ? (
-            <Button
-              label={openButtonLabel}
-              variant="primary"
-              fullWidth
-              loading={fileBusy && !!openStage}
-              disabled={fileBusy && !openStage}
-              onPress={onOpenOriginal}
-            />
+            <>
+              {canPreview ? (
+                <Button
+                  label={t("librarySource.detail.previewButton")}
+                  variant="primary"
+                  fullWidth
+                  disabled={fileBusy}
+                  onPress={() => router.push({ pathname: "/library/[id]/preview" as any, params: { id: source.id } })}
+                />
+              ) : null}
+              <Button
+                label={openButtonLabel}
+                variant={canPreview ? "secondary" : "primary"}
+                fullWidth
+                loading={fileBusy && !!openStage}
+                disabled={fileBusy && !openStage}
+                onPress={onOpenOriginal}
+              />
+            </>
           ) : null}
 
           {!source.cloudUploadState ? (
