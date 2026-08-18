@@ -33,9 +33,16 @@ export type LocaleInfo = {
   direction: LocaleDirection;
 };
 
+// Declaration order is display order — app/language.tsx renders ENABLED_LOCALES (derived below)
+// in this exact sequence, so reordering entries here reorders the Settings language picker.
 export const LOCALE_REGISTRY: Record<Locale, LocaleInfo> = {
   en: { code: "en", nativeName: "English", enabled: true, direction: "ltr" },
   es: { code: "es", nativeName: "Español", enabled: true, direction: "ltr" },
+  fr: { code: "fr", nativeName: "Français", enabled: true, direction: "ltr" },
+  "pt-BR": { code: "pt-BR", nativeName: "Português (Brasil)", enabled: true, direction: "ltr" },
+  it: { code: "it", nativeName: "Italiano", enabled: true, direction: "ltr" },
+  de: { code: "de", nativeName: "Deutsch", enabled: true, direction: "ltr" },
+  nl: { code: "nl", nativeName: "Nederlands", enabled: true, direction: "ltr" },
 };
 
 /** Locales currently offered in the UI (Settings language picker), in registry declaration

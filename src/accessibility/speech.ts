@@ -4,9 +4,16 @@ import type { Locale } from "../i18n";
 
 // Maps Interval's own resolved UI language (never card content, which this app has no reliable
 // way to detect — see useSpeech.ts's doc comment) to a concrete speech language tag.
+// Record<Locale, ...> forces an entry for every locale in src/i18n/types.ts's Locale union —
+// adding a locale there without a speech tag here is a compile-time error.
 const SPEECH_LANGUAGE_TAGS: Record<Locale, string> = {
   en: "en-US",
   es: "es-ES",
+  fr: "fr-FR",
+  "pt-BR": "pt-BR",
+  it: "it-IT",
+  de: "de-DE",
+  nl: "nl-NL",
 };
 
 export function speechLanguageTag(locale: Locale): string {
