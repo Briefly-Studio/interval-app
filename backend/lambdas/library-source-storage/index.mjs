@@ -36,7 +36,9 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/png",
   "image/heic",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
 ]);
 
 function resp(statusCode, obj) {

@@ -446,38 +446,37 @@ OS-purgeable by design; only `librarySourceFiles/` (Documents-based) is the dura
 
 ### File type behavior
 
-Reuses the existing `SourceType` union — no new types, no claimed support beyond what's realistic.
-Each type maps to a MIME/UTI hint AND (where a safe one exists) a viewer-copy extension:
+Reuses the existing `SourceType` union — no persisted type rename, no claimed support beyond what's
+realistic. Trusted format facts now live in `src/domain/librarySourceFormat.ts`, which is the
+single source for inbound detection, MIME/extension hints, cloud-upload eligibility, and disposable
+viewer/export copy extensions.
 
 | SourceType | Extension used | Notes |
 |---|---|---|
 | `pdf` | `pdf` | |
 | `docx` | `docx` or `doc` | Chosen from the source's actual captured MIME type (`application/msword` → `doc`), not from sourceType alone — a picked legacy `.doc` file is automatically detected and categorized as `docx` at attach/save time (see "Source type detection" below), not left to manual selection. |
 | `text` | `txt` | |
-| `pptx` | `pptx` | |
-| `xlsx` | `xlsx` | |
-| `image` | `jpg`/`png`/`heic` | Only for a recognized captured MIME type (`IMAGE_MIME_EXTENSIONS` in `src/domain/sourceViewer.ts`); an unrecognized image MIME type gets no extension rather than a guessed one. |
-| `audio` / unrecognized | none | No safe extension exists — falls back to the plain canonical (extensionless) path, MIME/UTI hints only. Audio has no attach path yet anyway (see "Supported input scope"). |
+| `pptx` | `pptx` or `ppt` | Legacy PowerPoint MIME (`application/vnd.ms-powerpoint`) keeps the historical product type value while preserving the real handoff extension. |
+| `xlsx` | `xlsx` or `xls` | Legacy Excel MIME (`application/vnd.ms-excel`) keeps the historical product type value while preserving the real handoff extension. |
+| `image` | `jpg`/`png`/`heic` | Chosen from the recognized captured MIME type; otherwise falls back to the family default. |
+| `audio` | `mp3`/`m4a`/`wav`/`aac` | Local metadata/file support is modeled, but cloud upload remains explicitly unsupported until a separate backend deployment mission changes that contract. |
 
-The extension is always chosen from this small, hardcoded, trusted table — **never** derived from
+The extension is always chosen from this small, hardcoded, trusted model — **never** derived from
 `originalName` or any other user/picker-supplied string, which is exactly what would let
-unvalidated text reach a filesystem path. Any other/unrecognized case falls back to a generic
-`application/octet-stream`/`public.data` hint, handed to the OS the same way — the OS decides
-whether it has a capable app, exactly the behavior a "hand off to the native viewer" strategy is
-supposed to have.
+unvalidated text reach a filesystem path.
 
 ### Source type detection (inbound)
 
-`src/domain/sourceTypeDetection.ts` is the mirror image of the outbound table above: given a
-physical file's captured MIME type (preferred) or file extension (fallback), it answers "which
-`SourceType` is this file actually?" — used to keep a source's declared `sourceType` from
-contradicting the file attached to it. A confidently-detected type is auto-selected at
+`src/domain/sourceTypeDetection.ts` is a thin wrapper around `librarySourceFormat`'s trusted
+evidence rules: given a physical file's captured MIME type (preferred when recognized) or file
+extension (fallback when MIME is missing, generic, or unrecognized), it answers "which `SourceType`
+is this file actually?" — used to keep a source's declared `sourceType` from contradicting the file
+attached to it. A confidently-detected type is auto-selected at
 attach/save time (Add, Source Detail's attach-file action, and a self-heal on opening Edit for an
 already-attached source) and the manual type picker becomes read-only for as long as that
 detection holds; a file whose type can't be confidently detected leaves manual selection as the
-only source of truth, unchanged from prior behavior. This module is deliberately separate from,
-and never imported by, the outbound `VIEWER_HINTS` table above — the two answer different
-questions and evolving one must never silently change the other.
+only source of truth, unchanged from prior behavior. A recognized specific MIME type wins over a
+conflicting extension; generic or absent MIME may fall back to a trusted extension.
 
 ### Error states
 

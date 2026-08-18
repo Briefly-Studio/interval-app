@@ -9,6 +9,7 @@ import { AuthService } from "../../auth/AuthService";
 import { updateLibrarySourceCloudState } from "../../storage/librarySources";
 import { hasPersistedSourceFile, persistPickedSourceFile } from "../../storage/librarySourceFileStorage";
 import { getLocalSourceFile, setLocalSourceFile } from "../../storage/librarySourceLocalFiles";
+import { isCloudUploadMimeTypeSupported, normalizeMimeType } from "../../domain/librarySourceFormat";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import { logLibraryFileAttach } from "../../utils/libraryFileAttachLog";
 import { isLibrarySourceStorageEnabled } from "./capability";
@@ -49,9 +50,14 @@ async function attemptUpload(
     return; // signed out / offline — stays "pending", retried later
   }
 
-  const mimeType = mimeTypeHint ?? local.mimeType;
+  const mimeType = normalizeMimeType(mimeTypeHint ?? local.mimeType);
   if (!mimeType) {
     logLibraryFileAttach("attemptUpload: MARK failed — no mime type available");
+    await updateLibrarySourceCloudState(scope, sourceId, "failed");
+    return;
+  }
+  if (!isCloudUploadMimeTypeSupported(mimeType)) {
+    logLibraryFileAttach("attemptUpload: MARK failed — mime type not supported for cloud upload");
     await updateLibrarySourceCloudState(scope, sourceId, "failed");
     return;
   }

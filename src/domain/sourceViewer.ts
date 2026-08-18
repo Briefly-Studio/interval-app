@@ -1,7 +1,8 @@
 import * as Sharing from "expo-sharing";
 
 import type { SourceType } from "../models/librarySource";
-import { prepareViewerCopy } from "../storage/librarySourceFileStorage";
+import { prepareExportCopy, prepareViewerCopy } from "../storage/librarySourceFileStorage";
+import { prepareSourceExportFilename, resolveSourceHandoffHint, type SourceHandoffHint } from "./librarySourceFormat";
 
 // Platform-native "open original" handoff — deliberately NOT a bespoke embedded viewer. Uses
 // expo-sharing's OS-native share/activity sheet (iOS UIActivityViewController — which offers an
@@ -31,65 +32,45 @@ import { prepareViewerCopy } from "../storage/librarySourceFileStorage";
 // (`<sourceId>.<safeExtension>`, Cache-based, never the canonical file) and hands that copy's URI
 // to `Sharing.shareAsync` instead — the canonical durable file itself is never renamed or touched.
 
-type ViewerHint = { mimeType: string; UTI: string; extension?: string };
+export type OpenFileResult = { ok: true } | { ok: false; reason: "unsupported-viewer" | "handoff-failed" };
 
-// UTI (iOS) / mimeType (both platforms) / extension hints per source type, used only to help the
-// OS present the right preview/app choices — never used to validate or gate anything. `extension`
-// is deliberately a small, hardcoded, trusted set — NEVER derived from an original filename (a
-// user- or picker-supplied string), which is exactly what would let unvalidated text reach a
-// filesystem path (see prepareViewerCopy's own SAFE_EXTENSION check for the defense-in-depth
-// backstop). `docx` distinguishes real legacy `.doc` (application/msword) from modern `.docx`
-// using the source's actual captured MIME type — sourceType alone can't tell them apart, since a
-// user picking a legacy Word file still selects "docx" from the metadata form's type dropdown.
-const VIEWER_HINTS: Partial<Record<SourceType, (mimeType: string | undefined) => ViewerHint>> = {
-  pdf: () => ({ mimeType: "application/pdf", UTI: "com.adobe.pdf", extension: "pdf" }),
-  docx: (mimeType) =>
-    mimeType === "application/msword"
-      ? { mimeType, UTI: "com.microsoft.word.doc", extension: "doc" }
-      : {
-          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          UTI: "org.openxmlformats.wordprocessingml.document",
-          extension: "docx",
-        },
-  text: () => ({ mimeType: "text/plain", UTI: "public.plain-text", extension: "txt" }),
-  pptx: () => ({
-    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    UTI: "org.openxmlformats.presentationml.presentation",
-    extension: "pptx",
-  }),
-  xlsx: () => ({
-    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    UTI: "org.openxmlformats.spreadsheetml.sheet",
-    extension: "xlsx",
-  }),
+export type PreparedSourceFileInput = SourceHandoffHint & {
+  uri: string;
+  dialogTitle: string;
 };
 
-// Real MIME type was already captured from the picked file at attach time (see
-// app/library/add.tsx) — more accurate than guessing jpeg vs. png vs. heic from sourceType alone.
-// Only a small, trusted, known-safe set gets a viewer-copy extension; an unrecognized image MIME
-// type falls back to no extension (see resolveViewerHint) rather than guessing wrong.
-const IMAGE_MIME_EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/heic": "heic",
-};
-
-function resolveViewerHint(source: { sourceType: SourceType; mimeType?: string }): ViewerHint {
-  const known = VIEWER_HINTS[source.sourceType];
-  if (known) return known(source.mimeType);
-  if (source.sourceType === "image") {
-    const mimeType = source.mimeType || "image/jpeg";
-    const extension = IMAGE_MIME_EXTENSIONS[mimeType];
-    return { mimeType, UTI: "public.image", extension };
+export async function prepareViewerInput(
+  uri: string,
+  source: { id: string; sourceType: SourceType; mimeType?: string; displayTitle: string }
+): Promise<PreparedSourceFileInput> {
+  const hint = resolveSourceHandoffHint(source);
+  let handoffUri = uri;
+  if (hint.extension) {
+    const viewerCopyUri = await prepareViewerCopy(source.id, hint.extension);
+    // Graceful degradation, not a hard failure: if the viewer copy couldn't be created for any
+    // reason, still attempt the handoff with the original (extensionless) canonical file and
+    // the MIME/UTI hints alone, rather than blocking "Open original" entirely.
+    if (viewerCopyUri) handoffUri = viewerCopyUri;
   }
-  // audio and any future/unlisted type: no audio file-intake UI exists yet (see
-  // docs/library-and-source-architecture.md's "Supported input scope"), so this generic fallback
-  // is only ever reached defensively, never as an expected path today. No safe extension exists
-  // for a generic/unknown type — never fabricate one (e.g. never default to "pdf").
-  return { mimeType: source.mimeType || "application/octet-stream", UTI: "public.data" };
+
+  return { ...hint, uri: handoffUri, dialogTitle: source.displayTitle };
 }
 
-export type OpenFileResult = { ok: true } | { ok: false; reason: "unsupported-viewer" | "handoff-failed" };
+export async function prepareSourceExport(
+  uri: string,
+  source: {
+    id: string;
+    sourceType: SourceType;
+    mimeType?: string;
+    originalName?: string;
+    displayTitle: string;
+  }
+): Promise<PreparedSourceFileInput> {
+  const hint = resolveSourceHandoffHint(source);
+  const exportFileName = prepareSourceExportFilename(source);
+  const exportCopyUri = await prepareExportCopy(source.id, exportFileName);
+  return { ...hint, uri: exportCopyUri ?? uri, dialogTitle: source.displayTitle };
+}
 
 /**
  * Hands a local file off to the OS-native viewer/share surface. `uri` must already be a local
@@ -108,18 +89,8 @@ export async function openSourceFile(
       return { ok: false, reason: "unsupported-viewer" };
     }
 
-    const { mimeType, UTI, extension } = resolveViewerHint(source);
-
-    let handoffUri = uri;
-    if (extension) {
-      const viewerCopyUri = await prepareViewerCopy(source.id, extension);
-      // Graceful degradation, not a hard failure: if the viewer copy couldn't be created for any
-      // reason, still attempt the handoff with the original (extensionless) canonical file and
-      // the MIME/UTI hints alone, rather than blocking "Open original" entirely.
-      if (viewerCopyUri) handoffUri = viewerCopyUri;
-    }
-
-    await Sharing.shareAsync(handoffUri, { mimeType, UTI, dialogTitle: source.displayTitle });
+    const input = await prepareViewerInput(uri, source);
+    await Sharing.shareAsync(input.uri, { mimeType: input.mimeType, UTI: input.UTI, dialogTitle: input.dialogTitle });
     return { ok: true };
   } catch (error) {
     if (__DEV__) {
