@@ -666,6 +666,7 @@ const ptBR = {
       originalFileVerifiedBody: "Este dispositivo confirmou acesso seguro ao original armazenado.",
       originalFileVerifyFailedTitle: "Não foi possível confirmar o acesso na nuvem",
       originalFileVerifyFailedBody: "Tente novamente quando estiver on-line.",
+      previewButton: "Visualizar",
       openOriginalButton: "Abrir original",
       preparingSource: "Preparando fonte…",
       downloadingOriginal: "Baixando original…",
@@ -686,6 +687,19 @@ const ptBR = {
       deleteBody: "Isso remove os detalhes da fonte armazenados no Interval. Não exclui nenhum arquivo original fora do aplicativo e não afeta seus baralhos. Você pode restaurá-la em Excluídos recentemente, dentro da Biblioteca.",
       actionFailedTitle: "Algo deu errado",
       actionFailedBody: "Tente novamente.",
+    },
+    preview: {
+      title: "Visualização",
+      loading: "Preparando visualização…",
+      downloading: "Baixando original…",
+      errorTitle: "Não foi possível exibir a visualização",
+      errorBody: "Não foi possível exibir este PDF dentro do Interval. Você ainda pode tentar abrir o original.",
+      retryButton: "Tentar novamente",
+      pageCount: {
+        one: "{{count}} página",
+        other: "{{count}} páginas",
+      },
+      pageProgress: "Página {{page}} de {{count}}",
     },
   },
   sourceCollections: {

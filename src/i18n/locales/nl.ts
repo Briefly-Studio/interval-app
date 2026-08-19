@@ -662,6 +662,7 @@ const nl = {
       originalFileVerifiedBody: "Dit apparaat heeft veilige toegang tot het opgeslagen origineel bevestigd.",
       originalFileVerifyFailedTitle: "Cloudtoegang kon niet worden bevestigd",
       originalFileVerifyFailedBody: "Probeer het opnieuw zodra je online bent.",
+      previewButton: "Voorbeeld",
       openOriginalButton: "Origineel openen",
       preparingSource: "Bron wordt voorbereid…",
       downloadingOriginal: "Origineel wordt gedownload…",
@@ -682,6 +683,19 @@ const nl = {
       deleteBody: "Dit verwijdert de brondetails die in Interval zijn opgeslagen. Er wordt geen origineel bestand buiten de app verwijderd en je stapels worden er niet door beïnvloed. Je kunt deze herstellen via Onlangs verwijderd in Bibliotheek.",
       actionFailedTitle: "Er is iets misgegaan",
       actionFailedBody: "Probeer het opnieuw.",
+    },
+    preview: {
+      title: "Voorbeeld",
+      loading: "Voorbeeld wordt voorbereid…",
+      downloading: "Origineel wordt gedownload…",
+      errorTitle: "Voorbeeld kon niet worden getoond",
+      errorBody: "Dit PDF-bestand kon niet in Interval worden weergegeven. Je kunt nog steeds proberen het origineel te openen.",
+      retryButton: "Opnieuw proberen",
+      pageCount: {
+        one: "{{count}} pagina",
+        other: "{{count}} pagina's",
+      },
+      pageProgress: "Pagina {{page}} van {{count}}",
     },
   },
   sourceCollections: {

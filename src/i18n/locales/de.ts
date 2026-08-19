@@ -663,6 +663,7 @@ const de = {
       originalFileVerifiedBody: "Dieses Gerät hat den sicheren Zugriff auf das gespeicherte Original bestätigt.",
       originalFileVerifyFailedTitle: "Cloud-Zugriff konnte nicht bestätigt werden",
       originalFileVerifyFailedBody: "Bitte versuche es erneut, sobald du online bist.",
+      previewButton: "Vorschau",
       openOriginalButton: "Original öffnen",
       preparingSource: "Quelle wird vorbereitet…",
       downloadingOriginal: "Original wird heruntergeladen…",
@@ -683,6 +684,19 @@ const de = {
       deleteBody: "Dadurch werden die in Interval gespeicherten Quellendetails entfernt. Es wird keine Originaldatei außerhalb der App gelöscht, und deine Stapel sind davon nicht betroffen. Du kannst sie über Kürzlich gelöscht in der Bibliothek wiederherstellen.",
       actionFailedTitle: "Etwas ist schiefgelaufen",
       actionFailedBody: "Bitte versuche es erneut.",
+    },
+    preview: {
+      title: "Vorschau",
+      loading: "Vorschau wird vorbereitet…",
+      downloading: "Original wird heruntergeladen…",
+      errorTitle: "Vorschau konnte nicht angezeigt werden",
+      errorBody: "Diese PDF-Datei konnte nicht in Interval angezeigt werden. Du kannst weiterhin versuchen, das Original zu öffnen.",
+      retryButton: "Erneut versuchen",
+      pageCount: {
+        one: "{{count}} Seite",
+        other: "{{count}} Seiten",
+      },
+      pageProgress: "Seite {{page}} von {{count}}",
     },
   },
   sourceCollections: {

@@ -668,6 +668,7 @@ const fr = {
       originalFileVerifiedBody: "Cet appareil a confirmé un accès sécurisé à l'original stocké.",
       originalFileVerifyFailedTitle: "Impossible de confirmer l'accès cloud",
       originalFileVerifyFailedBody: "Veuillez réessayer une fois connecté à internet.",
+      previewButton: "Aperçu",
       openOriginalButton: "Ouvrir l'original",
       preparingSource: "Préparation de la source…",
       downloadingOriginal: "Téléchargement de l'original…",
@@ -688,6 +689,19 @@ const fr = {
       deleteBody: "Cela supprime les détails de la source stockés dans Interval. Cela ne supprime aucun fichier original en dehors de l'application et n'affecte pas vos paquets. Vous pouvez la restaurer depuis Supprimés récemment, dans Bibliothèque.",
       actionFailedTitle: "Une erreur s'est produite",
       actionFailedBody: "Veuillez réessayer.",
+    },
+    preview: {
+      title: "Aperçu",
+      loading: "Préparation de l'aperçu…",
+      downloading: "Téléchargement de l'original…",
+      errorTitle: "Impossible d'afficher l'aperçu",
+      errorBody: "Ce PDF n'a pas pu être affiché dans Interval. Vous pouvez toujours essayer d'ouvrir l'original.",
+      retryButton: "Réessayer",
+      pageCount: {
+        one: "{{count}} page",
+        other: "{{count}} pages",
+      },
+      pageProgress: "Page {{page}} sur {{count}}",
     },
   },
   sourceCollections: {

@@ -665,6 +665,7 @@ const it = {
       originalFileVerifiedBody: "Questo dispositivo ha confermato l'accesso sicuro all'originale archiviato.",
       originalFileVerifyFailedTitle: "Impossibile confermare l'accesso cloud",
       originalFileVerifyFailedBody: "Riprova quando sei connesso a internet.",
+      previewButton: "Anteprima",
       openOriginalButton: "Apri originale",
       preparingSource: "Preparazione della fonte…",
       downloadingOriginal: "Download dell'originale…",
@@ -685,6 +686,19 @@ const it = {
       deleteBody: "Questo rimuove i dettagli della fonte archiviati in Interval. Non elimina alcun file originale al di fuori dell'app e non influisce sui tuoi mazzi. Puoi ripristinarla da Eliminati di recente, nella Libreria.",
       actionFailedTitle: "Qualcosa è andato storto",
       actionFailedBody: "Riprova.",
+    },
+    preview: {
+      title: "Anteprima",
+      loading: "Preparazione dell'anteprima…",
+      downloading: "Download dell'originale…",
+      errorTitle: "Impossibile visualizzare l'anteprima",
+      errorBody: "Non è stato possibile visualizzare questo PDF all'interno di Interval. Puoi comunque provare ad aprire l'originale.",
+      retryButton: "Riprova",
+      pageCount: {
+        one: "{{count}} pagina",
+        other: "{{count}} pagine",
+      },
+      pageProgress: "Pagina {{page}} di {{count}}",
     },
   },
   sourceCollections: {
