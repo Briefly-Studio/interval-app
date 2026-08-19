@@ -657,6 +657,7 @@ const es = {
       originalFileVerifiedBody: "Este dispositivo confirmó el acceso seguro al original guardado.",
       originalFileVerifyFailedTitle: "No se pudo confirmar el acceso en la nube",
       originalFileVerifyFailedBody: "Inténtalo de nuevo cuando tengas conexión.",
+      previewButton: "Vista previa",
       openOriginalButton: "Abrir original",
       preparingSource: "Preparando fuente…",
       downloadingOriginal: "Descargando original…",
@@ -677,6 +678,19 @@ const es = {
       deleteBody: "Esto elimina los detalles de la fuente guardados en Interval. No elimina ningún archivo original fuera de la app y no afecta a tus mazos. Puedes restaurarla desde Eliminado recientemente, dentro de Biblioteca.",
       actionFailedTitle: "Algo salió mal",
       actionFailedBody: "Inténtalo de nuevo.",
+    },
+    preview: {
+      title: "Vista previa",
+      loading: "Preparando vista previa…",
+      downloading: "Descargando original…",
+      errorTitle: "No se pudo mostrar la vista previa",
+      errorBody: "Este PDF no se pudo mostrar dentro de Interval. Aún puedes intentar abrir el original.",
+      retryButton: "Reintentar",
+      pageCount: {
+        one: "{{count}} página",
+        other: "{{count}} páginas",
+      },
+      pageProgress: "Página {{page}} de {{count}}",
     },
   },
   sourceCollections: {

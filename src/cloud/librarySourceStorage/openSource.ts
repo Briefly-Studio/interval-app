@@ -27,6 +27,10 @@ export type OpenSourceOutcome = { status: "opened" } | { status: "error"; reason
 
 export type OpenSourceStage = "resolving" | "downloading" | "opening";
 
+export type ResolveSourceOriginalOutcome =
+  | { status: "resolved"; uri: string }
+  | { status: "error"; reason: Exclude<OpenSourceErrorReason, "unsupported-viewer" | "handoff-failed"> };
+
 // Keyed by source id so a rapid double-tap (or a second screen instance) for the SAME source
 // shares one in-flight attempt instead of starting a duplicate download — mirrors
 // src/cloud/sync/SyncService.ts's inFlightSync convention. A different source id is never
@@ -56,33 +60,41 @@ async function performOpen(
   source: LibrarySourceRecord,
   onStage?: (stage: OpenSourceStage) => void
 ): Promise<OpenSourceOutcome> {
-  onStage?.("resolving");
-
-  let uri = await getPersistedSourceFileUri(source.id);
-
-  if (!uri) {
-    // IMPORTANT PRODUCT RULE: local availability and upload state are independent — a source with
-    // a local copy but cloudUploadState "pending"/"failed" is handled above (uri would be
-    // non-null). Only when there is genuinely no local copy does upload state matter at all, and
-    // only to decide whether a cloud fallback is even worth attempting.
-    if (source.cloudUploadState !== "uploaded" || !isLibrarySourceStorageEnabled()) {
-      return { status: "error", reason: "unavailable" };
-    }
-
-    onStage?.("downloading");
-    const result = await downloadSourceOriginal(source.id);
-    if (!result.ok) {
-      const reason = result.reason === "network-error" || result.reason === "disabled" ? "offline-no-local" : result.reason;
-      return { status: "error", reason };
-    }
-    uri = result.uri;
-  }
+  const resolved = await resolveSourceOriginal(source, onStage);
+  if (resolved.status === "error") return resolved;
 
   onStage?.("opening");
-  const opened = await openSourceFile(uri, source);
+  const opened = await openSourceFile(resolved.uri, source);
   if (!opened.ok) {
     return { status: "error", reason: opened.reason };
   }
 
   return { status: "opened" };
+}
+
+export async function resolveSourceOriginal(
+  source: LibrarySourceRecord,
+  onStage?: (stage: Exclude<OpenSourceStage, "opening">) => void
+): Promise<ResolveSourceOriginalOutcome> {
+  onStage?.("resolving");
+
+  const localUri = await getPersistedSourceFileUri(source.id);
+  if (localUri) return { status: "resolved", uri: localUri };
+
+  // IMPORTANT PRODUCT RULE: local availability and upload state are independent — a source with
+  // a local copy but cloudUploadState "pending"/"failed" was handled above. Only when there is
+  // genuinely no local copy does upload state matter, and only to decide whether cloud fallback
+  // is even worth attempting.
+  if (source.cloudUploadState !== "uploaded" || !isLibrarySourceStorageEnabled()) {
+    return { status: "error", reason: "unavailable" };
+  }
+
+  onStage?.("downloading");
+  const result = await downloadSourceOriginal(source.id);
+  if (!result.ok) {
+    const reason = result.reason === "network-error" || result.reason === "disabled" ? "offline-no-local" : result.reason;
+    return { status: "error", reason };
+  }
+
+  return { status: "resolved", uri: result.uri };
 }

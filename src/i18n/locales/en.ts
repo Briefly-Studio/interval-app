@@ -671,6 +671,7 @@ const en = {
       originalFileVerifiedBody: "This device confirmed secure access to the stored original.",
       originalFileVerifyFailedTitle: "Couldn't confirm cloud access",
       originalFileVerifyFailedBody: "Please try again once you're online.",
+      previewButton: "Preview",
       openOriginalButton: "Open original",
       preparingSource: "Preparing source…",
       downloadingOriginal: "Downloading original…",
@@ -691,6 +692,19 @@ const en = {
       deleteBody: "This removes the source details stored in Interval. It does not delete any original file outside the app, and it does not affect your decks. You can restore this from Recently Deleted in Library.",
       actionFailedTitle: "Something went wrong",
       actionFailedBody: "Please try again.",
+    },
+    preview: {
+      title: "Preview",
+      loading: "Preparing preview…",
+      downloading: "Downloading original…",
+      errorTitle: "Couldn't preview source",
+      errorBody: "This PDF couldn't be shown inside Interval. You can still try opening the original.",
+      retryButton: "Retry",
+      pageCount: {
+        one: "{{count}} page",
+        other: "{{count}} pages",
+      },
+      pageProgress: "Page {{page}} of {{count}}",
     },
   },
   sourceCollections: {
