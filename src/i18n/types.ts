@@ -1,8 +1,12 @@
-// "en" and "es" have real resources. Adding a language later means adding both a Locale entry
-// and a locales/<code>.ts file.
-export type Locale = "en" | "es";
+// Every member here has a real resource file under ./locales and a corresponding entry in
+// ./localeRegistry.ts (display name, enabled state, direction) — adding a language later means
+// adding all three together, and `Record<Locale, ...>` usages elsewhere (localeRegistry.ts,
+// translate.ts's RESOURCES, src/accessibility/speech.ts) force every one of those sites to be
+// updated at compile time, not just remembered by convention. "pt-BR" (not bare "pt") is
+// deliberate — see src/i18n/locales/pt-BR.ts's header comment.
+export type Locale = "en" | "es" | "fr" | "pt-BR" | "it" | "de" | "nl";
 
-export const SUPPORTED_LOCALES: readonly Locale[] = ["en", "es"];
+export const SUPPORTED_LOCALES: readonly Locale[] = ["en", "es", "fr", "pt-BR", "it", "de", "nl"];
 
 export function isSupportedLocale(value: string): value is Locale {
   return (SUPPORTED_LOCALES as readonly string[]).includes(value);
@@ -55,3 +59,17 @@ export type TranslationPath<T> = {
       ? `${K}.${TranslationPath<T[K]>}`
       : never;
 }[keyof T & string];
+
+// Structural drift-protection for non-English translation resources: `en.ts`'s `as const` gives
+// every leaf its own exact string-literal type (e.g. the type "Back", not string), so checking a
+// translation resource directly `satisfies typeof en` would wrongly demand every other locale
+// contain the literal English words. WidenLeaves recursively widens every leaf back to `string`
+// (or `PluralForms`, for a plural entry — matched by structural compatibility, not by an exact
+// literal) while preserving the exact key structure — every key `en.ts` has, every locale using
+// `... as const satisfies WidenLeaves<typeof en>` must have too, or it's a compile-time error,
+// not a silent runtime gap papered over by resolveLeaf's English fallback.
+export type WidenLeaves<T> = T extends string
+  ? string
+  : T extends PluralForms
+    ? PluralForms
+    : { [K in keyof T]: WidenLeaves<T[K]> };
