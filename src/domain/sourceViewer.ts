@@ -37,6 +37,7 @@ export type OpenFileResult = { ok: true } | { ok: false; reason: "unsupported-vi
 export type PreparedSourceFileInput = SourceHandoffHint & {
   uri: string;
   dialogTitle: string;
+  usedStagedCopy: boolean;
 };
 
 export async function prepareViewerInput(
@@ -53,7 +54,7 @@ export async function prepareViewerInput(
     if (viewerCopyUri) handoffUri = viewerCopyUri;
   }
 
-  return { ...hint, uri: handoffUri, dialogTitle: source.displayTitle };
+  return { ...hint, uri: handoffUri, dialogTitle: source.displayTitle, usedStagedCopy: handoffUri !== uri };
 }
 
 export async function prepareSourceExport(
@@ -69,7 +70,7 @@ export async function prepareSourceExport(
   const hint = resolveSourceHandoffHint(source);
   const exportFileName = prepareSourceExportFilename(source);
   const exportCopyUri = await prepareExportCopy(source.id, exportFileName);
-  return { ...hint, uri: exportCopyUri ?? uri, dialogTitle: source.displayTitle };
+  return { ...hint, uri: exportCopyUri ?? uri, dialogTitle: source.displayTitle, usedStagedCopy: !!exportCopyUri };
 }
 
 /**

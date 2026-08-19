@@ -1,4 +1,5 @@
 import Pdf from "react-native-pdf";
+import { File } from "expo-file-system";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
@@ -21,6 +22,35 @@ import { Screen } from "../../../src/ui/Screen";
 import { useTheme } from "@/src/theme";
 
 type PreviewStatus = "loading" | "ready" | "error";
+
+function logPdfPreview(stage: string, detail?: Record<string, unknown>): void {
+  if (!__DEV__) return;
+  if (detail && Object.keys(detail).length > 0) {
+    console.log(`[LibrarySourcePreview] ${stage}`, detail);
+  } else {
+    console.log(`[LibrarySourcePreview] ${stage}`);
+  }
+}
+
+function safeErrorDetail(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  return String(error);
+}
+
+function uriScheme(uri: string): string {
+  const match = uri.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
+  return match ? `${match[1]}://` : "unknown";
+}
+
+function inspectLocalPreviewFile(uri: string): { exists: boolean; size?: number } {
+  try {
+    const file = new File(uri);
+    return file.exists ? { exists: true, size: file.size } : { exists: false };
+  } catch (error) {
+    logPdfPreview("file inspect failed", { error: safeErrorDetail(error) });
+    return { exists: false };
+  }
+}
 
 function openFailedBodyKey(reason: OpenSourceErrorReason): string {
   switch (reason) {
@@ -92,6 +122,19 @@ export default function LibrarySourcePreviewScreen() {
     }
 
     const input = await prepareViewerInput(resolved.uri, found);
+    const file = inspectLocalPreviewFile(input.uri);
+    logPdfPreview("prepared input", {
+      sourceType: found.sourceType,
+      uriScheme: uriScheme(input.uri),
+      usedStagedCopy: input.usedStagedCopy,
+      hasPdfExtension: input.uri.toLowerCase().endsWith(".pdf"),
+      exists: file.exists,
+      size: file.size,
+    });
+    if (!input.usedStagedCopy || !input.uri.toLowerCase().endsWith(".pdf") || !file.exists || !file.size) {
+      setStatus("error");
+      return;
+    }
     setPreviewUri(input.uri);
     setStatus("ready");
   }, [id]);
@@ -146,12 +189,15 @@ export default function LibrarySourcePreviewScreen() {
               style={styles.pdf}
               trustAllCerts={false}
               onLoadComplete={(numberOfPages) => {
+                logPdfPreview("load complete", { pages: numberOfPages });
                 setPageLabel(plural("librarySource.preview.pageCount", numberOfPages));
               }}
               onPageChanged={(page, numberOfPages) => {
+                logPdfPreview("page changed", { page, pages: numberOfPages });
                 setPageLabel(t("librarySource.preview.pageProgress", { page, count: numberOfPages }));
               }}
-              onError={() => {
+              onError={(error) => {
+                logPdfPreview("render error", { error: safeErrorDetail(error) });
                 setStatus("error");
               }}
             />
