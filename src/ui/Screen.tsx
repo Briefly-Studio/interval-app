@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useLayoutDirection } from "../i18n/direction";
 import { useTheme } from "@/src/theme";
 
 type ScreenProps = {
@@ -14,6 +15,7 @@ type ScreenProps = {
 // for forms. Purely presentational — carries no navigation or data logic.
 export function Screen({ children, scroll = false, contentStyle }: ScreenProps) {
   const { colors, spacing } = useTheme();
+  const { direction } = useLayoutDirection();
   // `flex: 1` on this View is correct (and required) for the non-scroll case — it's what lets a
   // FlatList-containing screen fill remaining space. Inside a ScrollView it's the opposite of
   // correct: it constrains the content to the ScrollView's own (viewport-sized) available space
@@ -34,7 +36,7 @@ export function Screen({ children, scroll = false, contentStyle }: ScreenProps) 
   );
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.canvas }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.canvas, direction }]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}

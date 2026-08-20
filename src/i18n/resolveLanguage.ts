@@ -8,6 +8,7 @@ const FALLBACK_LOCALE: Locale = "en";
 // bare "pt"/"pt-PT" exists), so a device reporting ANY Portuguese variant (Brazilian or European)
 // falls back to it rather than to English — the closest available match, not a mismatch.
 const PRIMARY_SUBTAG_LOCALE: Partial<Record<string, Locale>> = {
+  ar: "ar",
   pt: "pt-BR",
 };
 

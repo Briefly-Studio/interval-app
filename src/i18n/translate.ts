@@ -1,5 +1,6 @@
 import de from "./locales/de";
 import en from "./locales/en";
+import ar from "./locales/ar";
 import es from "./locales/es";
 import fr from "./locales/fr";
 import hi from "./locales/hi";
@@ -31,6 +32,7 @@ const RESOURCES: Record<Locale, TranslationTree> = {
   ja,
   ko,
   hi,
+  ar,
 };
 const FALLBACK_LOCALE: Locale = "en";
 

@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { mirrorIfRtl, useLayoutDirection } from "../src/i18n/direction";
 import { useTranslation, type LanguagePreference } from "../src/i18n";
 import { ENABLED_LOCALES, LOCALE_REGISTRY } from "../src/i18n/localeRegistry";
 import { useTheme } from "@/src/theme";
@@ -14,6 +15,7 @@ export default function LanguageScreen() {
   const router = useRouter();
   const { t, preference, setLanguagePreference } = useTranslation();
   const { colors, iconSizes, spacing, touchTarget, typography } = useTheme();
+  const { direction, row, text } = useLayoutDirection();
 
   // System default first, then every currently-enabled locale (ENABLED_LOCALES —
   // src/i18n/localeRegistry.ts) in its own native name — no flags, no country ties: language and
@@ -30,9 +32,9 @@ export default function LanguageScreen() {
 
   return (
     <Screen>
-      <View style={[styles.header, { gap: spacing.sm }]}>
+      <View style={[styles.header, row, { gap: spacing.sm }]}>
         <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
-        <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">{t("settings.language")}</Text>
+        <Text style={[typography.title, text, { color: colors.textPrimary }]} accessibilityRole="header">{t("settings.language")}</Text>
       </View>
 
       <Card style={styles.rowGroup}>
@@ -48,12 +50,15 @@ export default function LanguageScreen() {
                 accessibilityLabel={option.label}
                 style={({ pressed }) => [
                   styles.row,
+                  row,
                   { minHeight: touchTarget.min, paddingVertical: spacing.sm },
                   pressed && { backgroundColor: colors.surfaceMuted },
                 ]}
               >
-                <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{option.label}</Text>
-                {selected ? <Ionicons name="checkmark" size={iconSizes.md} color={colors.accent} /> : null}
+                <Text style={[typography.bodyMedium, text, { color: colors.textPrimary }]}>{option.label}</Text>
+                {selected ? (
+                  <Ionicons name="checkmark" size={iconSizes.md} color={colors.accent} style={mirrorIfRtl(direction)} />
+                ) : null}
               </Pressable>
             </View>
           );
@@ -64,11 +69,10 @@ export default function LanguageScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center" },
+  header: { alignItems: "center" },
   rowGroup: { gap: 0 },
   divider: { height: 1 },
   row: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },

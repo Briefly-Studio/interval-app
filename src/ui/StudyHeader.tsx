@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import { useTranslation } from "../i18n";
+import { useLayoutDirection } from "../i18n/direction";
 import { IconButton } from "./IconButton";
 import { useTheme } from "@/src/theme";
 
@@ -18,22 +19,23 @@ type StudyHeaderProps = {
 export function StudyHeader({ title, progressLabel, onClose, closeLabel }: StudyHeaderProps) {
   const { t } = useTranslation();
   const { colors, spacing, typography } = useTheme();
+  const { row, text } = useLayoutDirection();
   return (
-    <View style={[styles.row, { gap: spacing.sm }]}>
+    <View style={[styles.row, row, { gap: spacing.sm }]}>
       <IconButton name="close" accessibilityLabel={closeLabel ?? t("common.close")} onPress={onClose} />
       <Text
-        style={[typography.subheading, styles.title, { color: colors.textPrimary }]}
+        style={[typography.subheading, text, styles.title, { color: colors.textPrimary }]}
         numberOfLines={1}
         accessibilityRole="header"
       >
         {title}
       </Text>
-      {progressLabel ? <Text style={[typography.caption, { color: colors.textSecondary }]}>{progressLabel}</Text> : null}
+      {progressLabel ? <Text style={[typography.caption, text, { color: colors.textSecondary }]}>{progressLabel}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center" },
+  row: { alignItems: "center" },
   title: { flex: 1 },
 });

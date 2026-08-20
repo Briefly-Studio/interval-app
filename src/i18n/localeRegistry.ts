@@ -26,10 +26,10 @@ export type LocaleInfo = {
    * while `enabled: false` — e.g. mid-translation and not yet ready to ship — without any
    * Settings/UI file needing to change once it's ready; only this flag flips. */
   enabled: boolean;
-  /** Reading direction this locale's script requires. Metadata only in this batch — nothing
-   * reads this to flip layout, invoke `I18nManager`, or otherwise change rendering. Exists so a
-   * future RTL batch (e.g. Arabic) has a single place to add that fact rather than inventing a
-   * new per-locale lookup at that time. */
+  /** Reading direction this locale's script requires. The app applies this through local
+   * presentation helpers so language changes remain live; React Native's global I18nManager RTL
+   * state is intentionally not toggled during a picker change because that requires a reload to
+   * take effect safely. */
   direction: LocaleDirection;
 };
 
@@ -48,6 +48,7 @@ export const LOCALE_REGISTRY: Record<Locale, LocaleInfo> = {
   ja: { code: "ja", nativeName: "日本語", enabled: true, direction: "ltr" },
   ko: { code: "ko", nativeName: "한국어", enabled: true, direction: "ltr" },
   hi: { code: "hi", nativeName: "हिन्दी", enabled: true, direction: "ltr" },
+  ar: { code: "ar", nativeName: "العربية", enabled: true, direction: "rtl" },
 };
 
 /** Locales currently offered in the UI (Settings language picker), in registry declaration
@@ -59,4 +60,8 @@ export const ENABLED_LOCALES: readonly Locale[] = (Object.keys(LOCALE_REGISTRY) 
 
 export function getLocaleInfo(code: Locale): LocaleInfo {
   return LOCALE_REGISTRY[code];
+}
+
+export function isRtlLocale(code: Locale): boolean {
+  return LOCALE_REGISTRY[code].direction === "rtl";
 }
