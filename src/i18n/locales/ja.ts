@@ -669,7 +669,9 @@ const ja = {
       loading: "プレビューを準備しています…",
       downloading: "元のファイルをダウンロード中…",
       errorTitle: "ソースをプレビューできませんでした",
-      errorBody: "この PDF は Interval 内で表示できませんでした。元のファイルを開くことはできます。",
+      errorBody: "このソースは Interval 内で表示できませんでした。元のファイルを開くことはできます。",
+      tooLargeTitle: "プレビューが大きすぎます",
+      tooLargeBody: "このテキストファイルは大きすぎるため、Interval 内で安全にプレビューできません。元のファイルを開くことはできます。",
       retryButton: "再試行",
       pageCount: {
         other: "{{count}}ページ",

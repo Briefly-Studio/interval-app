@@ -666,7 +666,9 @@ const zhHans = {
       loading: "正在准备预览…",
       downloading: "正在下载原始文件…",
       errorTitle: "无法预览资料",
-      errorBody: "此 PDF 无法在 Interval 内显示。你仍可以尝试打开原始文件。",
+      errorBody: "此资料无法在 Interval 内显示。你仍可以尝试打开原始文件。",
+      tooLargeTitle: "预览内容过大",
+      tooLargeBody: "此文本文件过大，无法在 Interval 内安全预览。你仍可以打开原始文件。",
       retryButton: "重试",
       pageCount: {
         other: "{{count}} 页",
