@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { mirrorIfRtl, useLayoutDirection } from "../i18n/direction";
 import { useTheme } from "@/src/theme";
 
 type SettingsRowProps = {
@@ -33,6 +34,7 @@ export function SettingsRow({
   loading = false,
 }: SettingsRowProps) {
   const { colors, spacing, iconSizes, touchTarget, typography } = useTheme();
+  const { direction, row, text } = useLayoutDirection();
   const isInert = disabled || !onPress;
 
   const content = (
@@ -48,22 +50,31 @@ export function SettingsRow({
         <Text
           style={[
             typography.bodyMedium,
+            text,
             { color: isInert ? colors.disabledText : destructive ? colors.danger : colors.textPrimary },
           ]}
         >
           {label}
         </Text>
-        {subtitle ? <Text style={[typography.caption, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
+        {subtitle ? <Text style={[typography.caption, text, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
       </View>
       {!isInert && !loading ? (
-        <Ionicons name="chevron-forward" size={iconSizes.sm} color={colors.textSecondary} />
+        <Ionicons
+          name="chevron-forward"
+          size={iconSizes.sm}
+          color={colors.textSecondary}
+          style={mirrorIfRtl(direction)}
+        />
       ) : null}
     </>
   );
 
   if (isInert) {
     return (
-      <View style={[styles.row, { gap: spacing.md, minHeight: touchTarget.min, paddingVertical: spacing.sm }]} accessibilityRole="text">
+      <View
+        style={[styles.row, row, { gap: spacing.md, minHeight: touchTarget.min, paddingVertical: spacing.sm }]}
+        accessibilityRole="text"
+      >
         {content}
       </View>
     );
@@ -77,6 +88,7 @@ export function SettingsRow({
       accessibilityState={{ busy: loading }}
       style={({ pressed }) => [
         styles.row,
+        row,
         { gap: spacing.md, minHeight: touchTarget.min, paddingVertical: spacing.sm },
         pressed && { backgroundColor: colors.surfaceMuted },
       ]}
@@ -87,6 +99,6 @@ export function SettingsRow({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center" },
+  row: { alignItems: "center" },
   textCol: { flex: 1, gap: 2 },
 });

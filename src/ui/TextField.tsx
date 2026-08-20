@@ -2,6 +2,7 @@ import { useState } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 
 import { useTranslation } from "../i18n";
+import { useLayoutDirection } from "../i18n/direction";
 import { IconButton } from "./IconButton";
 import { useTheme } from "@/src/theme";
 
@@ -15,21 +16,23 @@ type TextFieldProps = Omit<TextInputProps, "style"> & {
 export function TextField({ label, error, isPassword, ...inputProps }: TextFieldProps) {
   const { colors, radii, spacing, typography, touchTarget } = useTheme();
   const { t } = useTranslation();
+  const { row, text } = useLayoutDirection();
   const [revealed, setRevealed] = useState(false);
   const isMultiline = !!inputProps.multiline;
 
   return (
     <View style={[styles.container, { gap: spacing.xs }]}>
-      {label ? <Text style={[typography.label, { color: colors.textSecondary }]}>{label}</Text> : null}
+      {label ? <Text style={[typography.label, text, { color: colors.textSecondary }]}>{label}</Text> : null}
       <View
         style={[
           styles.inputRow,
+          row,
           {
             borderColor: error ? colors.danger : colors.inputBorder,
             backgroundColor: colors.inputBackground,
             borderRadius: radii.md,
-            paddingLeft: spacing.md,
-            paddingRight: isPassword ? spacing.xs : spacing.md,
+            paddingStart: spacing.md,
+            paddingEnd: isPassword ? spacing.xs : spacing.md,
             minHeight: touchTarget.min,
           },
           isMultiline && { alignItems: "flex-start", minHeight: 96, paddingVertical: spacing.sm },
@@ -42,6 +45,7 @@ export function TextField({ label, error, isPassword, ...inputProps }: TextField
           textAlignVertical={isMultiline ? "top" : inputProps.textAlignVertical}
           style={[
             styles.input,
+            text,
             { color: colors.textPrimary, paddingVertical: spacing.sm },
             isMultiline && styles.inputMultiline,
           ]}
@@ -58,7 +62,7 @@ export function TextField({ label, error, isPassword, ...inputProps }: TextField
       </View>
       {error ? (
         <Text
-          style={[typography.caption, { color: colors.danger }]}
+          style={[typography.caption, text, { color: colors.danger }]}
           accessibilityLiveRegion="polite"
           accessibilityRole="alert"
         >
@@ -71,7 +75,7 @@ export function TextField({ label, error, isPassword, ...inputProps }: TextField
 
 const styles = StyleSheet.create({
   container: {},
-  inputRow: { flexDirection: "row", alignItems: "center", borderWidth: 1 },
+  inputRow: { alignItems: "center", borderWidth: 1 },
   input: { flex: 1, fontSize: 16 },
   // Multiline rows use alignItems: "flex-start" (not the default "center"/stretch) so the
   // input starts at the top rather than vertically centering as it grows. Without an explicit

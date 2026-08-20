@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 
 import { useTranslation } from "../i18n";
+import { useLayoutDirection } from "../i18n/direction";
 import { Card } from "./Card";
 import { useTheme } from "@/src/theme";
 import type { DeckRecord } from "../models/deck";
@@ -20,6 +21,7 @@ type DeckCardProps = {
 export function DeckCard({ deck, onPress, onLongPress }: DeckCardProps) {
   const { t, language } = useTranslation();
   const { colors, spacing, typography } = useTheme();
+  const { text } = useLayoutDirection();
   return (
     <Pressable
       onPress={onPress}
@@ -31,10 +33,10 @@ export function DeckCard({ deck, onPress, onLongPress }: DeckCardProps) {
       style={({ pressed }) => [pressed && styles.pressed]}
     >
       <Card style={{ gap: spacing.xs }}>
-        <Text style={[typography.subheading, { color: colors.textPrimary }]} numberOfLines={2}>
+        <Text style={[typography.subheading, text, { color: colors.textPrimary }]} numberOfLines={2}>
           {deck.title}
         </Text>
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>
+        <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
           {t("home.deckCardCreatedOn", { date: new Date(deck.createdAt).toLocaleDateString(language) })}
         </Text>
       </Card>

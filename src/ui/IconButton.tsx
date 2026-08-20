@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 
+import { mirrorIfRtl, useLayoutDirection } from "../i18n/direction";
 import { useTheme } from "@/src/theme";
 
 type IconButtonVariant = "ghost" | "surface";
@@ -30,7 +31,9 @@ export function IconButton({
   style,
 }: IconButtonProps) {
   const { colors, radii, touchTarget } = useTheme();
+  const { direction } = useLayoutDirection();
   const iconColor = color ?? (variant === "surface" ? colors.textPrimary : colors.textSecondary);
+  const mirroredIcon = name === "chevron-back" || name === "chevron-forward";
 
   return (
     <Pressable
@@ -48,7 +51,12 @@ export function IconButton({
         style,
       ]}
     >
-      <Ionicons name={name} size={size} color={disabled ? colors.disabledText : iconColor} />
+      <Ionicons
+        name={name}
+        size={size}
+        color={disabled ? colors.disabledText : iconColor}
+        style={mirroredIcon ? mirrorIfRtl(direction) : undefined}
+      />
     </Pressable>
   );
 }

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { useLayoutDirection } from "../i18n/direction";
 import { useTheme } from "@/src/theme";
 
 type HomeHeaderProps = {
@@ -16,17 +17,18 @@ type HomeHeaderProps = {
 // right-side controls it's handed.
 export function HomeHeader({ onTitleLongPress, children }: HomeHeaderProps) {
   const { colors, spacing, typography } = useTheme();
+  const { row } = useLayoutDirection();
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, row]}>
       <Pressable onLongPress={onTitleLongPress} delayLongPress={600} accessibilityRole="header">
         <Text style={[typography.title, { color: colors.textPrimary }]}>Interval</Text>
       </Pressable>
-      <View style={[styles.right, { gap: spacing.sm }]}>{children}</View>
+      <View style={[styles.right, row, { gap: spacing.sm }]}>{children}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  right: { flexDirection: "row", alignItems: "center" },
+  row: { alignItems: "center", justifyContent: "space-between" },
+  right: { alignItems: "center" },
 });

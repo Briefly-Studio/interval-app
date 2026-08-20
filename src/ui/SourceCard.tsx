@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SOURCE_TYPE_LABEL_KEYS, STATUS_LABEL_KEYS } from "../domain/librarySourceLabels";
 import { formatAudioDuration, formatFileSize } from "../domain/librarySourceFormat";
 import { useTranslation } from "../i18n";
+import { mirrorIfRtl, useLayoutDirection } from "../i18n/direction";
 import type { LibrarySourceRecord } from "../models/librarySource";
 import type { SourceCollectionRecord } from "../models/sourceCollection";
 import { useTheme } from "@/src/theme";
@@ -23,6 +24,7 @@ type SourceCardProps = {
 export function SourceCard({ source, collections, onPress, onLongPress }: SourceCardProps) {
   const { t, plural, language } = useTranslation();
   const { colors, iconSizes, spacing, typography } = useTheme();
+  const { direction, row, text } = useLayoutDirection();
 
   const typeLabel = t(SOURCE_TYPE_LABEL_KEYS[source.sourceType]);
   const statusLabel = source.processingStatus === "ready" ? null : t(STATUS_LABEL_KEYS[source.processingStatus]);
@@ -76,35 +78,41 @@ export function SourceCard({ source, collections, onPress, onLongPress }: Source
       accessibilityHint={t("librarySource.cardHint")}
       style={({ pressed }) => [pressed && styles.pressed]}
     >
-      <Card style={[styles.cardRow, { gap: spacing.sm }]}>
+      <Card style={[styles.cardRow, row, { gap: spacing.sm }]}>
         <View style={[styles.content, { gap: spacing.xs }]}>
-          <Text style={[typography.subheading, { color: colors.textPrimary }]} numberOfLines={2}>
+          <Text style={[typography.subheading, text, { color: colors.textPrimary }]} numberOfLines={2}>
             {source.displayTitle}
           </Text>
           {source.originalName && source.originalName !== source.displayTitle ? (
-            <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text style={[typography.caption, text, { color: colors.textSecondary }]} numberOfLines={1}>
               {source.originalName}
             </Text>
           ) : null}
-          <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+          <Text style={[typography.caption, text, { color: colors.textSecondary }]} numberOfLines={1}>
             {metaParts.join(" · ")}
           </Text>
           {contextParts.length > 0 ? (
-            <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text style={[typography.caption, text, { color: colors.textSecondary }]} numberOfLines={1}>
               {contextParts.join(" · ")}
             </Text>
           ) : null}
-          <View style={[styles.footerRow, { gap: spacing.sm }]}>
-            <Text style={[typography.caption, { color: colors.textMuted }]}>{dateLabel}</Text>
+          <View style={[styles.footerRow, row, { gap: spacing.sm }]}>
+            <Text style={[typography.caption, text, { color: colors.textMuted }]}>{dateLabel}</Text>
             {statusLabel ? (
-              <Text style={[typography.caption, styles.statusLabel, { color: colors.accent }]}>{statusLabel}</Text>
+              <Text style={[typography.caption, text, styles.statusLabel, { color: colors.accent }]}>{statusLabel}</Text>
             ) : null}
           </View>
         </View>
         {/* Visual affordance only — a sighted user has no other cue that this row opens
             something. Accessibility already gets this via accessibilityRole="button" plus the
             hint above; the icon itself carries no separate accessible name (decorative). */}
-        <Ionicons name="chevron-forward" size={iconSizes.md} color={colors.textSecondary} importantForAccessibility="no" />
+        <Ionicons
+          name="chevron-forward"
+          size={iconSizes.md}
+          color={colors.textSecondary}
+          importantForAccessibility="no"
+          style={mirrorIfRtl(direction)}
+        />
       </Card>
     </Pressable>
   );
@@ -112,8 +120,8 @@ export function SourceCard({ source, collections, onPress, onLongPress }: Source
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
-  cardRow: { flexDirection: "row", alignItems: "center" },
+  cardRow: { alignItems: "center" },
   content: { flex: 1 },
-  footerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  footerRow: { justifyContent: "space-between", alignItems: "center" },
   statusLabel: { fontWeight: "700" },
 });
