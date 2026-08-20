@@ -709,6 +709,9 @@ const de = {
       errorBody: "Diese Quelle konnte nicht in Interval geöffnet werden. Du kannst weiterhin versuchen, das Original zu öffnen.",
       unsupportedTitle: "Diese Quelle kann noch nicht geöffnet werden",
       unsupportedBody: "Dieser Dateityp wird in Interval noch nicht unterstützt. Du kannst weiterhin das Original öffnen.",
+      tooLargeTitle: "Dokument ist zu groß",
+      tooLargeBody: "Dieses Dokument ist zu groß, um es sicher in Interval zu öffnen. Du kannst weiterhin versuchen, das Original zu öffnen.",
+      emptyBody: "Dieses Dokument enthält keinen lesbaren Inhalt.",
     },
   },
   sourceCollections: {

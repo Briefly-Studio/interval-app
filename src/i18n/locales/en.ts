@@ -717,6 +717,9 @@ const en = {
       errorBody: "This source couldn't be opened inside Interval. You can still try opening the original.",
       unsupportedTitle: "Can't open this source yet",
       unsupportedBody: "This file type isn't supported inside Interval yet. You can still open the original.",
+      tooLargeTitle: "Document is too large",
+      tooLargeBody: "This document is too large to open safely inside Interval. You can still try opening the original.",
+      emptyBody: "This document has no readable content.",
     },
   },
   sourceCollections: {

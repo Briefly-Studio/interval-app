@@ -714,6 +714,9 @@ const fr = {
       errorBody: "Cette source n'a pas pu être ouverte dans Interval. Vous pouvez toujours essayer d'ouvrir l'original.",
       unsupportedTitle: "Impossible d'ouvrir cette source pour le moment",
       unsupportedBody: "Ce type de fichier n'est pas encore pris en charge dans Interval. Vous pouvez toujours ouvrir l'original.",
+      tooLargeTitle: "Le document est trop volumineux",
+      tooLargeBody: "Ce document est trop volumineux pour être ouvert en toute sécurité dans Interval. Vous pouvez toujours essayer d'ouvrir l'original.",
+      emptyBody: "Ce document ne contient aucun contenu lisible.",
     },
   },
   sourceCollections: {

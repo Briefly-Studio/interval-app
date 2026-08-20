@@ -708,6 +708,9 @@ const nl = {
       errorBody: "Deze bron kon niet worden geopend in Interval. Je kunt nog steeds proberen het origineel te openen.",
       unsupportedTitle: "Deze bron kan nog niet worden geopend",
       unsupportedBody: "Dit bestandstype wordt nog niet ondersteund in Interval. Je kunt nog steeds het origineel openen.",
+      tooLargeTitle: "Document is te groot",
+      tooLargeBody: "Dit document is te groot om veilig te openen in Interval. Je kunt nog steeds proberen het origineel te openen.",
+      emptyBody: "Dit document bevat geen leesbare inhoud.",
     },
   },
   sourceCollections: {
