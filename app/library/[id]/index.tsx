@@ -182,6 +182,7 @@ export default function LibrarySourceDetailScreen() {
         const extension = extensionFromFileName(asset.name);
         const detectedType = detectSourceTypeFromFile({ mimeType: asset.mimeType, extension });
         await updateLibrarySource(scope, source.id, {
+          originalName: asset.name || source.originalName,
           mimeType: asset.mimeType,
           extension,
           ...(detectedType ? { sourceType: detectedType } : {}),

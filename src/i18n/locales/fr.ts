@@ -698,6 +698,7 @@ const fr = {
       errorBody: "Cette source n'a pas pu être affichée dans Interval. Vous pouvez toujours essayer d'ouvrir l'original.",
       tooLargeTitle: "L'aperçu est trop volumineux",
       tooLargeBody: "Ce fichier texte est trop volumineux pour être prévisualisé en toute sécurité dans Interval. Vous pouvez toujours ouvrir l'original.",
+      emptyTextBody: "Ce fichier texte est vide.",
       retryButton: "Réessayer",
       pageCount: {
         one: "{{count}} page",

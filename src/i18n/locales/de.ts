@@ -693,6 +693,7 @@ const de = {
       errorBody: "Diese Quelle konnte nicht in Interval angezeigt werden. Du kannst weiterhin versuchen, das Original zu öffnen.",
       tooLargeTitle: "Vorschau ist zu groß",
       tooLargeBody: "Diese Textdatei ist zu groß, um sie sicher in Interval als Vorschau anzuzeigen. Du kannst weiterhin das Original öffnen.",
+      emptyTextBody: "Diese Textdatei ist leer.",
       retryButton: "Erneut versuchen",
       pageCount: {
         one: "{{count}} Seite",

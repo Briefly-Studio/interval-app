@@ -696,6 +696,7 @@ const ptBR = {
       errorBody: "Não foi possível exibir esta fonte dentro do Interval. Você ainda pode tentar abrir o original.",
       tooLargeTitle: "A visualização é grande demais",
       tooLargeBody: "Este arquivo de texto é grande demais para ser visualizado com segurança dentro do Interval. Você ainda pode abrir o original.",
+      emptyTextBody: "Este arquivo de texto está vazio.",
       retryButton: "Tentar novamente",
       pageCount: {
         one: "{{count}} página",

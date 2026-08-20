@@ -692,6 +692,7 @@ const nl = {
       errorBody: "Deze bron kon niet in Interval worden weergegeven. Je kunt nog steeds proberen het origineel te openen.",
       tooLargeTitle: "Voorbeeld is te groot",
       tooLargeBody: "Dit tekstbestand is te groot om veilig in Interval als voorbeeld te tonen. Je kunt nog steeds het origineel openen.",
+      emptyTextBody: "Dit tekstbestand is leeg.",
       retryButton: "Opnieuw proberen",
       pageCount: {
         one: "{{count}} pagina",

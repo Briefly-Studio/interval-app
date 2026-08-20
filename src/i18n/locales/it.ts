@@ -695,6 +695,7 @@ const it = {
       errorBody: "Non è stato possibile visualizzare questa fonte all'interno di Interval. Puoi comunque provare ad aprire l'originale.",
       tooLargeTitle: "Anteprima troppo grande",
       tooLargeBody: "Questo file di testo è troppo grande per essere visualizzato in sicurezza dentro Interval. Puoi comunque aprire l'originale.",
+      emptyTextBody: "Questo file di testo è vuoto.",
       retryButton: "Riprova",
       pageCount: {
         one: "{{count}} pagina",
