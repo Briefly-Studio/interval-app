@@ -313,6 +313,8 @@ export default function LibrarySourceDetailScreen() {
   const canOpenOriginal = hasLocalFile || source.cloudUploadState === "uploaded";
   const canPreview = canOpenOriginal && hasEmbeddedSourcePreview(source);
   const canOpenInReader = canOpenOriginal && hasFullSourceReader(source);
+  const openInIntervalLabel =
+    source.sourceType === "audio" ? t("librarySource.detail.listenInIntervalButton") : t("librarySource.detail.openInIntervalButton");
   const openButtonLabel =
     fileBusy && openStage === "downloading"
       ? t("librarySource.detail.downloadingOriginal")
@@ -371,7 +373,7 @@ export default function LibrarySourceDetailScreen() {
             <>
               {canOpenInReader ? (
                 <Button
-                  label={t("librarySource.detail.openInIntervalButton")}
+                  label={openInIntervalLabel}
                   variant="primary"
                   fullWidth
                   disabled={fileBusy}

@@ -15,20 +15,20 @@ import type { SourceType } from "../models/librarySource";
 //
 // Extension points for future formats (documented here, not implemented): DOC/DOCX would resolve
 // to a `{ kind: "future-office-document" }` case, PPT/PPTX to `{ kind: "future-presentation" }`,
-// XLS/XLSX to `{ kind: "future-spreadsheet" }`, and audio to `{ kind: "future-audio-player" }` —
-// each its own reader.tsx renderer branch once implemented, same shape as pdf/image/text below.
-// None of that is implemented in this batch; `resolveSourceReaderStrategy` currently maps all of
-// them to "unsupported" on purpose.
+// and XLS/XLSX to `{ kind: "future-spreadsheet" }` — each its own reader.tsx renderer branch once
+// implemented, same shape as pdf/image/text/audio below.
 export type SourceReaderStrategy =
   | { kind: "pdf-reader" }
   | { kind: "image-reader" }
   | { kind: "text-reader" }
+  | { kind: "audio-player" }
   | { kind: "unsupported" };
 
 export function resolveSourceReaderStrategy(source: { sourceType: SourceType }): SourceReaderStrategy {
   if (source.sourceType === "pdf") return { kind: "pdf-reader" };
   if (source.sourceType === "image") return { kind: "image-reader" };
   if (source.sourceType === "text") return { kind: "text-reader" };
+  if (source.sourceType === "audio") return { kind: "audio-player" };
   return { kind: "unsupported" };
 }
 
