@@ -43,6 +43,11 @@ export const LOCALE_REGISTRY: Record<Locale, LocaleInfo> = {
   it: { code: "it", nativeName: "Italiano", enabled: true, direction: "ltr" },
   de: { code: "de", nativeName: "Deutsch", enabled: true, direction: "ltr" },
   nl: { code: "nl", nativeName: "Nederlands", enabled: true, direction: "ltr" },
+  ru: { code: "ru", nativeName: "Русский", enabled: true, direction: "ltr" },
+  "zh-Hans": { code: "zh-Hans", nativeName: "简体中文", enabled: true, direction: "ltr" },
+  ja: { code: "ja", nativeName: "日本語", enabled: true, direction: "ltr" },
+  ko: { code: "ko", nativeName: "한국어", enabled: true, direction: "ltr" },
+  hi: { code: "hi", nativeName: "हिन्दी", enabled: true, direction: "ltr" },
 };
 
 /** Locales currently offered in the UI (Settings language picker), in registry declaration
