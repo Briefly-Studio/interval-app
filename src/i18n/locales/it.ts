@@ -666,6 +666,7 @@ const it = {
       originalFileVerifyFailedTitle: "Impossibile confermare l'accesso cloud",
       originalFileVerifyFailedBody: "Riprova quando sei connesso a internet.",
       previewButton: "Anteprima",
+      openInIntervalButton: "Apri in Interval",
       openOriginalButton: "Apri originale",
       preparingSource: "Preparazione della fonte…",
       downloadingOriginal: "Download dell'originale…",
@@ -702,6 +703,14 @@ const it = {
         other: "{{count}} pagine",
       },
       pageProgress: "Pagina {{page}} di {{count}}",
+    },
+    reader: {
+      screenLabel: "Lettore",
+      loading: "Caricamento della fonte…",
+      errorTitle: "Impossibile aprire la fonte",
+      errorBody: "Non è stato possibile aprire questa fonte all'interno di Interval. Puoi comunque provare ad aprire l'originale.",
+      unsupportedTitle: "Impossibile aprire questa fonte per ora",
+      unsupportedBody: "Questo tipo di file non è ancora supportato all'interno di Interval. Puoi comunque aprire l'originale.",
     },
   },
   sourceCollections: {

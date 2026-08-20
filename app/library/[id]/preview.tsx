@@ -16,6 +16,7 @@ import {
 import { prepareViewerInput } from "../../../src/domain/sourceViewer";
 import { chunkTextPreviewContent, inspectTextPreviewFile } from "../../../src/domain/sourcePreviewText";
 import { resolveSourcePreviewStrategy, type SourcePreviewStrategy } from "../../../src/domain/sourcePreview";
+import { hasFullSourceReader } from "../../../src/domain/sourceReader";
 import { useTranslation } from "../../../src/i18n";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
 import { getLibrarySources } from "../../../src/storage/librarySources";
@@ -277,22 +278,39 @@ export default function LibrarySourcePreviewScreen() {
               <Text style={[typography.secondary, styles.errorText, { color: colors.textSecondary }]}>
                 {status === "too-large" ? t("librarySource.preview.tooLargeBody") : t("librarySource.preview.errorBody")}
               </Text>
-              <Button label={t("librarySource.preview.retryButton")} variant="secondary" onPress={load} />
+              {status === "too-large" && source && hasFullSourceReader(source) ? (
+                <Button
+                  label={t("librarySource.detail.openInIntervalButton")}
+                  variant="primary"
+                  onPress={() => router.push({ pathname: "/library/[id]/reader" as any, params: { id: source.id } })}
+                />
+              ) : (
+                <Button label={t("librarySource.preview.retryButton")} variant="secondary" onPress={load} />
+              )}
             </View>
           )}
         </View>
 
         <View style={[styles.footer, { gap: spacing.sm }]}>
           {pageLabel ? <Text style={[typography.caption, { color: colors.textSecondary }]}>{pageLabel}</Text> : <View />}
-          {source ? (
-            <Button
-              label={t("librarySource.detail.openOriginalButton")}
-              variant="secondary"
-              loading={openingOriginal}
-              disabled={openingOriginal}
-              onPress={onOpenOriginal}
-            />
-          ) : null}
+          <View style={[styles.footerActions, { gap: spacing.sm }]}>
+            {status === "ready" && source && hasFullSourceReader(source) ? (
+              <Button
+                label={t("librarySource.detail.openInIntervalButton")}
+                variant="secondary"
+                onPress={() => router.push({ pathname: "/library/[id]/reader" as any, params: { id: source.id } })}
+              />
+            ) : null}
+            {source ? (
+              <Button
+                label={t("librarySource.detail.openOriginalButton")}
+                variant="secondary"
+                loading={openingOriginal}
+                disabled={openingOriginal}
+                onPress={onOpenOriginal}
+              />
+            ) : null}
+          </View>
         </View>
       </View>
     </Screen>
@@ -313,4 +331,5 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   errorText: { textAlign: "center" },
   footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  footerActions: { flexDirection: "row", alignItems: "center" },
 });

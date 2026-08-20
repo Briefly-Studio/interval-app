@@ -643,6 +643,7 @@ const ja = {
       originalFileVerifyFailedTitle: "クラウドへのアクセスを確認できませんでした",
       originalFileVerifyFailedBody: "オンラインになってからもう一度お試しください。",
       previewButton: "プレビュー",
+      openInIntervalButton: "Interval で開く",
       openOriginalButton: "元のファイルを開く",
       preparingSource: "ソースを準備しています…",
       downloadingOriginal: "元のファイルをダウンロード中…",
@@ -678,6 +679,14 @@ const ja = {
         other: "{{count}}ページ",
       },
       pageProgress: "{{count}}ページ中{{page}}ページ目",
+    },
+    reader: {
+      screenLabel: "リーダー",
+      loading: "ソースを読み込んでいます…",
+      errorTitle: "ソースを開けませんでした",
+      errorBody: "このソースは Interval 内で開けませんでした。元のファイルを開くことはできます。",
+      unsupportedTitle: "このソースはまだ開けません",
+      unsupportedBody: "このファイル形式は Interval ではまだサポートされていません。元のファイルを開くことはできます。",
     },
   },
   sourceCollections: {

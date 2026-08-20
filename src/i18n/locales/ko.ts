@@ -638,6 +638,7 @@ const ko = {
       originalFileVerifyFailedTitle: "클라우드 접근을 확인하지 못했습니다",
       originalFileVerifyFailedBody: "온라인 상태가 되면 다시 시도해 주세요.",
       previewButton: "미리보기",
+      openInIntervalButton: "Interval에서 열기",
       openOriginalButton: "원본 열기",
       preparingSource: "자료를 준비하는 중…",
       downloadingOriginal: "원본을 다운로드하는 중…",
@@ -673,6 +674,14 @@ const ko = {
         other: "{{count}}페이지",
       },
       pageProgress: "{{count}}페이지 중 {{page}}페이지",
+    },
+    reader: {
+      screenLabel: "리더",
+      loading: "자료를 불러오는 중…",
+      errorTitle: "자료를 열 수 없습니다",
+      errorBody: "이 자료를 Interval 내에서 열 수 없습니다. 원본 열기는 계속 시도할 수 있습니다.",
+      unsupportedTitle: "아직 이 자료를 열 수 없습니다",
+      unsupportedBody: "이 파일 형식은 Interval에서 아직 지원되지 않습니다. 원본은 계속 열 수 있습니다.",
     },
   },
   sourceCollections: {
