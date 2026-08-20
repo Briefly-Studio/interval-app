@@ -698,7 +698,9 @@ const en = {
       loading: "Preparing preview…",
       downloading: "Downloading original…",
       errorTitle: "Couldn't preview source",
-      errorBody: "This PDF couldn't be shown inside Interval. You can still try opening the original.",
+      errorBody: "This source couldn't be shown inside Interval. You can still try opening the original.",
+      tooLargeTitle: "Preview is too large",
+      tooLargeBody: "This text file is too large to preview safely inside Interval. You can still open the original.",
       retryButton: "Retry",
       pageCount: {
         one: "{{count}} page",

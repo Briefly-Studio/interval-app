@@ -695,7 +695,9 @@ const fr = {
       loading: "Préparation de l'aperçu…",
       downloading: "Téléchargement de l'original…",
       errorTitle: "Impossible d'afficher l'aperçu",
-      errorBody: "Ce PDF n'a pas pu être affiché dans Interval. Vous pouvez toujours essayer d'ouvrir l'original.",
+      errorBody: "Cette source n'a pas pu être affichée dans Interval. Vous pouvez toujours essayer d'ouvrir l'original.",
+      tooLargeTitle: "L'aperçu est trop volumineux",
+      tooLargeBody: "Ce fichier texte est trop volumineux pour être prévisualisé en toute sécurité dans Interval. Vous pouvez toujours ouvrir l'original.",
       retryButton: "Réessayer",
       pageCount: {
         one: "{{count}} page",

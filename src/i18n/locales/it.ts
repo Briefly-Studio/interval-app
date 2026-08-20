@@ -692,7 +692,9 @@ const it = {
       loading: "Preparazione dell'anteprima…",
       downloading: "Download dell'originale…",
       errorTitle: "Impossibile visualizzare l'anteprima",
-      errorBody: "Non è stato possibile visualizzare questo PDF all'interno di Interval. Puoi comunque provare ad aprire l'originale.",
+      errorBody: "Non è stato possibile visualizzare questa fonte all'interno di Interval. Puoi comunque provare ad aprire l'originale.",
+      tooLargeTitle: "Anteprima troppo grande",
+      tooLargeBody: "Questo file di testo è troppo grande per essere visualizzato in sicurezza dentro Interval. Puoi comunque aprire l'originale.",
       retryButton: "Riprova",
       pageCount: {
         one: "{{count}} pagina",

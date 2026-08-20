@@ -684,7 +684,9 @@ const es = {
       loading: "Preparando vista previa…",
       downloading: "Descargando original…",
       errorTitle: "No se pudo mostrar la vista previa",
-      errorBody: "Este PDF no se pudo mostrar dentro de Interval. Aún puedes intentar abrir el original.",
+      errorBody: "Esta fuente no se pudo mostrar dentro de Interval. Aún puedes intentar abrir el original.",
+      tooLargeTitle: "La vista previa es demasiado grande",
+      tooLargeBody: "Este archivo de texto es demasiado grande para previsualizarlo de forma segura dentro de Interval. Aún puedes abrir el original.",
       retryButton: "Reintentar",
       pageCount: {
         one: "{{count}} página",

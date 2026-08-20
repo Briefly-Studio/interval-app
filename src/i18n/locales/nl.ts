@@ -689,7 +689,9 @@ const nl = {
       loading: "Voorbeeld wordt voorbereid…",
       downloading: "Origineel wordt gedownload…",
       errorTitle: "Voorbeeld kon niet worden getoond",
-      errorBody: "Dit PDF-bestand kon niet in Interval worden weergegeven. Je kunt nog steeds proberen het origineel te openen.",
+      errorBody: "Deze bron kon niet in Interval worden weergegeven. Je kunt nog steeds proberen het origineel te openen.",
+      tooLargeTitle: "Voorbeeld is te groot",
+      tooLargeBody: "Dit tekstbestand is te groot om veilig in Interval als voorbeeld te tonen. Je kunt nog steeds het origineel openen.",
       retryButton: "Opnieuw proberen",
       pageCount: {
         one: "{{count}} pagina",

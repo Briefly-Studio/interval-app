@@ -693,7 +693,9 @@ const ptBR = {
       loading: "Preparando visualização…",
       downloading: "Baixando original…",
       errorTitle: "Não foi possível exibir a visualização",
-      errorBody: "Não foi possível exibir este PDF dentro do Interval. Você ainda pode tentar abrir o original.",
+      errorBody: "Não foi possível exibir esta fonte dentro do Interval. Você ainda pode tentar abrir o original.",
+      tooLargeTitle: "A visualização é grande demais",
+      tooLargeBody: "Este arquivo de texto é grande demais para ser visualizado com segurança dentro do Interval. Você ainda pode abrir o original.",
       retryButton: "Tentar novamente",
       pageCount: {
         one: "{{count}} página",
