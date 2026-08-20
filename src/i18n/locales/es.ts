@@ -687,6 +687,7 @@ const es = {
       errorBody: "Esta fuente no se pudo mostrar dentro de Interval. Aún puedes intentar abrir el original.",
       tooLargeTitle: "La vista previa es demasiado grande",
       tooLargeBody: "Este archivo de texto es demasiado grande para previsualizarlo de forma segura dentro de Interval. Aún puedes abrir el original.",
+      emptyTextBody: "Este archivo de texto está vacío.",
       retryButton: "Reintentar",
       pageCount: {
         one: "{{count}} página",

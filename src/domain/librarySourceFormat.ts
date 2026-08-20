@@ -223,6 +223,16 @@ function stripFinalExtension(value: string): string {
   return value.slice(0, lastDot);
 }
 
+function stripTrustedExtensionRepeats(value: string, extension: string | undefined): string {
+  if (!extension) return value;
+  const suffix = `.${extension.toLowerCase()}`;
+  let base = value;
+  while (base.toLowerCase().endsWith(suffix)) {
+    base = base.slice(0, -suffix.length).replace(/[.\s-]+$/g, "");
+  }
+  return base || value;
+}
+
 export function sanitizeExportFilenameBase(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const base = stripFinalExtension(value)
@@ -255,7 +265,8 @@ export function prepareSourceExportFilename(source: {
     sanitizeExportFilenameBase(source.id) ??
     SAFE_FILENAME_FALLBACK;
 
-  return extension ? `${base}.${extension}` : base;
+  const exportBase = stripTrustedExtensionRepeats(base, extension);
+  return extension ? `${exportBase}.${extension}` : exportBase;
 }
 
 export function formatFileSize(bytes: number | undefined): string | null {

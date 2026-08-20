@@ -28,9 +28,9 @@ import { prepareSourceExportFilename, resolveSourceHandoffHint, type SourceHando
 // (which is deliberately extensionless, see src/storage/librarySourceFileStorage.ts), iOS showed
 // a generic "File"/"data" classification using the bare source id as the filename, and Quick Look
 // could not render the PDF. The fix: before handing off, this module asks
-// `prepareViewerCopy` for a short-lived, extension-bearing COPY of the durable original
-// (`<sourceId>.<safeExtension>`, Cache-based, never the canonical file) and hands that copy's URI
-// to `Sharing.shareAsync` instead — the canonical durable file itself is never renamed or touched.
+// `prepareViewerCopy`/`prepareExportCopy` for a short-lived, extension-bearing COPY of the
+// durable original (Cache-based, never the canonical file) and hands that copy's URI to
+// `Sharing.shareAsync` instead — the canonical durable file itself is never renamed or touched.
 
 export type OpenFileResult = { ok: true } | { ok: false; reason: "unsupported-viewer" | "handoff-failed" };
 
@@ -82,7 +82,7 @@ export async function prepareSourceExport(
  */
 export async function openSourceFile(
   uri: string,
-  source: { id: string; sourceType: SourceType; mimeType?: string; displayTitle: string }
+  source: { id: string; sourceType: SourceType; mimeType?: string; originalName?: string; displayTitle: string }
 ): Promise<OpenFileResult> {
   try {
     const available = await Sharing.isAvailableAsync();
@@ -90,7 +90,7 @@ export async function openSourceFile(
       return { ok: false, reason: "unsupported-viewer" };
     }
 
-    const input = await prepareViewerInput(uri, source);
+    const input = await prepareSourceExport(uri, source);
     await Sharing.shareAsync(input.uri, { mimeType: input.mimeType, UTI: input.UTI, dialogTitle: input.dialogTitle });
     return { ok: true };
   } catch (error) {

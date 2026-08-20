@@ -669,6 +669,7 @@ const zhHans = {
       errorBody: "此资料无法在 Interval 内显示。你仍可以尝试打开原始文件。",
       tooLargeTitle: "预览内容过大",
       tooLargeBody: "此文本文件过大，无法在 Interval 内安全预览。你仍可以打开原始文件。",
+      emptyTextBody: "此文本文件为空。",
       retryButton: "重试",
       pageCount: {
         other: "{{count}} 页",

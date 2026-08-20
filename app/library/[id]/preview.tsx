@@ -14,6 +14,7 @@ import {
   type OpenSourceStage,
 } from "../../../src/cloud/librarySourceStorage/openSource";
 import { prepareViewerInput } from "../../../src/domain/sourceViewer";
+import { chunkTextPreviewContent, inspectTextPreviewFile } from "../../../src/domain/sourcePreviewText";
 import { resolveSourcePreviewStrategy, type SourcePreviewStrategy } from "../../../src/domain/sourcePreview";
 import { useTranslation } from "../../../src/i18n";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
@@ -25,8 +26,6 @@ import { useTheme } from "@/src/theme";
 
 type EmbeddedPreviewKind = Extract<SourcePreviewStrategy["kind"], "embedded-pdf" | "embedded-image" | "embedded-text">;
 type PreviewStatus = "loading" | "ready" | "error" | "too-large";
-
-const MAX_TEXT_PREVIEW_BYTES = 1024 * 1024;
 
 function logSourcePreview(stage: string, detail?: Record<string, unknown>): void {
   if (!__DEV__) return;
@@ -155,7 +154,12 @@ export default function LibrarySourcePreviewScreen() {
       return;
     }
     if (strategy.kind === "embedded-text") {
-      if (file.size > MAX_TEXT_PREVIEW_BYTES) {
+      const textInspection = inspectTextPreviewFile(file);
+      if (textInspection.status === "missing") {
+        setStatus("error");
+        return;
+      }
+      if (textInspection.status === "too-large") {
         setStatus("too-large");
         return;
       }
@@ -252,9 +256,17 @@ export default function LibrarySourcePreviewScreen() {
               />
             ) : (
               <ScrollView style={styles.textScroll} contentContainerStyle={[styles.textContent, { padding: spacing.md }]}>
-                <Text style={[typography.body, styles.previewText, { color: colors.textPrimary }]}>
-                  {textContent ?? ""}
-                </Text>
+                {textContent ? (
+                  chunkTextPreviewContent(textContent).map((chunk, index) => (
+                    <Text key={index} style={[typography.body, styles.previewText, { color: colors.textPrimary }]}>
+                      {chunk}
+                    </Text>
+                  ))
+                ) : (
+                  <Text style={[typography.secondary, styles.emptyText, { color: colors.textSecondary }]}>
+                    {t("librarySource.preview.emptyTextBody")}
+                  </Text>
+                )}
               </ScrollView>
             )
           ) : (
@@ -297,6 +309,7 @@ const styles = StyleSheet.create({
   textScroll: { flex: 1 },
   textContent: { flexGrow: 1 },
   previewText: { lineHeight: 23 },
+  emptyText: { flex: 1, textAlign: "center", textAlignVertical: "center" },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   errorText: { textAlign: "center" },
   footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

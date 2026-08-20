@@ -672,6 +672,7 @@ const ja = {
       errorBody: "このソースは Interval 内で表示できませんでした。元のファイルを開くことはできます。",
       tooLargeTitle: "プレビューが大きすぎます",
       tooLargeBody: "このテキストファイルは大きすぎるため、Interval 内で安全にプレビューできません。元のファイルを開くことはできます。",
+      emptyTextBody: "このテキストファイルは空です。",
       retryButton: "再試行",
       pageCount: {
         other: "{{count}}ページ",

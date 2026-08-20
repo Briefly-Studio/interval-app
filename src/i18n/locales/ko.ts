@@ -667,6 +667,7 @@ const ko = {
       errorBody: "이 자료를 Interval 내에서 표시할 수 없습니다. 원본 열기는 계속 시도할 수 있습니다.",
       tooLargeTitle: "미리보기가 너무 큽니다",
       tooLargeBody: "이 텍스트 파일은 너무 커서 Interval 내에서 안전하게 미리 볼 수 없습니다. 원본은 계속 열 수 있습니다.",
+      emptyTextBody: "이 텍스트 파일은 비어 있습니다.",
       retryButton: "다시 시도",
       pageCount: {
         other: "{{count}}페이지",
