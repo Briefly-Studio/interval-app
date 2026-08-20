@@ -640,6 +640,7 @@ const zhHans = {
       originalFileVerifyFailedTitle: "无法确认云端访问",
       originalFileVerifyFailedBody: "请在联网后重试。",
       previewButton: "预览",
+      openInIntervalButton: "在 Interval 中打开",
       openOriginalButton: "打开原始文件",
       preparingSource: "正在准备资料…",
       downloadingOriginal: "正在下载原始文件…",
@@ -675,6 +676,14 @@ const zhHans = {
         other: "{{count}} 页",
       },
       pageProgress: "第 {{page}} 页，共 {{count}} 页",
+    },
+    reader: {
+      screenLabel: "阅读模式",
+      loading: "正在加载资料…",
+      errorTitle: "无法打开资料",
+      errorBody: "此资料无法在 Interval 内打开。你仍可以尝试打开原始文件。",
+      unsupportedTitle: "暂时无法打开此资料",
+      unsupportedBody: "此文件类型在 Interval 中尚不支持。你仍可以打开原始文件。",
     },
   },
   sourceCollections: {

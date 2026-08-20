@@ -664,6 +664,7 @@ const de = {
       originalFileVerifyFailedTitle: "Cloud-Zugriff konnte nicht bestätigt werden",
       originalFileVerifyFailedBody: "Bitte versuche es erneut, sobald du online bist.",
       previewButton: "Vorschau",
+      openInIntervalButton: "In Interval öffnen",
       openOriginalButton: "Original öffnen",
       preparingSource: "Quelle wird vorbereitet…",
       downloadingOriginal: "Original wird heruntergeladen…",
@@ -700,6 +701,14 @@ const de = {
         other: "{{count}} Seiten",
       },
       pageProgress: "Seite {{page}} von {{count}}",
+    },
+    reader: {
+      screenLabel: "Lesemodus",
+      loading: "Quelle wird geladen…",
+      errorTitle: "Quelle konnte nicht geöffnet werden",
+      errorBody: "Diese Quelle konnte nicht in Interval geöffnet werden. Du kannst weiterhin versuchen, das Original zu öffnen.",
+      unsupportedTitle: "Diese Quelle kann noch nicht geöffnet werden",
+      unsupportedBody: "Dieser Dateityp wird in Interval noch nicht unterstützt. Du kannst weiterhin das Original öffnen.",
     },
   },
   sourceCollections: {

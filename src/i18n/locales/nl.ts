@@ -663,6 +663,7 @@ const nl = {
       originalFileVerifyFailedTitle: "Cloudtoegang kon niet worden bevestigd",
       originalFileVerifyFailedBody: "Probeer het opnieuw zodra je online bent.",
       previewButton: "Voorbeeld",
+      openInIntervalButton: "Openen in Interval",
       openOriginalButton: "Origineel openen",
       preparingSource: "Bron wordt voorbereid…",
       downloadingOriginal: "Origineel wordt gedownload…",
@@ -699,6 +700,14 @@ const nl = {
         other: "{{count}} pagina's",
       },
       pageProgress: "Pagina {{page}} van {{count}}",
+    },
+    reader: {
+      screenLabel: "Leesmodus",
+      loading: "Bron wordt geladen…",
+      errorTitle: "Kan bron niet openen",
+      errorBody: "Deze bron kon niet worden geopend in Interval. Je kunt nog steeds proberen het origineel te openen.",
+      unsupportedTitle: "Deze bron kan nog niet worden geopend",
+      unsupportedBody: "Dit bestandstype wordt nog niet ondersteund in Interval. Je kunt nog steeds het origineel openen.",
     },
   },
   sourceCollections: {

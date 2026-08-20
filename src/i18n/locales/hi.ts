@@ -644,6 +644,7 @@ const hi = {
       originalFileVerifyFailedTitle: "क्लाउड एक्सेस कन्फर्म नहीं हो सका",
       originalFileVerifyFailedBody: "ऑनलाइन होने पर कृपया फिर से कोशिश करें।",
       previewButton: "प्रीव्यू",
+      openInIntervalButton: "Interval में खोलें",
       openOriginalButton: "ओरिजिनल खोलें",
       preparingSource: "सोर्स तैयार हो रहा है…",
       downloadingOriginal: "ओरिजिनल डाउनलोड हो रहा है…",
@@ -679,6 +680,14 @@ const hi = {
         other: "{{count}} पेज",
       },
       pageProgress: "{{count}} में से पेज {{page}}",
+    },
+    reader: {
+      screenLabel: "रीडर",
+      loading: "सोर्स लोड हो रहा है…",
+      errorTitle: "सोर्स नहीं खोला जा सका",
+      errorBody: "यह सोर्स Interval के अंदर नहीं खोला जा सका। आप फिर भी ओरिजिनल खोलने की कोशिश कर सकते हैं।",
+      unsupportedTitle: "यह सोर्स अभी नहीं खोला जा सकता",
+      unsupportedBody: "यह फ़ाइल प्रकार Interval में अभी समर्थित नहीं है। आप फिर भी ओरिजिनल खोल सकते हैं।",
     },
   },
   sourceCollections: {

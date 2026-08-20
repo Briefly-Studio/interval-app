@@ -693,6 +693,7 @@ const ru = {
       originalFileVerifyFailedTitle: "Не удалось подтвердить доступ к облаку",
       originalFileVerifyFailedBody: "Попробуйте ещё раз, когда будете онлайн.",
       previewButton: "Предпросмотр",
+      openInIntervalButton: "Открыть в Interval",
       openOriginalButton: "Открыть оригинал",
       preparingSource: "Подготовка источника…",
       downloadingOriginal: "Загрузка оригинала…",
@@ -731,6 +732,14 @@ const ru = {
         other: "{{count}} страницы",
       },
       pageProgress: "Страница {{page}} из {{count}}",
+    },
+    reader: {
+      screenLabel: "Чтение",
+      loading: "Загрузка источника…",
+      errorTitle: "Не удалось открыть источник",
+      errorBody: "Этот источник не удалось открыть внутри Interval. Вы всё ещё можете попробовать открыть оригинал.",
+      unsupportedTitle: "Пока нельзя открыть этот источник",
+      unsupportedBody: "Этот тип файла пока не поддерживается в Interval. Вы всё ещё можете открыть оригинал.",
     },
   },
   sourceCollections: {

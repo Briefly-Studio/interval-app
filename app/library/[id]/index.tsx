@@ -19,6 +19,7 @@ import {
 import { formatAudioDuration, formatFileSize } from "../../../src/domain/librarySourceFormat";
 import { SOURCE_TYPE_LABEL_KEYS, STATUS_LABEL_KEYS } from "../../../src/domain/librarySourceLabels";
 import { hasEmbeddedSourcePreview } from "../../../src/domain/sourcePreview";
+import { hasFullSourceReader } from "../../../src/domain/sourceReader";
 import { detectSourceTypeFromFile, extensionFromFileName } from "../../../src/domain/sourceTypeDetection";
 import { useTranslation } from "../../../src/i18n";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
@@ -311,6 +312,7 @@ export default function LibrarySourceDetailScreen() {
   // docs/library-and-source-architecture.md's "Source open/preview" section).
   const canOpenOriginal = hasLocalFile || source.cloudUploadState === "uploaded";
   const canPreview = canOpenOriginal && hasEmbeddedSourcePreview(source);
+  const canOpenInReader = canOpenOriginal && hasFullSourceReader(source);
   const openButtonLabel =
     fileBusy && openStage === "downloading"
       ? t("librarySource.detail.downloadingOriginal")
@@ -367,10 +369,19 @@ export default function LibrarySourceDetailScreen() {
 
           {canOpenOriginal ? (
             <>
+              {canOpenInReader ? (
+                <Button
+                  label={t("librarySource.detail.openInIntervalButton")}
+                  variant="primary"
+                  fullWidth
+                  disabled={fileBusy}
+                  onPress={() => router.push({ pathname: "/library/[id]/reader" as any, params: { id: source.id } })}
+                />
+              ) : null}
               {canPreview ? (
                 <Button
                   label={t("librarySource.detail.previewButton")}
-                  variant="primary"
+                  variant={canOpenInReader ? "secondary" : "primary"}
                   fullWidth
                   disabled={fileBusy}
                   onPress={() => router.push({ pathname: "/library/[id]/preview" as any, params: { id: source.id } })}
@@ -378,7 +389,7 @@ export default function LibrarySourceDetailScreen() {
               ) : null}
               <Button
                 label={openButtonLabel}
-                variant={canPreview ? "secondary" : "primary"}
+                variant={canOpenInReader || canPreview ? "secondary" : "primary"}
                 fullWidth
                 loading={fileBusy && !!openStage}
                 disabled={fileBusy && !openStage}

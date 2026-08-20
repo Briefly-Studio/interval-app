@@ -667,6 +667,7 @@ const ptBR = {
       originalFileVerifyFailedTitle: "Não foi possível confirmar o acesso na nuvem",
       originalFileVerifyFailedBody: "Tente novamente quando estiver on-line.",
       previewButton: "Visualizar",
+      openInIntervalButton: "Abrir no Interval",
       openOriginalButton: "Abrir original",
       preparingSource: "Preparando fonte…",
       downloadingOriginal: "Baixando original…",
@@ -703,6 +704,14 @@ const ptBR = {
         other: "{{count}} páginas",
       },
       pageProgress: "Página {{page}} de {{count}}",
+    },
+    reader: {
+      screenLabel: "Leitor",
+      loading: "Carregando fonte…",
+      errorTitle: "Não foi possível abrir a fonte",
+      errorBody: "Não foi possível abrir esta fonte dentro do Interval. Você ainda pode tentar abrir o original.",
+      unsupportedTitle: "Ainda não é possível abrir esta fonte",
+      unsupportedBody: "Este tipo de arquivo ainda não é compatível dentro do Interval. Você ainda pode abrir o original.",
     },
   },
   sourceCollections: {

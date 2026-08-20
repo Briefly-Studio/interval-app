@@ -672,6 +672,7 @@ const en = {
       originalFileVerifyFailedTitle: "Couldn't confirm cloud access",
       originalFileVerifyFailedBody: "Please try again once you're online.",
       previewButton: "Preview",
+      openInIntervalButton: "Open in Interval",
       openOriginalButton: "Open original",
       preparingSource: "Preparing source…",
       downloadingOriginal: "Downloading original…",
@@ -708,6 +709,14 @@ const en = {
         other: "{{count}} pages",
       },
       pageProgress: "Page {{page}} of {{count}}",
+    },
+    reader: {
+      screenLabel: "Reader",
+      loading: "Loading source…",
+      errorTitle: "Couldn't open source",
+      errorBody: "This source couldn't be opened inside Interval. You can still try opening the original.",
+      unsupportedTitle: "Can't open this source yet",
+      unsupportedBody: "This file type isn't supported inside Interval yet. You can still open the original.",
     },
   },
   sourceCollections: {

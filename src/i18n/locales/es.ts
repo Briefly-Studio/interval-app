@@ -658,6 +658,7 @@ const es = {
       originalFileVerifyFailedTitle: "No se pudo confirmar el acceso en la nube",
       originalFileVerifyFailedBody: "Inténtalo de nuevo cuando tengas conexión.",
       previewButton: "Vista previa",
+      openInIntervalButton: "Abrir en Interval",
       openOriginalButton: "Abrir original",
       preparingSource: "Preparando fuente…",
       downloadingOriginal: "Descargando original…",
@@ -694,6 +695,14 @@ const es = {
         other: "{{count}} páginas",
       },
       pageProgress: "Página {{page}} de {{count}}",
+    },
+    reader: {
+      screenLabel: "Lector",
+      loading: "Cargando fuente…",
+      errorTitle: "No se pudo abrir la fuente",
+      errorBody: "Esta fuente no se pudo abrir dentro de Interval. Aún puedes intentar abrir el original.",
+      unsupportedTitle: "Aún no se puede abrir esta fuente",
+      unsupportedBody: "Este tipo de archivo aún no es compatible dentro de Interval. Aún puedes abrir el original.",
     },
   },
   sourceCollections: {
