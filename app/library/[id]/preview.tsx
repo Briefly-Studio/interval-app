@@ -17,6 +17,7 @@ import { prepareViewerInput } from "../../../src/domain/sourceViewer";
 import { chunkTextPreviewContent, inspectTextPreviewFile } from "../../../src/domain/sourcePreviewText";
 import { resolveSourcePreviewStrategy, type SourcePreviewStrategy } from "../../../src/domain/sourcePreview";
 import { hasFullSourceReader } from "../../../src/domain/sourceReader";
+import { useLayoutDirection } from "../../../src/i18n/direction";
 import { useTranslation } from "../../../src/i18n";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
 import { getLibrarySources } from "../../../src/storage/librarySources";
@@ -81,6 +82,10 @@ export default function LibrarySourcePreviewScreen() {
   const router = useRouter();
   const { t, plural } = useTranslation();
   const { colors, spacing, typography } = useTheme();
+  // Only the new "Open in Interval" footer row (added alongside the Full Reader route) needs
+  // this — the rest of this screen's chrome predates the Reader batch and is out of this
+  // integration's narrowly-scoped RTL fix.
+  const { row } = useLayoutDirection();
   const params = useLocalSearchParams();
   const idParam = params.id;
   const id = typeof idParam === "string" ? idParam : Array.isArray(idParam) ? idParam[0] : "";
@@ -293,7 +298,7 @@ export default function LibrarySourcePreviewScreen() {
 
         <View style={[styles.footer, { gap: spacing.sm }]}>
           {pageLabel ? <Text style={[typography.caption, { color: colors.textSecondary }]}>{pageLabel}</Text> : <View />}
-          <View style={[styles.footerActions, { gap: spacing.sm }]}>
+          <View style={[styles.footerActions, row, { gap: spacing.sm }]}>
             {status === "ready" && source && hasFullSourceReader(source) ? (
               <Button
                 label={t("librarySource.detail.openInIntervalButton")}
@@ -331,5 +336,5 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   errorText: { textAlign: "center" },
   footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  footerActions: { flexDirection: "row", alignItems: "center" },
+  footerActions: { alignItems: "center" },
 });

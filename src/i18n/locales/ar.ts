@@ -681,6 +681,7 @@ const ar = {
       originalFileVerifyFailedTitle: "تعذّر تأكيد الوصول السحابي",
       originalFileVerifyFailedBody: "حاول مرة أخرى عندما تكون متصلًا.",
       previewButton: "معاينة",
+      openInIntervalButton: "فتح في Interval",
       openOriginalButton: "فتح الأصل",
       preparingSource: "جارٍ تجهيز المصدر…",
       downloadingOriginal: "جارٍ تنزيل الأصل…",
@@ -721,6 +722,14 @@ const ar = {
         other: "{{count}} صفحة",
       },
       pageProgress: "الصفحة {{page}} من {{count}}",
+    },
+    reader: {
+      screenLabel: "القارئ",
+      loading: "جارٍ تحميل المصدر…",
+      errorTitle: "تعذّر فتح المصدر",
+      errorBody: "تعذّر فتح هذا المصدر داخل Interval. لا يزال بإمكانك محاولة فتح الأصل.",
+      unsupportedTitle: "لا يمكن فتح هذا المصدر بعد",
+      unsupportedBody: "هذا النوع من الملفات غير مدعوم داخل Interval بعد. لا يزال بإمكانك فتح الأصل.",
     },
   },
   sourceCollections: {

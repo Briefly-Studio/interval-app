@@ -16,6 +16,7 @@ import { prepareViewerInput } from "../../../src/domain/sourceViewer";
 import { chunkTextReaderContent, inspectTextReaderFile } from "../../../src/domain/sourceReaderText";
 import { resolveSourceReaderStrategy, type SourceReaderStrategy } from "../../../src/domain/sourceReader";
 import { useTranslation } from "../../../src/i18n";
+import { useLayoutDirection } from "../../../src/i18n/direction";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
 import { getLibrarySources } from "../../../src/storage/librarySources";
 import { Button } from "../../../src/ui/Button";
@@ -103,6 +104,12 @@ export default function LibrarySourceReaderScreen() {
   const router = useRouter();
   const { t, plural } = useTranslation();
   const { colors, spacing, typography } = useTheme();
+  // `row`/`text` style the app's own Reader chrome (header, footer, status copy) per the active
+  // UI locale's direction. Deliberately NEVER applied to the rendered document text chunks below
+  // (`renderTextChunk`) — a source's own content must never be forced into the UI locale's
+  // direction (e.g. Arabic UI + an English .txt source must keep that English text naturally
+  // left-aligned, not right-aligned just because the chrome around it is RTL).
+  const { row, text } = useLayoutDirection();
   const params = useLocalSearchParams();
   const idParam = params.id;
   const id = typeof idParam === "string" ? idParam : Array.isArray(idParam) ? idParam[0] : "";
@@ -243,11 +250,11 @@ export default function LibrarySourceReaderScreen() {
   return (
     <Screen>
       <View style={[styles.container, { gap: spacing.md }]}>
-        <View style={[styles.header, { gap: spacing.sm }]}>
+        <View style={[styles.header, row, { gap: spacing.sm }]}>
           <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={goBack} />
           <View style={styles.headerText}>
-            <Text style={[typography.caption, { color: colors.textSecondary }]}>{t("librarySource.reader.screenLabel")}</Text>
-            <Text style={[typography.title, { color: colors.textPrimary }]} numberOfLines={1} accessibilityRole="header">
+            <Text style={[typography.caption, text, { color: colors.textSecondary }]}>{t("librarySource.reader.screenLabel")}</Text>
+            <Text style={[typography.title, text, { color: colors.textPrimary }]} numberOfLines={1} accessibilityRole="header">
               {source?.displayTitle ?? t("librarySource.detail.loading")}
             </Text>
           </View>
@@ -256,7 +263,7 @@ export default function LibrarySourceReaderScreen() {
         <View style={[styles.viewer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {status === "resolving" || status === "loading" ? (
             <View style={styles.centered}>
-              <Text style={[typography.secondary, { color: colors.textSecondary }]}>{loadingText}</Text>
+              <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>{loadingText}</Text>
             </View>
           ) : status === "ready" && readerUri ? (
             readerKind === "pdf-reader" ? (
@@ -310,16 +317,16 @@ export default function LibrarySourceReaderScreen() {
             )
           ) : status === "empty" ? (
             <View style={[styles.centered, { gap: spacing.sm }]}>
-              <Text style={[typography.secondary, styles.errorText, { color: colors.textSecondary }]}>
+              <Text style={[typography.secondary, text, styles.errorText, { color: colors.textSecondary }]}>
                 {t("librarySource.preview.emptyTextBody")}
               </Text>
             </View>
           ) : (
             <View style={[styles.centered, { gap: spacing.sm }]}>
-              <Text style={[typography.subheading, { color: colors.textPrimary }]}>
+              <Text style={[typography.subheading, text, { color: colors.textPrimary }]}>
                 {status === "unsupported" ? t("librarySource.reader.unsupportedTitle") : t("librarySource.reader.errorTitle")}
               </Text>
-              <Text style={[typography.secondary, styles.errorText, { color: colors.textSecondary }]}>
+              <Text style={[typography.secondary, text, styles.errorText, { color: colors.textSecondary }]}>
                 {status === "unsupported" ? t("librarySource.reader.unsupportedBody") : t("librarySource.reader.errorBody")}
               </Text>
               {status !== "unsupported" ? (
@@ -329,8 +336,8 @@ export default function LibrarySourceReaderScreen() {
           )}
         </View>
 
-        <View style={[styles.footer, { gap: spacing.sm }]}>
-          {pageLabel ? <Text style={[typography.caption, { color: colors.textSecondary }]}>{pageLabel}</Text> : <View />}
+        <View style={[styles.footer, row, { gap: spacing.sm }]}>
+          {pageLabel ? <Text style={[typography.caption, text, { color: colors.textSecondary }]}>{pageLabel}</Text> : <View />}
           {source ? (
             <Button
               label={t("librarySource.detail.openOriginalButton")}
@@ -355,7 +362,7 @@ export default function LibrarySourceReaderScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center" },
+  header: { alignItems: "center" },
   headerText: { flex: 1 },
   viewer: { flex: 1, overflow: "hidden", borderWidth: StyleSheet.hairlineWidth, borderRadius: 8 },
   pdf: { flex: 1, width: "100%", height: "100%" },
@@ -364,5 +371,5 @@ const styles = StyleSheet.create({
   readerText: { lineHeight: 23 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   errorText: { textAlign: "center" },
-  footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  footer: { alignItems: "center", justifyContent: "space-between" },
 });
