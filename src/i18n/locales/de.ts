@@ -690,7 +690,9 @@ const de = {
       loading: "Vorschau wird vorbereitet…",
       downloading: "Original wird heruntergeladen…",
       errorTitle: "Vorschau konnte nicht angezeigt werden",
-      errorBody: "Diese PDF-Datei konnte nicht in Interval angezeigt werden. Du kannst weiterhin versuchen, das Original zu öffnen.",
+      errorBody: "Diese Quelle konnte nicht in Interval angezeigt werden. Du kannst weiterhin versuchen, das Original zu öffnen.",
+      tooLargeTitle: "Vorschau ist zu groß",
+      tooLargeBody: "Diese Textdatei ist zu groß, um sie sicher in Interval als Vorschau anzuzeigen. Du kannst weiterhin das Original öffnen.",
       retryButton: "Erneut versuchen",
       pageCount: {
         one: "{{count}} Seite",

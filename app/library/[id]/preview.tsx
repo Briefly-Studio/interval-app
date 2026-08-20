@@ -1,8 +1,10 @@
 import Pdf from "react-native-pdf";
 import { File } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import {
@@ -12,7 +14,7 @@ import {
   type OpenSourceStage,
 } from "../../../src/cloud/librarySourceStorage/openSource";
 import { prepareViewerInput } from "../../../src/domain/sourceViewer";
-import { resolveSourcePreviewStrategy } from "../../../src/domain/sourcePreview";
+import { resolveSourcePreviewStrategy, type SourcePreviewStrategy } from "../../../src/domain/sourcePreview";
 import { useTranslation } from "../../../src/i18n";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
 import { getLibrarySources } from "../../../src/storage/librarySources";
@@ -21,9 +23,12 @@ import { IconButton } from "../../../src/ui/IconButton";
 import { Screen } from "../../../src/ui/Screen";
 import { useTheme } from "@/src/theme";
 
-type PreviewStatus = "loading" | "ready" | "error";
+type EmbeddedPreviewKind = Extract<SourcePreviewStrategy["kind"], "embedded-pdf" | "embedded-image" | "embedded-text">;
+type PreviewStatus = "loading" | "ready" | "error" | "too-large";
 
-function logPdfPreview(stage: string, detail?: Record<string, unknown>): void {
+const MAX_TEXT_PREVIEW_BYTES = 1024 * 1024;
+
+function logSourcePreview(stage: string, detail?: Record<string, unknown>): void {
   if (!__DEV__) return;
   if (detail && Object.keys(detail).length > 0) {
     console.log(`[LibrarySourcePreview] ${stage}`, detail);
@@ -47,7 +52,7 @@ function inspectLocalPreviewFile(uri: string): { exists: boolean; size?: number 
     const file = new File(uri);
     return file.exists ? { exists: true, size: file.size } : { exists: false };
   } catch (error) {
-    logPdfPreview("file inspect failed", { error: safeErrorDetail(error) });
+    logSourcePreview("file inspect failed", { error: safeErrorDetail(error) });
     return { exists: false };
   }
 }
@@ -82,6 +87,8 @@ export default function LibrarySourcePreviewScreen() {
 
   const [source, setSource] = useState<LibrarySourceRecord | null>(null);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [previewKind, setPreviewKind] = useState<EmbeddedPreviewKind | null>(null);
+  const [textContent, setTextContent] = useState<string | null>(null);
   const [status, setStatus] = useState<PreviewStatus>("loading");
   const [stage, setStage] = useState<Exclude<OpenSourceStage, "opening">>("resolving");
   const [openingOriginal, setOpeningOriginal] = useState(false);
@@ -104,13 +111,20 @@ export default function LibrarySourcePreviewScreen() {
     setStatus("loading");
     setStage("resolving");
     setPageLabel(null);
+    setPreviewUri(null);
+    setPreviewKind(null);
+    setTextContent(null);
 
     const scope = await AuthService.getActiveScope();
     const sources = await getLibrarySources(scope);
     const found = sources.find((item) => item.id === id) ?? null;
     setSource(found);
 
-    if (!found || resolveSourcePreviewStrategy(found).kind !== "embedded-pdf") {
+    const strategy = found ? resolveSourcePreviewStrategy(found) : { kind: "unsupported" as const };
+    if (
+      !found ||
+      (strategy.kind !== "embedded-pdf" && strategy.kind !== "embedded-image" && strategy.kind !== "embedded-text")
+    ) {
       setStatus("error");
       return;
     }
@@ -123,19 +137,39 @@ export default function LibrarySourcePreviewScreen() {
 
     const input = await prepareViewerInput(resolved.uri, found);
     const file = inspectLocalPreviewFile(input.uri);
-    logPdfPreview("prepared input", {
+    logSourcePreview("prepared input", {
       sourceType: found.sourceType,
+      strategy: strategy.kind,
       uriScheme: uriScheme(input.uri),
       usedStagedCopy: input.usedStagedCopy,
-      hasPdfExtension: input.uri.toLowerCase().endsWith(".pdf"),
+      extension: input.extension,
       exists: file.exists,
       size: file.size,
     });
-    if (!input.usedStagedCopy || !input.uri.toLowerCase().endsWith(".pdf") || !file.exists || !file.size) {
+    if (!input.usedStagedCopy || !input.extension || !file.exists || file.size === undefined) {
       setStatus("error");
       return;
     }
+    if (strategy.kind !== "embedded-text" && file.size <= 0) {
+      setStatus("error");
+      return;
+    }
+    if (strategy.kind === "embedded-text") {
+      if (file.size > MAX_TEXT_PREVIEW_BYTES) {
+        setStatus("too-large");
+        return;
+      }
+      try {
+        const text = await FileSystem.readAsStringAsync(input.uri, { encoding: FileSystem.EncodingType.UTF8 });
+        setTextContent(text);
+      } catch (error) {
+        logSourcePreview("text read failed", { error: safeErrorDetail(error) });
+        setStatus("error");
+        return;
+      }
+    }
     setPreviewUri(input.uri);
+    setPreviewKind(strategy.kind);
     setStatus("ready");
   }, [id]);
 
@@ -184,28 +218,52 @@ export default function LibrarySourcePreviewScreen() {
               <Text style={[typography.secondary, { color: colors.textSecondary }]}>{loadingText}</Text>
             </View>
           ) : status === "ready" && previewUri ? (
-            <Pdf
-              source={{ uri: previewUri, cache: false }}
-              style={styles.pdf}
-              trustAllCerts={false}
-              onLoadComplete={(numberOfPages) => {
-                logPdfPreview("load complete", { pages: numberOfPages });
-                setPageLabel(plural("librarySource.preview.pageCount", numberOfPages));
-              }}
-              onPageChanged={(page, numberOfPages) => {
-                logPdfPreview("page changed", { page, pages: numberOfPages });
-                setPageLabel(t("librarySource.preview.pageProgress", { page, count: numberOfPages }));
-              }}
-              onError={(error) => {
-                logPdfPreview("render error", { error: safeErrorDetail(error) });
-                setStatus("error");
-              }}
-            />
+            previewKind === "embedded-pdf" ? (
+              <Pdf
+                source={{ uri: previewUri, cache: false }}
+                style={styles.pdf}
+                trustAllCerts={false}
+                onLoadComplete={(numberOfPages) => {
+                  logSourcePreview("pdf load complete", { pages: numberOfPages });
+                  setPageLabel(plural("librarySource.preview.pageCount", numberOfPages));
+                }}
+                onPageChanged={(page, numberOfPages) => {
+                  logSourcePreview("pdf page changed", { page, pages: numberOfPages });
+                  setPageLabel(t("librarySource.preview.pageProgress", { page, count: numberOfPages }));
+                }}
+                onError={(error) => {
+                  logSourcePreview("pdf render error", { error: safeErrorDetail(error) });
+                  setStatus("error");
+                }}
+              />
+            ) : previewKind === "embedded-image" ? (
+              <Image
+                source={{ uri: previewUri }}
+                style={styles.image}
+                contentFit="contain"
+                transition={120}
+                onLoad={() => {
+                  logSourcePreview("image load complete", { uriScheme: uriScheme(previewUri) });
+                }}
+                onError={(error) => {
+                  logSourcePreview("image render error", { error: safeErrorDetail(error) });
+                  setStatus("error");
+                }}
+              />
+            ) : (
+              <ScrollView style={styles.textScroll} contentContainerStyle={[styles.textContent, { padding: spacing.md }]}>
+                <Text style={[typography.body, styles.previewText, { color: colors.textPrimary }]}>
+                  {textContent ?? ""}
+                </Text>
+              </ScrollView>
+            )
           ) : (
             <View style={[styles.centered, { gap: spacing.sm }]}>
-              <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("librarySource.preview.errorTitle")}</Text>
+              <Text style={[typography.subheading, { color: colors.textPrimary }]}>
+                {status === "too-large" ? t("librarySource.preview.tooLargeTitle") : t("librarySource.preview.errorTitle")}
+              </Text>
               <Text style={[typography.secondary, styles.errorText, { color: colors.textSecondary }]}>
-                {t("librarySource.preview.errorBody")}
+                {status === "too-large" ? t("librarySource.preview.tooLargeBody") : t("librarySource.preview.errorBody")}
               </Text>
               <Button label={t("librarySource.preview.retryButton")} variant="secondary" onPress={load} />
             </View>
@@ -235,6 +293,10 @@ const styles = StyleSheet.create({
   headerText: { flex: 1 },
   viewer: { flex: 1, overflow: "hidden", borderWidth: StyleSheet.hairlineWidth, borderRadius: 8 },
   pdf: { flex: 1, width: "100%", height: "100%" },
+  image: { flex: 1, width: "100%", height: "100%" },
+  textScroll: { flex: 1 },
+  textContent: { flexGrow: 1 },
+  previewText: { lineHeight: 23 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   errorText: { textAlign: "center" },
   footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
