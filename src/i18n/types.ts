@@ -3,10 +3,25 @@
 // adding all three together, and `Record<Locale, ...>` usages elsewhere (localeRegistry.ts,
 // translate.ts's RESOURCES, src/accessibility/speech.ts) force every one of those sites to be
 // updated at compile time, not just remembered by convention. "pt-BR" (not bare "pt") is
-// deliberate — see src/i18n/locales/pt-BR.ts's header comment.
-export type Locale = "en" | "es" | "fr" | "pt-BR" | "it" | "de" | "nl";
+// deliberate — see src/i18n/locales/pt-BR.ts's header comment. "zh-Hans" (not bare "zh" or
+// "zh-CN") is the same kind of deliberate choice — see src/i18n/locales/zh-Hans.ts's header
+// comment and resolveLanguage.ts's device-tag mapping for why.
+export type Locale = "en" | "es" | "fr" | "pt-BR" | "it" | "de" | "nl" | "ru" | "zh-Hans" | "ja" | "ko" | "hi";
 
-export const SUPPORTED_LOCALES: readonly Locale[] = ["en", "es", "fr", "pt-BR", "it", "de", "nl"];
+export const SUPPORTED_LOCALES: readonly Locale[] = [
+  "en",
+  "es",
+  "fr",
+  "pt-BR",
+  "it",
+  "de",
+  "nl",
+  "ru",
+  "zh-Hans",
+  "ja",
+  "ko",
+  "hi",
+];
 
 export function isSupportedLocale(value: string): value is Locale {
   return (SUPPORTED_LOCALES as readonly string[]).includes(value);

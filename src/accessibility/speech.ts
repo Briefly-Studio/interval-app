@@ -14,6 +14,11 @@ const SPEECH_LANGUAGE_TAGS: Record<Locale, string> = {
   it: "it-IT",
   de: "de-DE",
   nl: "nl-NL",
+  ru: "ru-RU",
+  "zh-Hans": "zh-CN",
+  ja: "ja-JP",
+  ko: "ko-KR",
+  hi: "hi-IN",
 };
 
 export function speechLanguageTag(locale: Locale): string {
