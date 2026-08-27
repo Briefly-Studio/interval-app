@@ -356,6 +356,17 @@ This exists purely so the pipeline (`generateStudyDeck` → validation → draft
 end-to-end today, in tests and in a future dev-only harness, without a real model call. It is never
 presented as production AI capability.
 
+### Running the focused tests
+
+`npm run test:ai` runs the mobile-side domain tests (`src/domain/ai/*.test.ts`) plus the backend
+skeleton's request-validation tests (`backend/lambdas/ai-generate-study-deck/index.test.mjs`) via
+Node's built-in test runner (`node --test`) — no test framework dependency added. A small
+test-only ESM loader (`scripts/ai-test-loader.mjs`) lets Node resolve this repository's existing
+extensionless relative imports directly; it is never loaded by the app itself. Coverage includes
+context-budget selection/ordering, extraction-status mapping, structural and per-card response
+validation (including duplicate-provenance-id and duplicate-card handling), and the backend
+skeleton's size-ceiling and selected-chunk-id consistency checks.
+
 ## What is intentionally NOT implemented
 
 - No real model provider call anywhere (no OpenAI/Anthropic/Bedrock/Gemini SDK, no network
