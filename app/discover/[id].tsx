@@ -88,6 +88,13 @@ export default function DiscoverLessonScreen() {
   const [scope, setScope] = useState<WorkspaceScope | null>(null);
   const [progress, setProgress] = useState<DiscoverProgressState | null>(null);
   const [saving, setSaving] = useState(false);
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/discover");
+  };
 
   useEffect(() => {
     let alive = true;
@@ -113,7 +120,7 @@ export default function DiscoverLessonScreen() {
   if (!lesson) {
     return (
       <Screen>
-        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
+        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={handleBack} />
         <View style={styles.emptyWrap}>
           <EmptyState
             icon="compass-outline"
@@ -144,7 +151,7 @@ export default function DiscoverLessonScreen() {
     if (!progress) return;
     try {
       await persistProgress(markLessonCompleted(progress, lesson.id));
-      router.back();
+      handleBack();
     } catch {
       Alert.alert(t("discover.completeFailedTitle"), t("discover.completeFailedBody"));
     }
@@ -153,7 +160,7 @@ export default function DiscoverLessonScreen() {
   return (
     <Screen contentStyle={styles.readerScreen}>
       <View style={[styles.headerRow, row, { gap: spacing.sm }]}>
-        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
+        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={handleBack} />
         <View style={styles.headerText}>
           <Text style={[typography.caption, text, { color: colors.textSecondary }]}>{t("discover.lessonScreenLabel")}</Text>
         </View>
@@ -166,7 +173,7 @@ export default function DiscoverLessonScreen() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { gap: spacing.lg, paddingBottom: spacing.xl }]}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { gap: spacing.lg, paddingBottom: spacing.xl }]}>
         <View style={{ gap: spacing.sm }}>
           <View style={[styles.lessonMetaRow, row, { gap: spacing.sm }]}>
             <View
@@ -224,6 +231,7 @@ const styles = StyleSheet.create({
   headerRow: { alignItems: "center" },
   headerText: { flex: 1 },
   emptyWrap: { flex: 1, justifyContent: "center" },
+  scrollView: { flex: 1 },
   scrollContent: {},
   lessonMetaRow: { alignItems: "center", flexWrap: "wrap" },
   categoryPill: { minHeight: 28, justifyContent: "center" },
@@ -236,4 +244,3 @@ const styles = StyleSheet.create({
   topicRow: { flexDirection: "row", flexWrap: "wrap" },
   topicChip: { minHeight: 28, justifyContent: "center", borderWidth: 1, borderRadius: 999 },
 });
-

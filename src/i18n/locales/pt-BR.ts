@@ -175,7 +175,7 @@ const ptBR = {
     sessionProgress: "Progresso da sessão",
     sessionProgressValue: "{{completed}} / {{limit}} concluídas · cerca de {{minutes}} min",
     boundedFooter: "Esta prévia é finita de propósito. Conclua a sessão para chegar ao ponto de pausa de hoje.",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minutos, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minutos, {{position}}, {{status}}",
     completedBadge: "Concluída",
     savedBadge: "Salva",
     notStartedBadge: "Não iniciada",

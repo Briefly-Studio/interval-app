@@ -58,8 +58,8 @@ export function emptyDiscoverProgress(): DiscoverProgressState {
   return { viewedLessonIds: [], completedLessonIds: [], savedLessonIds: [] };
 }
 
-export function uniqueIds(ids: readonly string[]): string[] {
-  return Array.from(new Set(ids.filter(Boolean)));
+export function uniqueIds(ids: readonly unknown[]): string[] {
+  return Array.from(new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0)));
 }
 
 export function markLessonViewed(progress: DiscoverProgressState, lessonId: string): DiscoverProgressState {
@@ -94,19 +94,22 @@ export function discoverBudgetSummary(
   progress: DiscoverProgressState,
   config: DiscoverBudgetConfig = DISCOVER_PREVIEW_BUDGET
 ): DiscoverBudgetSummary {
-  const completed = new Set(progress.completedLessonIds);
+  const lessonIds = new Set(lessons.map((lesson) => lesson.id));
+  const completed = new Set(uniqueIds(progress.completedLessonIds).filter((id) => lessonIds.has(id)));
+  const viewed = uniqueIds(progress.viewedLessonIds).filter((id) => lessonIds.has(id));
+  const effectiveLessonLimit = Math.min(config.lessonLimit, lessons.length);
   const estimatedMinutesCompleted = lessons.reduce(
     (total, lesson) => total + (completed.has(lesson.id) ? lesson.estimatedMinutes : 0),
     0
   );
-  const lessonsViewed = Math.min(uniqueIds(progress.viewedLessonIds).length, config.lessonLimit);
-  const lessonsCompleted = Math.min(uniqueIds(progress.completedLessonIds).length, config.lessonLimit);
+  const lessonsViewed = Math.min(viewed.length, effectiveLessonLimit);
+  const lessonsCompleted = Math.min(completed.size, effectiveLessonLimit);
   return {
-    lessonLimit: config.lessonLimit,
+    lessonLimit: effectiveLessonLimit,
     lessonsViewed,
     lessonsCompleted,
     estimatedMinutesCompleted,
-    isSessionComplete: lessonsCompleted >= config.lessonLimit,
+    isSessionComplete: effectiveLessonLimit > 0 && lessonsCompleted >= effectiveLessonLimit,
   };
 }
 
@@ -116,4 +119,3 @@ export function visibleDiscoverLessons(
 ): readonly DiscoverLesson[] {
   return lessons.slice(0, config.lessonLimit);
 }
-

@@ -16,11 +16,9 @@ function normalizeProgress(value: unknown): DiscoverProgressState {
   if (!value || typeof value !== "object") return emptyDiscoverProgress();
   const candidate = value as Partial<Record<keyof DiscoverProgressState, unknown>>;
   return {
-    viewedLessonIds: uniqueIds(Array.isArray(candidate.viewedLessonIds) ? candidate.viewedLessonIds.filter(String) : []),
-    completedLessonIds: uniqueIds(
-      Array.isArray(candidate.completedLessonIds) ? candidate.completedLessonIds.filter(String) : []
-    ),
-    savedLessonIds: uniqueIds(Array.isArray(candidate.savedLessonIds) ? candidate.savedLessonIds.filter(String) : []),
+    viewedLessonIds: uniqueIds(Array.isArray(candidate.viewedLessonIds) ? candidate.viewedLessonIds : []),
+    completedLessonIds: uniqueIds(Array.isArray(candidate.completedLessonIds) ? candidate.completedLessonIds : []),
+    savedLessonIds: uniqueIds(Array.isArray(candidate.savedLessonIds) ? candidate.savedLessonIds : []),
   };
 }
 
@@ -41,4 +39,3 @@ export async function saveDiscoverProgress(scope: WorkspaceScope, progress: Disc
 export async function resetDiscoverProgress(scope: WorkspaceScope): Promise<void> {
   await AsyncStorage.removeItem(discoverProgressKey(scope));
 }
-

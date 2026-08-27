@@ -164,7 +164,7 @@ const es = {
     sessionProgress: "Progreso de la sesión",
     sessionProgressValue: "{{completed}} / {{limit}} completadas · unos {{minutes}} min",
     boundedFooter: "Esta vista previa es finita a propósito. Completa la sesión para llegar al punto de pausa de hoy.",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minutos, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minutos, {{position}}, {{status}}",
     completedBadge: "Completada",
     savedBadge: "Guardada",
     notStartedBadge: "Sin empezar",

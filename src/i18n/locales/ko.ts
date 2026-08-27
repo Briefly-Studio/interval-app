@@ -173,7 +173,7 @@ const ko = {
     sessionProgress: "세션 진행률",
     sessionProgressValue: "{{completed}} / {{limit}} 완료 · 약 {{minutes}}분",
     boundedFooter: "이 미리보기는 의도적으로 유한합니다. 세션을 완료하면 오늘의 멈춤 지점에 도달합니다.",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}}분, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}}분, {{position}}, {{status}}",
     completedBadge: "완료됨",
     savedBadge: "저장됨",
     notStartedBadge: "시작 전",

@@ -173,7 +173,7 @@ const ja = {
     sessionProgress: "セッションの進捗",
     sessionProgressValue: "{{completed}} / {{limit}} 完了 · 約{{minutes}}分",
     boundedFooter: "このプレビューは意図的に有限です。セッションを完了すると今日の停止地点に到達します。",
-    cardAccessibilityLabel: "{{title}}、{{category}}、{{minutes}}分、{{position}}",
+    cardAccessibilityLabel: "{{title}}、{{category}}、{{minutes}}分、{{position}}、{{status}}",
     completedBadge: "完了",
     savedBadge: "保存済み",
     notStartedBadge: "未開始",

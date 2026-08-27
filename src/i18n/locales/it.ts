@@ -174,7 +174,7 @@ const it = {
     sessionProgress: "Avanzamento sessione",
     sessionProgressValue: "{{completed}} / {{limit}} completate · circa {{minutes}} min",
     boundedFooter: "Questa anteprima è volutamente limitata. Completa la sessione per raggiungere il punto di pausa di oggi.",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minuti, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minuti, {{position}}, {{status}}",
     completedBadge: "Completata",
     savedBadge: "Salvata",
     notStartedBadge: "Non iniziata",

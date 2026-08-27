@@ -166,7 +166,7 @@ const en = {
     sessionProgress: "Session progress",
     sessionProgressValue: "{{completed}} / {{limit}} complete · about {{minutes}} min",
     boundedFooter: "This preview is intentionally finite. Complete the session to reach today’s stopping point.",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minutes, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minutes, {{position}}, {{status}}",
     completedBadge: "Completed",
     savedBadge: "Saved",
     notStartedBadge: "Not started",

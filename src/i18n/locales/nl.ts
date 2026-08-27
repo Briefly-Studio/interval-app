@@ -171,7 +171,7 @@ const nl = {
     sessionProgress: "Sessievordering",
     sessionProgressValue: "{{completed}} / {{limit}} voltooid · ongeveer {{minutes}} min",
     boundedFooter: "Deze preview is bewust eindig. Rond de sessie af om het stoppunt van vandaag te bereiken.",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minuten, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minuten, {{position}}, {{status}}",
     completedBadge: "Voltooid",
     savedBadge: "Opgeslagen",
     notStartedBadge: "Niet gestart",

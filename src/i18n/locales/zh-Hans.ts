@@ -174,7 +174,7 @@ const zhHans = {
     sessionProgress: "会话进度",
     sessionProgressValue: "已完成 {{completed}} / {{limit}} · 约 {{minutes}} 分钟",
     boundedFooter: "此预览有意设置为有限内容。完成会话即可到达今天的停止点。",
-    cardAccessibilityLabel: "{{title}}，{{category}}，{{minutes}} 分钟，{{position}}",
+    cardAccessibilityLabel: "{{title}}，{{category}}，{{minutes}} 分钟，{{position}}，{{status}}",
     completedBadge: "已完成",
     savedBadge: "已保存",
     notStartedBadge: "未开始",

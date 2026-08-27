@@ -162,7 +162,7 @@ const ar = {
     sessionProgress: "تقدّم الجلسة",
     sessionProgressValue: "{{completed}} / {{limit}} مكتملة · حوالي {{minutes}} دقيقة",
     boundedFooter: "هذه المعاينة محدودة عمدًا. أكمل الجلسة للوصول إلى نقطة التوقف لهذا اليوم.",
-    cardAccessibilityLabel: "{{title}}، {{category}}، {{minutes}} دقيقة، {{position}}",
+    cardAccessibilityLabel: "{{title}}، {{category}}، {{minutes}} دقيقة، {{position}}، {{status}}",
     completedBadge: "مكتمل",
     savedBadge: "محفوظ",
     notStartedBadge: "لم يبدأ",

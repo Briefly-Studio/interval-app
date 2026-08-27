@@ -172,7 +172,7 @@ const de = {
     sessionProgress: "Sitzungsfortschritt",
     sessionProgressValue: "{{completed}} / {{limit}} abgeschlossen · etwa {{minutes}} Min.",
     boundedFooter: "Diese Vorschau ist absichtlich begrenzt. Schließe die Sitzung ab, um den heutigen Haltepunkt zu erreichen.",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} Minuten, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} Minuten, {{position}}, {{status}}",
     completedBadge: "Abgeschlossen",
     savedBadge: "Gespeichert",
     notStartedBadge: "Nicht begonnen",

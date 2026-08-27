@@ -175,7 +175,7 @@ const hi = {
     sessionProgress: "सेशन प्रगति",
     sessionProgressValue: "{{completed}} / {{limit}} पूरे · लगभग {{minutes}} मिनट",
     boundedFooter: "यह प्रीव्यू जानबूझकर सीमित है। आज के रुकने के बिंदु तक पहुँचने के लिए सेशन पूरा करें।",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} मिनट, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} मिनट, {{position}}, {{status}}",
     completedBadge: "पूरा",
     savedBadge: "सेव किया गया",
     notStartedBadge: "शुरू नहीं",

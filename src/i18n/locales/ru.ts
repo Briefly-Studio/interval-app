@@ -179,7 +179,7 @@ const ru = {
     sessionProgress: "Прогресс сессии",
     sessionProgressValue: "{{completed}} / {{limit}} завершено · около {{minutes}} мин",
     boundedFooter: "Этот предварительный просмотр намеренно конечен. Завершите сессию, чтобы дойти до сегодняшней точки остановки.",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} минут, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} минут, {{position}}, {{status}}",
     completedBadge: "Завершено",
     savedBadge: "Сохранено",
     notStartedBadge: "Не начато",

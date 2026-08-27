@@ -25,6 +25,8 @@ import { Card } from "../../src/ui/Card";
 import { IconButton } from "../../src/ui/IconButton";
 import { Screen } from "../../src/ui/Screen";
 
+const discoverViewabilityConfig = { itemVisiblePercentThreshold: 55 };
+
 function LessonCard({
   lesson,
   index,
@@ -44,6 +46,7 @@ function LessonCard({
   const { colors, iconSizes, radii, spacing, typography } = useTheme();
   const { row, text } = useLayoutDirection();
   const progressLabel = t("discover.lessonPosition", { current: index + 1, total });
+  const statusLabel = completed ? t("discover.completedBadge") : saved ? t("discover.savedBadge") : t("discover.notStartedBadge");
 
   return (
     <Pressable
@@ -54,6 +57,7 @@ function LessonCard({
         category: lesson.category,
         minutes: lesson.estimatedMinutes,
         position: progressLabel,
+        status: statusLabel,
       })}
       style={({ pressed }) => [pressed && styles.pressed]}
     >
@@ -98,7 +102,7 @@ function LessonCard({
               color={completed || saved ? colors.accent : colors.textMuted}
             />
             <Text style={[typography.caption, text, { color: completed || saved ? colors.accent : colors.textSecondary }]}>
-              {completed ? t("discover.completedBadge") : saved ? t("discover.savedBadge") : t("discover.notStartedBadge")}
+              {statusLabel}
             </Text>
           </View>
         </View>
@@ -120,6 +124,13 @@ function CompletionCard({
   const { t } = useTranslation();
   const { colors, iconSizes, radii, spacing, typography } = useTheme();
   const { text } = useLayoutDirection();
+  const handleDone = () => {
+    if (router.canGoBack()) {
+      router.dismissAll();
+      return;
+    }
+    router.replace("/");
+  };
 
   return (
     <View style={styles.completionWrap}>
@@ -147,10 +158,10 @@ function CompletionCard({
           </Text>
         </View>
         <Button
-          label={t("discover.studySavedButton")}
+          label={t("common.back")}
           variant="secondary"
           fullWidth
-          onPress={() => router.push({ pathname: "/" as any })}
+          onPress={handleDone}
         />
         {__DEV__ ? <Button label={t("discover.resetPreviewButton")} variant="ghost" fullWidth onPress={onReset} /> : null}
       </Card>
@@ -175,6 +186,14 @@ export default function DiscoverScreen() {
     () => discoverBudgetSummary(visibleLessons, progress ?? { viewedLessonIds: [], completedLessonIds: [], savedLessonIds: [] }),
     [progress, visibleLessons]
   );
+  const progressPercent = summary.lessonLimit > 0 ? (summary.lessonsCompleted / summary.lessonLimit) * 100 : 0;
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/");
+  }, [router]);
 
   useEffect(() => {
     scopeRef.current = scope;
@@ -210,7 +229,7 @@ export default function DiscoverScreen() {
     const next = newlyViewed.reduce((state, id) => markLessonViewed(state, id), activeProgress);
     setProgress(next);
     progressRef.current = next;
-    saveDiscoverProgress(activeScope, next);
+    saveDiscoverProgress(activeScope, next).catch(() => {});
   });
 
   const onReset = async () => {
@@ -224,7 +243,7 @@ export default function DiscoverScreen() {
   const header = (
     <View style={{ gap: spacing.lg }}>
       <View style={[styles.headerRow, row, { gap: spacing.sm }]}>
-        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={() => router.back()} />
+        <IconButton name="chevron-back" accessibilityLabel={t("common.back")} onPress={handleBack} />
         <View style={styles.headerText}>
           <Text style={[typography.title, text, { color: colors.textPrimary }]} accessibilityRole="header">
             {t("discover.title")}
@@ -246,11 +265,15 @@ export default function DiscoverScreen() {
             })}
           </Text>
         </View>
-        <View style={[styles.progressTrack, { backgroundColor: colors.surfaceMuted }]}>
+        <View
+          style={[styles.progressTrack, { backgroundColor: colors.surfaceMuted }]}
+          accessibilityRole="progressbar"
+          accessibilityValue={{ min: 0, max: summary.lessonLimit, now: summary.lessonsCompleted }}
+        >
           <View
             style={[
               styles.progressFill,
-              { width: `${(summary.lessonsCompleted / summary.lessonLimit) * 100}%`, backgroundColor: colors.accent },
+              { width: `${progressPercent}%`, backgroundColor: colors.accent },
             ]}
           />
         </View>
@@ -295,7 +318,7 @@ export default function DiscoverScreen() {
           />
         )}
         onViewableItemsChanged={onViewableItemsChanged.current}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 55 }}
+        viewabilityConfig={discoverViewabilityConfig}
         ListFooterComponent={
           <Text style={[typography.caption, text, styles.footerNote, { color: colors.textSecondary }]}>
             {t("discover.boundedFooter")}

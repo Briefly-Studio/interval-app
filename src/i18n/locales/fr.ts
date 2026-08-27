@@ -177,7 +177,7 @@ const fr = {
     sessionProgress: "Progression de la session",
     sessionProgressValue: "{{completed}} / {{limit}} terminées · environ {{minutes}} min",
     boundedFooter: "Cet aperçu est volontairement limité. Terminez la session pour atteindre le point d'arrêt du jour.",
-    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minutes, {{position}}",
+    cardAccessibilityLabel: "{{title}}, {{category}}, {{minutes}} minutes, {{position}}, {{status}}",
     completedBadge: "Terminée",
     savedBadge: "Enregistrée",
     notStartedBadge: "Non commencée",
