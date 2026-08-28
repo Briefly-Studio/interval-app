@@ -16,6 +16,7 @@ import {
   type OpenSourceErrorReason,
   type OpenSourceStage,
 } from "../../../src/cloud/librarySourceStorage/openSource";
+import { isGenerateStudyDeckEnabled } from "../../../src/domain/ai/generateStudyDeckCapability";
 import { formatAudioDuration, formatFileSize } from "../../../src/domain/librarySourceFormat";
 import { SOURCE_TYPE_LABEL_KEYS, STATUS_LABEL_KEYS } from "../../../src/domain/librarySourceLabels";
 import { hasEmbeddedSourcePreview } from "../../../src/domain/sourcePreview";
@@ -86,6 +87,7 @@ export default function LibrarySourceDetailScreen() {
   const [fileBusy, setFileBusy] = useState(false);
   const [openStage, setOpenStage] = useState<OpenSourceStage | null>(null);
   const storageEnabled = isLibrarySourceStorageEnabled();
+  const generateEnabled = isGenerateStudyDeckEnabled();
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -465,6 +467,20 @@ export default function LibrarySourceDetailScreen() {
               )}
             </>
           ) : null}
+        </Card>
+      ) : null}
+
+      {generateEnabled && !source.archivedAt ? (
+        <Card style={[styles.detailCard, { gap: spacing.sm }]}>
+          <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("generateDeck.entry.heading")}</Text>
+          <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("generateDeck.entry.body")}</Text>
+          <Button
+            label={t("generateDeck.entry.button")}
+            variant="primary"
+            fullWidth
+            disabled={mutating}
+            onPress={() => router.push({ pathname: "/library/[id]/generate" as any, params: { id: source.id } })}
+          />
         </Card>
       ) : null}
 
