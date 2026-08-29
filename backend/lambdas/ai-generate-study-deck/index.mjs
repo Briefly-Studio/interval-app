@@ -77,13 +77,28 @@ function validateRequestBody(body) {
   }
 
   if (!Array.isArray(context.chunks)) return { error: "malformed-request" };
-  if (typeof context.totalChars !== "number" || context.totalChars > LIMITS.maxContextCharsPerRequest) {
-    return { error: "context-too-large" };
-  }
+
+  // Never trust a client-supplied totalChars for the cost/privacy size ceiling — recompute from
+  // the actual chunk text so a client can't understate size to slip past the limit.
+  let computedTotalChars = 0;
   for (const chunk of context.chunks) {
     if (!isPlainObject(chunk) || typeof chunk.id !== "string" || typeof chunk.text !== "string") {
       return { error: "malformed-request" };
     }
+    computedTotalChars += chunk.text.length;
+  }
+  if (computedTotalChars > LIMITS.maxContextCharsPerRequest) {
+    return { error: "context-too-large" };
+  }
+
+  // The mobile pipeline always derives selectedChunkIds from the exact context chunks it built
+  // (see aiService.ts's buildRequest) — enforce that invariant here rather than trusting a client
+  // to keep the two fields in sync, so provenance/audit metadata can't silently diverge from what
+  // was actually generated against.
+  const contextChunkIdSet = new Set(context.chunks.map((chunk) => chunk.id));
+  const selectedChunkIdSet = new Set(request.selectedChunkIds);
+  if (selectedChunkIdSet.size !== contextChunkIdSet.size || ![...selectedChunkIdSet].every((id) => contextChunkIdSet.has(id))) {
+    return { error: "malformed-request" };
   }
 
   return { request, context };
@@ -127,7 +142,9 @@ function validateModelResponse(raw, contextChunkIds) {
     const dupKey = `${front.toLowerCase()}|${back.toLowerCase()}`;
     if (seen.has(dupKey)) return cardIssues.push({ cardIndex: index, code: "duplicate-card" });
     seen.add(dupKey);
-    acceptedCards.push({ front, back, sourceChunkIds: card.sourceChunkIds });
+    // Dedupe a card's own repeated sourceChunkIds (e.g. ["c1", "c1"]) rather than rejecting —
+    // mirrors src/domain/ai/responseValidation.ts.
+    acceptedCards.push({ front, back, sourceChunkIds: Array.from(new Set(card.sourceChunkIds)) });
   });
 
   if (acceptedCards.length === 0) {

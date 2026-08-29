@@ -13,6 +13,26 @@ import type {
   GenerationOptions,
 } from "./types";
 
+/**
+ * `prepareGenerationContext` only knows about the candidate chunks it was handed — it has no way
+ * to see chunks a caller already excluded via `selectedChunkIds` before context prep ever ran. So
+ * its `fullSourceIncluded`/`excludedChunkIds`/`excludedChunkCount` are only correct relative to
+ * that pre-filtered candidate set, not the original source. This reconciles them against the
+ * FULL `normalizedContent` so "full source" reporting stays honest regardless of which layer did
+ * the excluding — a caller-selected subset must never be reported as `fullSourceIncluded: true`
+ * just because everything it asked for happened to fit the budget.
+ */
+function reconcileFullSourceReporting(normalizedContent: NormalizedSourceContent, context: GenerationContext): GenerationContext {
+  const includedIds = new Set(context.chunks.map((chunk) => chunk.id));
+  const excludedChunkIds = normalizedContent.chunks.filter((chunk) => !includedIds.has(chunk.id)).map((chunk) => chunk.id);
+  return {
+    ...context,
+    fullSourceIncluded: excludedChunkIds.length === 0 && normalizedContent.chunks.length > 0,
+    excludedChunkIds,
+    excludedChunkCount: excludedChunkIds.length,
+  };
+}
+
 // The one place a mobile-side (or future backend-side) caller drives the full
 // Source -> Generate Study Deck pipeline: extraction-status guard -> context preparation ->
 // provider call -> structured-response validation -> draft. Nothing outside this file (and
@@ -123,11 +143,13 @@ export async function generateStudyDeck(
   // Only "ready" falls through — ExtractionStatus is exhaustively "ready" | every key above.
 
   const scoped = selectChunks(normalizedContent, input.selectedChunkIds);
-  const context = prepareGenerationContext(scoped, input.contextOptions);
+  const preparedContext = prepareGenerationContext(scoped, input.contextOptions);
 
-  if (context.chunkCount === 0) {
+  if (preparedContext.chunkCount === 0) {
     return errorOutcome("source-empty", "No usable content was available to generate a deck from.");
   }
+
+  const context = reconcileFullSourceReporting(normalizedContent, preparedContext);
 
   const request = buildRequest(normalizedContent, input, context.chunks.map((chunk) => chunk.id));
 
