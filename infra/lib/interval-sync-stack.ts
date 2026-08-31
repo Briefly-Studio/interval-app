@@ -174,19 +174,48 @@ export class IntervalSyncStack extends cdk.Stack {
     // ---------------------------------------------------------------------
     const nodeRuntime = resolveNodeRuntime();
 
+    // Shared, size-agnostic props. memorySize/timeout are set PER FUNCTION below rather than
+    // here, because the sync Lambdas and the presigned-URL Lambda have genuinely different
+    // workloads (see each function's own comment).
     const commonLambdaProps = {
       runtime: nodeRuntime,
       architecture: lambda.Architecture.ARM_64,
-      memorySize: 128,
-      timeout: cdk.Duration.seconds(3),
       role: syncLambdaRole,
       handler: "index.handler",
     };
 
+    // Sync Lambda sizing — raised from the original 128 MB / 3 s after a confirmed Development
+    // incident (2026-08, docs/cdk-infrastructure.md "Sync Lambda sizing incident"): CloudWatch
+    // showed `interval-dev-sync-push` terminating at exactly 3000 ms on every invocation
+    // (warm invocations too, not just the one cold start that consumed ~330 ms of the budget),
+    // API Gateway returning 500, and the client reporting `Http500` — while the DynamoDB tables
+    // were healthy. 128 MB gives roughly 1/12th of a vCPU, and the push handler does two
+    // network round trips (Changes PutItem + Records UpdateItem) per dirty record; on a weak
+    // core, with cold-start and AWS-SDK retry/backoff on top, 3 s left no operational margin.
+    //
+    // 256 MB ~doubles the CPU/network share; 15 s is generous headroom for a bounded push
+    // (the handler now caps changes-per-request and processes records with bounded concurrency
+    // — see backend/lambdas/sync-push/lib.mjs) while still failing well inside API Gateway's own
+    // 29 s integration ceiling. Deliberately NOT Lambda's maximum (10 GB / 900 s) — that would
+    // waste money and hide, rather than fix, a genuinely slow path. The same construct serves
+    // Development and Staging identically (see infra/bin/interval-infra.ts); Production is not
+    // CDK-managed and is untouched.
+    const SYNC_LAMBDA_MEMORY_MB = 256;
+    const SYNC_LAMBDA_TIMEOUT = cdk.Duration.seconds(15);
+
+    // Keep *.test.mjs (backend/lambdas/**/lib.test.mjs) out of the deployed Lambda package — they
+    // are exercised locally via `npm run test:sync` (Node's built-in test runner), never at
+    // runtime.
+    const syncAssetExclude = ["*.test.mjs"];
+
     const syncPushFunction = new lambda.Function(this, "SyncPushFunction", {
       ...commonLambdaProps,
+      memorySize: SYNC_LAMBDA_MEMORY_MB,
+      timeout: SYNC_LAMBDA_TIMEOUT,
       functionName: names.syncPush,
-      code: lambda.Code.fromAsset(path.join(__dirname, "../../backend/lambdas/sync-push")),
+      code: lambda.Code.fromAsset(path.join(__dirname, "../../backend/lambdas/sync-push"), {
+        exclude: syncAssetExclude,
+      }),
       environment: {
         RECORDS_TABLE: recordsTable.tableName,
         CHANGES_TABLE: changesTable.tableName,
@@ -195,8 +224,12 @@ export class IntervalSyncStack extends cdk.Stack {
 
     const syncPullFunction = new lambda.Function(this, "SyncPullFunction", {
       ...commonLambdaProps,
+      memorySize: SYNC_LAMBDA_MEMORY_MB,
+      timeout: SYNC_LAMBDA_TIMEOUT,
       functionName: names.syncPull,
-      code: lambda.Code.fromAsset(path.join(__dirname, "../../backend/lambdas/sync-pull")),
+      code: lambda.Code.fromAsset(path.join(__dirname, "../../backend/lambdas/sync-pull"), {
+        exclude: syncAssetExclude,
+      }),
       environment: {
         CHANGES_TABLE: changesTable.tableName,
       },
@@ -299,6 +332,12 @@ export class IntervalSyncStack extends cdk.Stack {
 
       const librarySourceStorageFunction = new lambda.Function(this, "LibrarySourceStorageFunction", {
         ...commonLambdaProps,
+        // Unchanged by the 2026-08 sync-Lambda sizing incident — this Lambda only derives an
+        // object key from trusted claims and generates a short-lived S3 presigned URL (no
+        // DynamoDB, no per-record loop), so 128 MB / 3 s remains appropriate. Set explicitly
+        // here now that commonLambdaProps no longer carries memory/timeout.
+        memorySize: 128,
+        timeout: cdk.Duration.seconds(3),
         role: librarySourceStorageRole,
         functionName: names.librarySourceStorage,
         code: lambda.Code.fromAsset(path.join(__dirname, "../../backend/lambdas/library-source-storage")),

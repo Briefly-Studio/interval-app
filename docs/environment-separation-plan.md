@@ -707,6 +707,18 @@ Development only. AWS mutations: normal read/write traffic to Development tables
 not a "mutation" in the guardrail sense). Exit criteria met: sync behaves identically to
 Production's documented invariants, confirmed against the live Development backend.
 
+> **2026-08 follow-up (Development sync timeout incident).** Development sync later regressed to
+> `SYNC FAILED: Http500`; a read-only CloudWatch investigation found `interval-dev-sync-push`
+> timing out at exactly 3000 ms on every invocation under the original `128 MB / 3 s` Lambda
+> sizing. Fixed in code/CDK (both sync Lambdas → `256 MB / 15 s`, bounded push concurrency,
+> per-request change cap, richer diagnostics), and after an independent audit of that fix:
+> client-side sequential push chunking, `{entity, id}` acknowledgement identity, and a
+> `SK`-derived pull cursor. See `docs/cdk-infrastructure.md`'s "Sync Lambda sizing incident
+> (2026-08)". **Rollback for this class of change is redeploy-the-previous-revision, never
+> `cdk destroy` — that would wipe Development's test accounts and data** (see that doc's
+> "Rollback / removal"). Redeployment of `IntervalDevelopmentStack` remains founder-gated;
+> Staging and Production were not touched.
+
 **STEP 7 — Create the Staging/Beta environment.**
 **Status: complete.** Objective: repeat Step 5's process for `interval-staging-*`, serving as both
 Staging and the external Beta environment per §17's founder-approved decision — no separate
