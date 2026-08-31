@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Alert, SectionList, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
-import { getSyncDiagnosticCode } from "../src/cloud/sync/http";
+import { describeSyncFailure } from "../src/cloud/sync/http";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { getSyncState } from "../src/cloud/sync/syncState";
 import { useTranslation } from "../src/i18n";
@@ -201,7 +201,7 @@ export default function RecentlyDeletedScreen() {
         // visible error notification here — only genuinely actionable (needsAttention) ones do.
         SyncService.syncOnce().catch((e) => {
           if (getSyncState().status === "needsAttention") {
-            console.error("SYNC FAILED:", getSyncDiagnosticCode(e));
+            console.error("SYNC FAILED:", describeSyncFailure(e));
           }
         });
 
@@ -241,7 +241,7 @@ export default function RecentlyDeletedScreen() {
           await restoreCardToDeck(scope, card, card.deckId);
           SyncService.syncOnce().catch((e) => {
             if (getSyncState().status === "needsAttention") {
-              console.error("SYNC FAILED:", getSyncDiagnosticCode(e));
+              console.error("SYNC FAILED:", describeSyncFailure(e));
             }
           });
           await loadDeleted();
@@ -281,7 +281,7 @@ export default function RecentlyDeletedScreen() {
                 await restoreCardToDeck(scope, card, recoveryDeck.id);
                 SyncService.syncOnce().catch((e) => {
                   if (getSyncState().status === "needsAttention") {
-                    console.error("SYNC FAILED:", getSyncDiagnosticCode(e));
+                    console.error("SYNC FAILED:", describeSyncFailure(e));
                   }
                 });
                 await loadDeleted();

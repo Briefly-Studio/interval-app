@@ -410,8 +410,23 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   separation milestone. The CDK `pointInTimeRecovery` API used in `infra/lib/interval-sync-stack.ts`
   is itself deprecated in favor of `pointInTimeRecoverySpecification` (a `cdk synth`-time warning
   only, not a functional issue) — remains unaddressed cleanup work.
-- No automated test harness exists in this repository — all verification (app and infrastructure)
-  is manual founder QA plus local static checks (`tsc`, lint, `cdk synth`), not automated tests.
+- No app-level automated test harness exists — all app verification is manual founder QA plus
+  local static checks (`tsc`, lint, `cdk synth`). The only automated tests are focused
+  pure-logic unit tests for the sync push/pull helpers (`npm run test:sync`, Node's built-in
+  `node --test`, zero added dependencies — `backend/lambdas/sync-{push,pull}/lib.test.mjs`,
+  which also cover the client push helpers in `src/cloud/sync/pushHelpers.mjs`).
+- Development/Staging sync Lambdas were raised from `128 MB / 3 s` to `256 MB / 15 s` after a
+  confirmed 2026-08 Development incident (`interval-dev-sync-push` timing out at exactly 3000 ms
+  on every invocation → `Http500`), then further hardened after an independent audit of that
+  fix: client-side **sequential push chunking** (`PUSH_BATCH_SIZE`, so a backlog over the
+  server's `MAX_CHANGES_PER_PUSH` no longer deadlocks), **`{entity, id}` acknowledgement
+  identity** in the push response (an `id` alone is not unique across entity types), and a
+  **`SK`-derived pull cursor** (a legacy row missing the `changeKey` attribute no longer wedges
+  the pull). See `docs/cdk-infrastructure.md`'s "Sync Lambda sizing incident (2026-08)".
+  Remaining lower-priority item: whether Production's grandfathered `128 MB / 3 s` sync Lambdas
+  need the same sizing change (separate, founder-gated). **Rollback for any of this is
+  redeploy-the-previous-revision, never `cdk destroy IntervalDevelopmentStack`** (that is an
+  environment teardown that deletes Development's Cognito accounts + DynamoDB data).
 - `expo-doctor` reports a known, accepted 17/18 due to 8 packages sitting one SDK patch version
   behind — tracked, not a regression each time it's re-confirmed.
 - Whether Production's deployed Lambda functions match this repository's `backend/lambdas/`

@@ -16,11 +16,18 @@ export class SyncNetworkError extends Error {}
 // Thrown when the server responded with a non-2xx status. Carries the numeric status so callers
 // can classify the failure (and report a safe diagnostic code) without ever parsing or
 // surfacing the raw response body/message to the user.
+export type SyncOperation = "push" | "pull";
+
 export class SyncHttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Which half of the sync round trip produced this non-2xx response. Used only for safe
+   * diagnostic logging (see `describeSyncFailure`) — the stored `getSyncDiagnosticCode` value is
+   * deliberately kept status-only and stable. */
+  operation: SyncOperation;
+  constructor(status: number, operation: SyncOperation, message: string) {
     super(message);
     this.status = status;
+    this.operation = operation;
   }
 }
 
@@ -43,7 +50,7 @@ export async function pushChanges(
   }
 
   if (!res.ok) {
-    throw new SyncHttpError(res.status, `push failed: ${res.status}`);
+    throw new SyncHttpError(res.status, "push", `push failed: ${res.status}`);
   }
 
   return (await res.json()) as PushResponse;
@@ -67,7 +74,7 @@ export async function pullChanges(
   }
 
   if (!res.ok) {
-    throw new SyncHttpError(res.status, `pull failed: ${res.status}`);
+    throw new SyncHttpError(res.status, "pull", `pull failed: ${res.status}`);
   }
 
   return (await res.json()) as PullResponse;
@@ -81,6 +88,24 @@ export function isSyncNetworkError(error: unknown): boolean {
 /** The server's numeric HTTP status, if this error came from a non-ok response. */
 export function getSyncHttpStatus(error: unknown): number | undefined {
   return error instanceof SyncHttpError ? error.status : undefined;
+}
+
+/** Which sync operation (push/pull) a `SyncHttpError` came from, if known. */
+export function getSyncOperation(error: unknown): SyncOperation | undefined {
+  return error instanceof SyncHttpError ? error.operation : undefined;
+}
+
+/**
+ * A slightly richer, still fully-safe diagnostic string for CONSOLE LOGS only — the stable
+ * internal code from `getSyncDiagnosticCode` plus which half of the round trip failed, e.g.
+ * `"Http500 (push)"` / `"Http413 (push)"` / `"Http500 (pull)"`. Never includes the raw message,
+ * stack, URL, or response body. Not stored as sync state's diagnosticCode (that stays
+ * status-only via `getSyncDiagnosticCode`).
+ */
+export function describeSyncFailure(error: unknown): string {
+  const code = getSyncDiagnosticCode(error);
+  const op = getSyncOperation(error);
+  return op ? `${code} (${op})` : code;
 }
 
 /**
