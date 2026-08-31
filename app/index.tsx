@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { AccessibilityInfo, Alert, FlatList, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../src/auth/AuthService";
 import { onWorkspaceChanged } from "../src/auth/authSignal";
@@ -15,6 +15,7 @@ import { getHomeGreeting } from "../src/content/timeGreeting";
 import { sortDeckCollectionsCanonical } from "../src/domain/deckCollectionOrder";
 import { getAssignedDeckIds, getUnfiledDecks } from "../src/domain/deckCollectionMembership";
 import { sortDecksCanonical } from "../src/domain/deckOrder";
+import { mirrorIfRtl, useLayoutDirection } from "../src/i18n/direction";
 import { useTranslation } from "../src/i18n";
 import type { DeckRecord } from "../src/models/deck";
 import type { DeckCollectionRecord } from "../src/models/deckCollection";
@@ -24,6 +25,7 @@ import type { WorkspaceScope } from "../src/storage/workspaceScope";
 import { useTheme, type ThemeTokens } from "@/src/theme";
 import { AccountButton } from "../src/ui/AccountButton";
 import { Button } from "../src/ui/Button";
+import { Card } from "../src/ui/Card";
 import { DeckCard } from "../src/ui/DeckCard";
 import { DeckCollectionChip } from "../src/ui/DeckCollectionChip";
 import { showDeckActionsSheet } from "../src/ui/deckActionsSheet";
@@ -62,6 +64,7 @@ export default function DecksHome() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, spacing, typography } = useTheme();
+  const { direction, row } = useLayoutDirection();
   const [decks, setDecksState] = useState<DeckRecord[]>([]);
   const [collections, setCollections] = useState<DeckCollectionRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -274,6 +277,11 @@ export default function DecksHome() {
 
       <View style={[styles.secondaryRow, { gap: spacing.sm }]}>
         <SecondaryAction
+          icon="compass-outline"
+          label={t("home.discoverButton")}
+          onPress={() => router.push({ pathname: "/discover" as any })}
+        />
+        <SecondaryAction
           icon="library-outline"
           label={t("home.libraryButton")}
           onPress={() => router.push({ pathname: "/library" as any })}
@@ -285,6 +293,26 @@ export default function DecksHome() {
           onPress={() => router.push({ pathname: "/recently-deleted" as any })}
         />
       </View>
+
+      <Pressable
+        onPress={() => router.push({ pathname: "/discover" as any })}
+        accessibilityRole="button"
+        accessibilityLabel={t("home.discoverCardAccessibilityLabel")}
+        style={({ pressed }) => pressed && styles.pressed}
+      >
+        <Card style={{ gap: spacing.sm }}>
+          <View style={[styles.discoverCardHeader, row, { gap: spacing.sm }]}>
+            <View style={[styles.discoverIconWrap, { backgroundColor: colors.accentSubtle }]}>
+              <Ionicons name="compass-outline" size={22} color={colors.accent} />
+            </View>
+            <View style={styles.discoverCardText}>
+              <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("home.discoverCardTitle")}</Text>
+              <Text style={[typography.secondary, { color: colors.textSecondary }]}>{t("home.discoverCardBody")}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={mirrorIfRtl(direction)} />
+          </View>
+        </Card>
+      </Pressable>
 
       {isEmpty ? (
         <View style={styles.emptyFill}>
@@ -375,6 +403,10 @@ const styles = StyleSheet.create({
   syncLabel: {},
 
   secondaryRow: { flexDirection: "row", flexWrap: "wrap" },
+  discoverCardHeader: { flexDirection: "row", alignItems: "center" },
+  discoverIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  discoverCardText: { flex: 1 },
+  pressed: { opacity: 0.86 },
 
   emptyFill: { flex: 1, justifyContent: "center" },
 
