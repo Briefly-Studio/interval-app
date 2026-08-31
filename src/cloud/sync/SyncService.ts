@@ -15,8 +15,9 @@ import { getSourceCollections, setSourceCollections } from "../../storage/source
 import { getSyncCursor, setSyncCursor } from "../../storage/sync";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import { sameScope } from "../../storage/workspaceScope";
-import { getSyncDiagnosticCode, isSyncNetworkError, pullChanges, pushChanges } from "./http";
+import { describeSyncFailure, getSyncDiagnosticCode, isSyncNetworkError, pullChanges, pushChanges } from "./http";
 import { isLibraryMetadataCloudSyncEnabled } from "./libraryMetadataSyncCapability";
+import { ackCount, isAcked, parseAckList, partitionPushChanges, pushBatchesSequentially } from "./pushHelpers.mjs";
 import {
   getSyncState,
   markSyncNeedsAttention,
@@ -470,46 +471,74 @@ async function runSync(): Promise<void> {
 
   let hasRejectedRecords = false;
   if (outgoing.length > 0) {
-    const pushJson = await pushChanges(accessToken, { deviceId, changes: outgoing });
+    // The server bounds a single request to MAX_CHANGES_PER_PUSH; the client must never
+    // intentionally exceed that or sync deadlocks for any backlog over the cap (audit finding 1).
+    // Batches are pushed STRICTLY SEQUENTIALLY: each batch's acknowledgment is fully processed
+    // (markClean) before the next batch is sent, so a mid-run failure has unambiguous semantics —
+    // earlier batches' accepted records are already clean, this and every later batch stay dirty,
+    // and the thrown error propagates (stopping sync before pull, exactly as an un-chunked push
+    // failure always has). setPendingDirtyCount is recomputed on the failure path so the UI
+    // reflects the batches that did land.
+    const batches = partitionPushChanges(outgoing);
 
-    // Revalidate identity before applying any part of the response — if the workspace changed
-    // while the push request was in flight, this run's acknowledgment no longer belongs to the
-    // now-inactive scope. The captured `scope` variable still points at the original workspace's
-    // storage keys, so this is defense-in-depth (nothing would cross into the new workspace's
-    // keys either way) rather than the primary protection, but it keeps push and pull handled
-    // consistently and avoids doing pointless writes for a workspace nothing is looking at.
-    const scopeAfterPush = await AuthService.getActiveScope();
-    if (!sameScope(scopeAfterPush, scope)) {
-      console.warn("[sync] aborting markClean: active workspace changed mid-push");
-      return;
-    }
+    const applyBatch = async (batch: Change[]): Promise<"abort" | void> => {
+      const pushJson = await pushChanges(accessToken, { deviceId, changes: batch });
 
-    const accepted = Array.isArray(pushJson.accepted) ? pushJson.accepted : [];
-    const rejected = Array.isArray(pushJson.rejected) ? pushJson.rejected : [];
-    hasRejectedRecords = rejected.length > 0;
+      // Revalidate identity before applying any part of this batch's response — if the workspace
+      // changed while the request was in flight, this run's acknowledgment no longer belongs to
+      // the now-inactive scope. Defense-in-depth (the captured `scope` still points at the
+      // original workspace's storage keys either way).
+      const scopeAfterPush = await AuthService.getActiveScope();
+      if (!sameScope(scopeAfterPush, scope)) {
+        console.warn("[sync] aborting markClean: active workspace changed mid-push");
+        return "abort";
+      }
 
-    if (accepted.length > 0) {
-      const acceptedSet = new Set(accepted);
+      // accepted/rejected are [{entity,id}] — id alone is not unique across entity types (audit
+      // finding 2). parseAckList drops any element that isn't a well-formed {entity,id}.
+      const acceptedAck = parseAckList(pushJson.accepted);
+      const rejectedAck = parseAckList(pushJson.rejected);
+      if (ackCount(rejectedAck) > 0) hasRejectedRecords = true;
 
-      const acknowledgedFor = (entity: EntityType): AcknowledgedRevs => {
-        const revs: AcknowledgedRevs = new Map();
-        for (const c of outgoing) {
-          if (c.entity === entity && acceptedSet.has(c.id)) {
-            revs.set(c.id, toRev((c.record as { rev?: number }).rev));
+      if (ackCount(acceptedAck) > 0) {
+        const acknowledgedFor = (entity: EntityType): AcknowledgedRevs => {
+          const revs: AcknowledgedRevs = new Map();
+          for (const c of batch) {
+            if (c.entity === entity && isAcked(acceptedAck, entity, c.id)) {
+              revs.set(c.id, toRev((c.record as { rev?: number }).rev));
+            }
           }
-        }
-        return revs;
-      };
+          return revs;
+        };
 
-      await markClean(scope, "deck", acknowledgedFor("deck"));
-      await markClean(scope, "card", acknowledgedFor("card"));
-      await markClean(scope, "session", acknowledgedFor("session"));
-      // No capability check needed here: when Library metadata sync is disabled, collectDirty
-      // never included these entities in `outgoing`, so acknowledgedFor(...) is naturally empty
-      // and markClean's own `if (acknowledged.size === 0) return;` guard makes this a no-op.
-      await markClean(scope, "librarySource", acknowledgedFor("librarySource"));
-      await markClean(scope, "sourceCollection", acknowledgedFor("sourceCollection"));
+        await markClean(scope, "deck", acknowledgedFor("deck"));
+        await markClean(scope, "card", acknowledgedFor("card"));
+        await markClean(scope, "session", acknowledgedFor("session"));
+        // No capability check needed: when Library metadata sync is disabled, collectDirty never
+        // included these entities, so acknowledgedFor(...) is empty and markClean's own
+        // `if (acknowledged.size === 0) return;` guard makes this a no-op.
+        await markClean(scope, "librarySource", acknowledgedFor("librarySource"));
+        await markClean(scope, "sourceCollection", acknowledgedFor("sourceCollection"));
+      }
+    };
+
+    let abortedMidPush = false;
+    try {
+      const result = await pushBatchesSequentially(batches, applyBatch);
+      abortedMidPush = result.aborted;
+    } catch (pushErr) {
+      // A batch failed (HTTP/network). Earlier batches' markClean already persisted; this and
+      // later batches remain dirty (pushBatchesSequentially stopped without sending them).
+      // Refresh the pending count to reflect what actually landed, then let the ORIGINAL failure
+      // propagate — pull does not run.
+      try {
+        setPendingDirtyCount((await collectDirty(scope)).length);
+      } catch {
+        // never mask the real push failure
+      }
+      throw pushErr;
     }
+    if (abortedMidPush) return; // workspace changed mid-push — quiet stop, this run is done
   }
 
   // 2) PULL
@@ -560,9 +589,10 @@ async function runSync(): Promise<void> {
   // See invariant #15 in docs/sync-invariants.md.
   setPendingDirtyCount((await collectDirty(scope)).length);
 
-  // A non-empty PushResponse.rejected means the server explicitly refused some records — this
-  // must never read as "Synced". Rejected records were never added to markClean's id lists
-  // above, so they're already left dirty and will be retried on the next ordinary sync trigger
+  // A rejection in ANY push batch means the server explicitly refused some records — this must
+  // never read as "Synced". Rejected records were never added to markClean's lists above (their
+  // `(entity, id)` is absent from every batch's `accepted`), so they're already left dirty and
+  // will be retried on the next ordinary sync trigger
   // (there is no automatic retry loop here — only real events: app launch, workspace change,
   // reconnect, or a manual retry — so this cannot spiral into a retry storm). Only a fixed,
   // sanitized diagnostic code is recorded — never which records, why, or any response content.
@@ -603,10 +633,13 @@ export const SyncService = {
         // loss (see markSyncOffline below); a quiet console.log is enough there for debugging.
         if (isNetworkRelated) {
           markSyncOffline();
-          console.log("[sync] offline:", getSyncDiagnosticCode(err));
+          console.log("[sync] offline:", describeSyncFailure(err));
         } else {
+          // Stored diagnosticCode stays status-only and stable (getSyncDiagnosticCode); the
+          // console line additionally names which half of the round trip failed, so a future
+          // "Http500" is immediately triageable as push vs pull (see describeSyncFailure).
           markSyncNeedsAttention(getSyncDiagnosticCode(err));
-          console.error("SYNC FAILED:", getSyncDiagnosticCode(err));
+          console.error("SYNC FAILED:", describeSyncFailure(err));
         }
         throw err;
       })

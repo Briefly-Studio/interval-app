@@ -48,12 +48,18 @@ complexity.
    `user:<sub>` storage keys are structurally distinct (`scopedKey` prefixes `u.<sub>.`
    only for `user` scope); there is no code path that copies or migrates guest-scoped
    data into a signed-in scope.
-3. **Push and pull operations are safe to retry.** Push: the backend's Changes-table
-   append is a conditional put keyed by a deterministic `changeKey`
-   (`ts|deviceId|entity|id|op`), so a retried identical push is a no-op on that table;
-   the Records-table upsert is idempotent in effect (re-writing the same data changes
-   nothing observable). Pull: cursor only advances after `applyChanges` completes
-   without throwing, so an interrupted pull is safe to re-issue with the same cursor.
+3. **Push and pull operations are safe to retry.** Push (per record, backend): the
+   Records-table upsert runs first (idempotent in effect — a `rev >= stored.rev`
+   conditional, so re-writing the same data changes nothing observable); the Changes-table
+   append runs only if that succeeded and is a conditional put keyed by a deterministic
+   `changeKey` (`ts|deviceId|entity|id|op`), so a retried identical push finds the row
+   already present and treats that as a benign duplicate. A record is `accepted` only when
+   the snapshot is current AND the log row is present (fresh or duplicate); a real
+   Changes-table write failure after a successful snapshot update leaves the record
+   *unacknowledged* so the client retries (self-healing — see
+   `backend/lambdas/sync-push/lib.mjs`'s `decidePushOutcome`). Pull: cursor only advances
+   after `applyChanges` completes without throwing, so an interrupted pull is safe to
+   re-issue with the same cursor.
 4. **Duplicate changes do not create duplicate records.** All records are stored keyed
    by `id` in a `Map`, both in `applyChanges` (pull) and in the Records table (backend);
    applying the same change twice is a no-op the second time.
@@ -74,22 +80,31 @@ complexity.
    `missingDeck` routes through `getOrCreateRecoveryDeck`, never a silent restore into
    nothing.
 9. **A successfully acknowledged local revision becomes clean only when the
-   acknowledgment corresponds to that exact revision.** `markClean` now compares the
-   currently-stored record's `rev` against the `rev` that was actually included in the
-   push payload for that id, and only clears `dirty` on an exact match.
+   acknowledgment corresponds to that exact revision AND entity.** `markClean` compares the
+   currently-stored record's `rev` against the `rev` that was included in the push payload,
+   and only for records whose `(entity, id)` appears in the response's `accepted` list —
+   the response is `[{entity, id}]`, never bare ids, so `deck:123` being accepted can never
+   mark `card:123` clean (audit finding 2). Clears `dirty` only on an exact `(entity, id, rev)`
+   match.
 10. **A record modified again during an active sync remains dirty.** Direct consequence
     of #9: if the user edits a record again (bumping `rev`) after it was read into the
     outgoing push payload but before the push response is applied, the stored `rev` no
     longer matches the acknowledged `rev`, so `markClean` leaves it dirty and it is
     retried on the next sync.
-11. **Cursors never move backward.** The client only ever persists a cursor value taken
-    directly from a successful pull response, and only when non-empty; there is no
-    client-side cursor construction. The backend's Changes-table query is
-    `ScanIndexForward: true` against a monotonically-increasing `SK`, so cursor values
-    it hands out are themselves non-decreasing (verified from source only).
+11. **Cursors never move backward, and a pull always makes forward progress.** The client
+    only ever persists a cursor value taken directly from a successful pull response, and
+    only when non-empty; there is no client-side cursor construction. The backend derives
+    the next cursor from the last keyable row's `SK` (`C#<changeKey>`), which the DynamoDB
+    key schema guarantees is present — so a legacy row missing only the `changeKey`
+    *attribute* can no longer wedge a pull on the same page forever (audit finding 3). A row
+    that cannot be keyed at all is walked past (it was already returned in that page's
+    `changes`), never skipped ahead of. Query is `ScanIndexForward: true` against a
+    monotonically-increasing `SK`.
 12. **Failed or partial syncs do not discard unsent local changes.** Rejected and
-    not-yet-pushed records are never included in `markClean`'s id list; a thrown
-    error anywhere in `runSync` leaves all dirty flags exactly as they were.
+    not-yet-pushed records are never marked clean; a thrown error anywhere in `runSync`
+    leaves all dirty flags exactly as they were. With sequential push chunking, a batch
+    failure leaves earlier batches' accepted records clean and every record in the failed
+    and later batches dirty — the error then propagates and pull does not run.
 13. **Account switching cannot leak changes across workspaces.** `runSync` captures
     `scope` once at the start and re-checks the active scope (`sameScope`) before
     applying pulled changes and before marking push results clean; a mismatch aborts
@@ -103,9 +118,20 @@ complexity.
     arithmetic expression that could drift from reality when a rejected record is later
     superseded by a newer pulled change.
 16. **No sync path logs study content, profile data, tokens, raw errors, or payloads.**
-    Both client (`getSyncDiagnosticCode`) and backend (`console.log` sites in both
-    Lambdas) log only a fixed string or a stable, sanitized code — never a raw `Error`
-    object, response body, or record content.
+    Both client (`getSyncDiagnosticCode` / `describeSyncFailure`) and backend (`console.log`
+    sites in both Lambdas) log only fixed strings, stable sanitized codes, or non-content
+    counts/timings (`changes=N`, `accepted=N rejected=N elapsedMs=N`, error class names) —
+    never a raw `Error` object, response body, record content, or full Cognito `sub` (only
+    the existing 8-char redacted prefix).
+
+17. **A single push request is bounded, and the client chunks to stay inside that bound.**
+    `sync-push` rejects a request with more than `MAX_CHANGES_PER_PUSH` (500) changes with a
+    deterministic `413` rather than working toward the Lambda timeout. The client partitions
+    its dirty set into batches of `PUSH_BATCH_SIZE` (`src/cloud/sync/pushHelpers.mjs`, held
+    `<= MAX_CHANGES_PER_PUSH` by a parity test in `backend/lambdas/sync-push/lib.test.mjs`)
+    and pushes them strictly sequentially, so any backlog syncs incrementally instead of
+    deadlocking on the cap (audit finding 1). The 413 remains a defensive boundary for a
+    malformed/old/external client; nothing is ever dropped.
 
 ## Known limitation: same-millisecond changeKey ordering
 

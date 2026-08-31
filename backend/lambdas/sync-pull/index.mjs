@@ -1,48 +1,29 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 
+import { getUserSub, jsonResponse, nextCursorForPage, resolvePullLimit } from "./lib.mjs";
+
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const CHANGES_TABLE = process.env.CHANGES_TABLE;
 
-function getUserSub(event) {
-  const subV2 = event?.requestContext?.authorizer?.jwt?.claims?.sub;
-  if (typeof subV2 === "string" && subV2.length) return subV2;
-
-  const subV1 = event?.requestContext?.authorizer?.claims?.sub;
-  if (typeof subV1 === "string" && subV1.length) return subV1;
-
-  const subLoose = event?.requestContext?.authorizer?.sub;
-  if (typeof subLoose === "string" && subLoose.length) return subLoose;
-
-  return null;
-}
-
 export const handler = async (event) => {
+  const startedAt = Date.now();
+
   if (!CHANGES_TABLE) {
-    return {
-      statusCode: 500,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ok: false, error: "Missing env var: CHANGES_TABLE" }),
-    };
+    return jsonResponse(500, { ok: false, error: "Missing env var: CHANGES_TABLE" });
   }
 
   const sub = getUserSub(event);
-  if (!sub) {
-    return {
-      statusCode: 401,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: "Unauthorized" }),
-    };
-  }
+  if (!sub) return jsonResponse(401, { message: "Unauthorized" });
 
   const OWNER_PK = `U#${sub}`;
   console.log("[auth] sub:", sub.slice(0, 8) + "…");
 
   const qs = event.queryStringParameters || {};
-  const deviceId = qs.deviceId || null;
   const cursor = qs.cursor || null;
-  const limit = Math.min(Number(qs.limit || 200), 500);
+  const limit = resolvePullLimit(qs.limit);
+  console.log(`[sync-pull] start cursor=${cursor ? "present" : "none"} limit=${limit}`);
 
   const params = {
     TableName: CHANGES_TABLE,
@@ -69,24 +50,28 @@ export const handler = async (event) => {
       ts: it.ts,
     }));
 
-    const nextCursor = items.length
-      ? items[items.length - 1].changeKey
-      : cursor ?? "";
+    // Advance the cursor from the last KEYABLE row's SK (`C#<changeKey>`), which the DynamoDB key
+    // schema guarantees is present — so a row that is only missing the `changeKey` ATTRIBUTE no
+    // longer wedges the pull on the same page forever (audit finding 3). See
+    // lib.mjs's nextCursorForPage for the forward-progress reasoning.
+    const next = nextCursorForPage(items, cursor);
+    if (items.length > 0 && !next.advanced) {
+      console.log("[sync-pull] warning: no keyable row in page — cursor not advanced");
+    } else if (next.unkeyedTrailingRows) {
+      console.log(`[sync-pull] note: ${next.unkeyedTrailingRows} trailing row(s) had no usable key`);
+    }
 
-    return {
-      statusCode: 200,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        cursor: nextCursor,
-        changes,
-      }),
-    };
+    console.log(
+      `[sync-pull] complete returned=${changes.length} hasMore=${
+        items.length === limit
+      } advanced=${next.advanced} elapsedMs=${Date.now() - startedAt}`
+    );
+
+    return jsonResponse(200, { cursor: next.cursor, changes });
   } catch (e) {
-    console.log("[sync-pull] unhandled error:", e?.name || "UnknownError");
-    return {
-      statusCode: 500,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ok: false, error: "Unhandled server error" }),
-    };
+    console.log(
+      `[sync-pull] unhandled error: ${e?.name || "UnknownError"} elapsedMs=${Date.now() - startedAt}`
+    );
+    return jsonResponse(500, { ok: false, error: "Unhandled server error" });
   }
 };
