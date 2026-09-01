@@ -2,8 +2,8 @@ import Pdf from "react-native-pdf";
 import { Directory, File, Paths } from "expo-file-system";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, FlatList, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import {
@@ -16,6 +16,7 @@ import { prepareViewerInput } from "../../../src/domain/sourceViewer";
 import { chunkTextReaderContent, inspectTextReaderFile } from "../../../src/domain/sourceReaderText";
 import { readDocxArchive, type DocxMedia } from "../../../src/domain/sourceReaderDocx";
 import type { DocxBlock, DocxRun } from "../../../src/domain/docxContent";
+import { computeDocxTableLayout } from "../../../src/domain/docxTableLayout";
 import { resolveSourceReaderStrategy, type SourceReaderStrategy } from "../../../src/domain/sourceReader";
 import { useTranslation } from "../../../src/i18n";
 import { useLayoutDirection } from "../../../src/i18n/direction";
@@ -58,6 +59,32 @@ import { useTheme } from "@/src/theme";
 
 type ReaderStatus = "resolving" | "loading" | "ready" | "empty" | "too-large" | "unsupported" | "failed";
 type EmbeddedReaderKind = Exclude<SourceReaderStrategy["kind"], "unsupported">;
+
+// docxContent.ts emits every table row as its own top-level block. For rendering we re-group each
+// maximal run of consecutive rows into ONE "table" block so the whole table shares a single set
+// of column widths and a single horizontal-scroll offset (see the table branch of
+// `renderDocxBlock` and src/domain/docxTableLayout.ts). Non-table blocks pass through untouched
+// and stay individually FlatList-virtualized; only a table's own rows render together. That
+// grouping is bounded by docxContent.ts's `MAX_BLOCKS` document-wide ceiling — a document large
+// enough to make one un-virtualized table a problem is already rejected upstream as "too-large".
+type DocxRenderBlock = Exclude<DocxBlock, { kind: "tableRow" }> | { kind: "table"; rows: DocxRun[][][] };
+
+function coalesceDocxTableRows(blocks: DocxBlock[]): DocxRenderBlock[] {
+  const out: DocxRenderBlock[] = [];
+  for (const block of blocks) {
+    if (block.kind !== "tableRow") {
+      out.push(block);
+      continue;
+    }
+    const last = out[out.length - 1];
+    if (last && last.kind === "table") {
+      last.rows.push(block.cells);
+    } else {
+      out.push({ kind: "table", rows: [block.cells] });
+    }
+  }
+  return out;
+}
 
 const DOCX_MEDIA_DIR_NAME = "librarySourceReaderDocxMedia";
 const SAFE_MEDIA_EXTENSION = /^[a-z0-9]{1,10}$/;
@@ -168,6 +195,15 @@ export default function LibrarySourceReaderScreen() {
   const [stage, setStage] = useState<Exclude<OpenSourceStage, "opening">>("resolving");
   const [openingOriginal, setOpeningOriginal] = useState(false);
   const [pageLabel, setPageLabel] = useState<string | null>(null);
+  // Actual on-screen width of the DOCX list, captured on layout — the reference width the table
+  // renderer sizes columns against. Falls back to the window width until the first layout pass.
+  const [docxListWidth, setDocxListWidth] = useState(0);
+  const { width: windowWidth } = useWindowDimensions();
+
+  // Consecutive DOCX table rows are grouped into single table blocks; see `coalesceDocxTableRows`.
+  const docxRenderBlocks = useMemo(() => coalesceDocxTableRows(docxBlocks), [docxBlocks]);
+  // Width available to a table = the list's inner width minus the FlatList content padding.
+  const docxTableViewport = Math.max(0, (docxListWidth || windowWidth) - spacing.md * 2);
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -336,7 +372,7 @@ export default function LibrarySourceReaderScreen() {
   );
 
   const renderDocxBlock = useCallback(
-    ({ item }: { item: DocxBlock }) => {
+    ({ item }: { item: DocxRenderBlock }) => {
       if (item.kind === "heading") {
         const headingStyle = item.level === 1 ? typography.heading : item.level === 2 ? typography.subheading : typography.bodyMedium;
         return (
@@ -353,18 +389,46 @@ export default function LibrarySourceReaderScreen() {
           </View>
         );
       }
-      if (item.kind === "tableRow") {
-        return (
-          <View style={[styles.docxTableRow, row, { borderColor: colors.border }]}>
-            {item.cells.map((cellRuns, index) => (
-              <Text
-                key={index}
-                style={[typography.secondary, styles.docxTableCell, { color: colors.textPrimary, borderColor: colors.border }]}
-              >
-                {cellRuns.map((run) => run.text).join("")}
-              </Text>
+      if (item.kind === "table") {
+        // Column widths come from a single deterministic pass (docxTableLayout.ts): narrow tables
+        // fill the viewport evenly with no scroll; wide tables hold a readable minimum per column
+        // and become horizontally scrollable rather than squeezing every column to a sliver.
+        // `columnCount` is the widest row's cell count so shorter rows still align.
+        const columnCount = item.rows.reduce((max, cells) => Math.max(max, cells.length), 0);
+        const layout = computeDocxTableLayout(columnCount, docxTableViewport);
+        const columnIndexes = Array.from({ length: layout.columnCount }, (_, index) => index);
+        const grid = (
+          <View style={[styles.docxTable, { width: layout.tableWidth, borderColor: colors.border }]}>
+            {item.rows.map((cells, rowIndex) => (
+              // Columns render in document (parse) order — NOT `row`/chrome direction. The parser
+              // carries no Word table-direction metadata, and forcing document content to follow
+              // the UI locale (e.g. reversing an English table under Arabic chrome) is the same
+              // thing `renderTextChunk`/`renderDocxRuns` deliberately avoid. Chrome stays RTL.
+              <View key={rowIndex} style={styles.docxTableRow}>
+                {columnIndexes.map((colIndex) => (
+                  <View
+                    key={colIndex}
+                    style={[styles.docxTableCell, { width: layout.columnWidth, borderColor: colors.border }]}
+                  >
+                    {/* Real, wrapping text (no numberOfLines) — screen-reader accessible, never clipped. */}
+                    <Text style={[typography.secondary, { color: colors.textPrimary }]}>
+                      {(cells[colIndex] ?? []).map((run) => run.text).join("")}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             ))}
           </View>
+        );
+        if (!layout.scrollable) {
+          return <View style={styles.docxTableBlock}>{grid}</View>;
+        }
+        // A horizontal ScrollView nested in the vertical reader FlatList: orthogonal axes, so
+        // vertical reading is unaffected and the whole table moves as one under a horizontal swipe.
+        return (
+          <ScrollView horizontal style={styles.docxTableBlock} showsHorizontalScrollIndicator>
+            {grid}
+          </ScrollView>
         );
       }
       if (item.kind === "image") {
@@ -379,7 +443,7 @@ export default function LibrarySourceReaderScreen() {
         <Text style={[typography.body, styles.docxParagraph, { color: colors.textPrimary }]}>{renderDocxRuns(item.runs)}</Text>
       );
     },
-    [typography, colors, row, docxMediaUris, renderDocxRuns]
+    [typography, colors, row, docxMediaUris, renderDocxRuns, docxTableViewport]
   );
 
   return (
@@ -451,11 +515,12 @@ export default function LibrarySourceReaderScreen() {
               />
             ) : (
               <FlatList
-                data={docxBlocks}
+                data={docxRenderBlocks}
                 renderItem={renderDocxBlock}
                 keyExtractor={(_, index) => String(index)}
                 style={styles.textList}
                 contentContainerStyle={{ padding: spacing.md }}
+                onLayout={(event) => setDocxListWidth(event.nativeEvent.layout.width)}
                 initialNumToRender={12}
                 maxToRenderPerBatch={12}
                 windowSize={7}
@@ -527,8 +592,19 @@ const styles = StyleSheet.create({
   docxParagraph: { lineHeight: 23, marginBottom: 12 },
   docxListItem: { alignItems: "flex-start", marginBottom: 8 },
   docxListText: { flex: 1, lineHeight: 23 },
-  docxTableRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 6 },
-  docxTableCell: { flex: 1, paddingHorizontal: 4 },
+  // One table block: outer margin only. When the table is wider than the viewport this is the
+  // horizontal ScrollView's own style; otherwise it wraps the grid directly.
+  docxTableBlock: { marginBottom: 12 },
+  // The grid gets top+left borders; each cell adds right+bottom — together a full ruled table
+  // with a border on every side. Explicit `width` is applied inline from docxTableLayout.ts.
+  docxTable: { borderTopWidth: StyleSheet.hairlineWidth, borderLeftWidth: StyleSheet.hairlineWidth },
+  docxTableRow: { flexDirection: "row", alignItems: "stretch" },
+  docxTableCell: {
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
   docxImage: { width: "100%", height: 220, marginBottom: 12 },
   docxBold: { fontWeight: "700" },
   docxItalic: { fontStyle: "italic" },

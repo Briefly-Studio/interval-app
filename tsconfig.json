@@ -2,6 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // Lets a co-located `*.test.ts` import its subject with an explicit `.ts` extension, which is
+    // what `node --test` (Node's built-in, zero-dependency runner) requires. Safe here because
+    // the Expo base config is `noEmit` — TypeScript never rewrites these paths into a build.
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": [
         "./*"
