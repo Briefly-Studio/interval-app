@@ -720,6 +720,9 @@ const ko = {
       errorBody: "이 자료를 Interval 내에서 열 수 없습니다. 원본 열기는 계속 시도할 수 있습니다.",
       unsupportedTitle: "아직 이 자료를 열 수 없습니다",
       unsupportedBody: "이 파일 형식은 Interval에서 아직 지원되지 않습니다. 원본은 계속 열 수 있습니다.",
+      tooLargeTitle: "문서가 너무 큽니다",
+      tooLargeBody: "이 문서는 너무 커서 Interval 내에서 안전하게 열 수 없습니다. 원본은 계속 열 수 있습니다.",
+      emptyBody: "이 문서에는 읽을 수 있는 내용이 없습니다.",
     },
   },
   sourceCollections: {

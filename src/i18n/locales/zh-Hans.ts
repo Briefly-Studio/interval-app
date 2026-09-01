@@ -722,6 +722,9 @@ const zhHans = {
       errorBody: "此资料无法在 Interval 内打开。你仍可以尝试打开原始文件。",
       unsupportedTitle: "暂时无法打开此资料",
       unsupportedBody: "此文件类型在 Interval 中尚不支持。你仍可以打开原始文件。",
+      tooLargeTitle: "文档过大",
+      tooLargeBody: "此文档过大，无法在 Interval 内安全打开。你仍可以尝试打开原始文件。",
+      emptyBody: "此文档没有可读内容。",
     },
   },
   sourceCollections: {

@@ -741,6 +741,9 @@ const es = {
       errorBody: "Esta fuente no se pudo abrir dentro de Interval. Aún puedes intentar abrir el original.",
       unsupportedTitle: "Aún no se puede abrir esta fuente",
       unsupportedBody: "Este tipo de archivo aún no es compatible dentro de Interval. Aún puedes abrir el original.",
+      tooLargeTitle: "El documento es demasiado grande",
+      tooLargeBody: "Este documento es demasiado grande para abrirlo de forma segura dentro de Interval. Aún puedes intentar abrir el original.",
+      emptyBody: "Este documento no tiene contenido legible.",
     },
   },
   sourceCollections: {

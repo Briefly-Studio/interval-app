@@ -750,6 +750,9 @@ const ptBR = {
       errorBody: "Não foi possível abrir esta fonte dentro do Interval. Você ainda pode tentar abrir o original.",
       unsupportedTitle: "Ainda não é possível abrir esta fonte",
       unsupportedBody: "Este tipo de arquivo ainda não é compatível dentro do Interval. Você ainda pode abrir o original.",
+      tooLargeTitle: "O documento é grande demais",
+      tooLargeBody: "Este documento é grande demais para ser aberto com segurança dentro do Interval. Você ainda pode tentar abrir o original.",
+      emptyBody: "Este documento não tem conteúdo legível.",
     },
   },
   sourceCollections: {

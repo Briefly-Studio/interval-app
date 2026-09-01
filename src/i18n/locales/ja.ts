@@ -725,6 +725,9 @@ const ja = {
       errorBody: "このソースは Interval 内で開けませんでした。元のファイルを開くことはできます。",
       unsupportedTitle: "このソースはまだ開けません",
       unsupportedBody: "このファイル形式は Interval ではまだサポートされていません。元のファイルを開くことはできます。",
+      tooLargeTitle: "ドキュメントが大きすぎます",
+      tooLargeBody: "このドキュメントは大きすぎるため、Interval 内で安全に開くことができません。元のファイルを開くことはできます。",
+      emptyBody: "このドキュメントには読み取り可能な内容がありません。",
     },
   },
   sourceCollections: {
