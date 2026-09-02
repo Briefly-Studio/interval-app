@@ -25,15 +25,16 @@ import type { SourceType } from "../models/librarySource";
 // mimeType-matching rules, so this stays the single source of truth for "is this really a .docx".
 //
 // Extension points for future formats (documented here, not implemented): PPT/PPTX would resolve
-// to a `{ kind: "future-presentation" }` case, XLS/XLSX to `{ kind: "future-spreadsheet" }`, and
-// audio to `{ kind: "future-audio-player" }` — each its own reader.tsx renderer branch once
-// implemented, same shape as pdf/image/text/docx below. None of that is implemented in this
-// batch; `resolveSourceReaderStrategy` currently maps all of them to "unsupported" on purpose.
+// to a `{ kind: "future-presentation" }` case, and XLS/XLSX to `{ kind: "future-spreadsheet" }` —
+// each its own reader.tsx renderer branch once implemented, same shape as pdf/image/text/docx/audio
+// below. None of that is implemented in this batch; `resolveSourceReaderStrategy` currently maps
+// all of them to "unsupported" on purpose.
 export type SourceReaderStrategy =
   | { kind: "pdf-reader" }
   | { kind: "image-reader" }
   | { kind: "text-reader" }
   | { kind: "docx-reader" }
+  | { kind: "audio-player" }
   | { kind: "unsupported" };
 
 export function resolveSourceReaderStrategy(source: { sourceType: SourceType; mimeType?: string }): SourceReaderStrategy {
@@ -41,6 +42,7 @@ export function resolveSourceReaderStrategy(source: { sourceType: SourceType; mi
   if (source.sourceType === "image") return { kind: "image-reader" };
   if (source.sourceType === "text") return { kind: "text-reader" };
   if (source.sourceType === "docx" && resolveSourceHandoffHint(source).extension === "docx") return { kind: "docx-reader" };
+  if (source.sourceType === "audio") return { kind: "audio-player" };
   return { kind: "unsupported" };
 }
 

@@ -1,9 +1,21 @@
 import Pdf from "react-native-pdf";
+import { Ionicons } from "@expo/vector-icons";
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Directory, File, Paths } from "expo-file-system";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type GestureResponderEvent,
+} from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
 import {
@@ -13,6 +25,14 @@ import {
   type OpenSourceStage,
 } from "../../../src/cloud/librarySourceStorage/openSource";
 import { prepareViewerInput } from "../../../src/domain/sourceViewer";
+import {
+  AUDIO_PLAYBACK_RATES,
+  clampPlaybackPosition,
+  formatPlaybackTime,
+  isPlaybackComplete,
+  playbackProgress,
+  type AudioPlaybackRate,
+} from "../../../src/domain/sourceAudioPlayer";
 import { chunkTextReaderContent, inspectTextReaderFile } from "../../../src/domain/sourceReaderText";
 import { readDocxArchive, type DocxMedia } from "../../../src/domain/sourceReaderDocx";
 import type { DocxBlock, DocxRun } from "../../../src/domain/docxContent";
@@ -48,6 +68,11 @@ import { useTheme } from "@/src/theme";
 // Text: see src/domain/sourceReaderText.ts's header comment for the exact, honestly-documented
 // large-file strategy (whole-file read, chunked + FlatList-virtualized render — not a streaming
 // or ranged read).
+//
+// Audio: uses expo-audio's native AudioPlayer against a local file URI. The route still uses the
+// same local-first/cloud-fallback resolver as every other Reader/Open Original path, but current
+// backend upload allow-lists intentionally do not accept audio originals, so cross-device audio
+// playback remains limited until that separately gated backend contract changes.
 //
 // DOCX: see src/domain/sourceReaderDocx.ts and src/domain/docxContent.ts for the full parsing
 // and security model. Rendering here follows the same block-level-not-per-word discipline as the
@@ -149,6 +174,258 @@ function inspectLocalFile(uri: string): { exists: boolean; size?: number } {
     logSourceReader("file inspect failed", { error: safeErrorDetail(error) });
     return { exists: false };
   }
+}
+
+function AudioPlayerView({
+  uri,
+  title,
+  onFailed,
+}: {
+  uri: string;
+  title: string;
+  onFailed: (error: unknown) => void;
+}) {
+  const { t } = useTranslation();
+  const { colors, iconSizes, radii, spacing, typography, touchTarget } = useTheme();
+  const { row, text } = useLayoutDirection();
+  const player = useAudioPlayer(uri, { updateInterval: 250 });
+  const audioStatus = useAudioPlayerStatus(player);
+  const [speed, setSpeed] = useState<AudioPlaybackRate>(1);
+  const [trackWidth, setTrackWidth] = useState(0);
+
+  const duration = Number.isFinite(audioStatus.duration) && audioStatus.duration > 0 ? audioStatus.duration : 0;
+  const currentTime = clampPlaybackPosition(audioStatus.currentTime, duration);
+  const complete = isPlaybackComplete(audioStatus);
+  const progress = playbackProgress(currentTime, duration);
+  const canSeek = audioStatus.isLoaded && duration > 0;
+  const stateLabel = audioStatus.isBuffering
+    ? t("librarySource.reader.audioBuffering")
+    : complete
+      ? t("librarySource.reader.audioEnded")
+      : audioStatus.playing
+        ? t("librarySource.reader.audioPlaying")
+        : audioStatus.isLoaded
+          ? t("librarySource.reader.audioPaused")
+          : t("librarySource.reader.loadingAudio");
+
+  useEffect(() => {
+    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false }).catch((error) => {
+      logSourceReader("audio mode setup failed", { error: safeErrorDetail(error) });
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      try {
+        player.pause();
+        player.clearLockScreenControls();
+      } catch {
+        // Best-effort cleanup; useAudioPlayer releases the native player when this component
+        // unmounts, so a cleanup exception here is not actionable for the user.
+      }
+    };
+  }, [player]);
+
+  const seekTo = useCallback(
+    async (seconds: number) => {
+      if (!canSeek) return;
+      try {
+        await player.seekTo(clampPlaybackPosition(seconds, duration));
+      } catch (error) {
+        logSourceReader("audio seek failed", { error: safeErrorDetail(error) });
+        onFailed(error);
+      }
+    },
+    [canSeek, duration, onFailed, player]
+  );
+
+  const seekFromEvent = useCallback(
+    (event: GestureResponderEvent) => {
+      if (!canSeek || trackWidth <= 0) return;
+      const pct = Math.max(0, Math.min(1, event.nativeEvent.locationX / trackWidth));
+      seekTo(pct * duration);
+    },
+    [canSeek, duration, seekTo, trackWidth]
+  );
+
+  const onPlayPause = async () => {
+    if (!audioStatus.isLoaded) return;
+    try {
+      if (complete) {
+        await player.seekTo(0);
+        player.play();
+        return;
+      }
+      if (audioStatus.playing) {
+        player.pause();
+      } else {
+        player.play();
+      }
+    } catch (error) {
+      logSourceReader("audio play/pause failed", { error: safeErrorDetail(error) });
+      onFailed(error);
+    }
+  };
+
+  const onSpeed = (nextSpeed: AudioPlaybackRate) => {
+    try {
+      player.setPlaybackRate(nextSpeed);
+      setSpeed(nextSpeed);
+    } catch (error) {
+      logSourceReader("audio rate failed", { error: safeErrorDetail(error) });
+      onFailed(error);
+    }
+  };
+
+  const timeLabel = useMemo(
+    () => `${formatPlaybackTime(currentTime)} / ${duration > 0 ? formatPlaybackTime(duration) : "--:--"}`,
+    [currentTime, duration]
+  );
+
+  return (
+    <View style={[styles.audioPanel, { gap: spacing.lg, padding: spacing.lg }]}>
+      <View style={[styles.audioArtwork, { borderRadius: radii.lg, backgroundColor: colors.accentSubtle }]}>
+        <Ionicons name="musical-notes" size={48} color={colors.accent} importantForAccessibility="no" />
+      </View>
+
+      <View style={{ gap: spacing.xs }}>
+        <Text style={[typography.subheading, text, { color: colors.textPrimary }]} numberOfLines={2}>
+          {title}
+        </Text>
+        <Text style={[typography.caption, text, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">
+          {stateLabel}
+        </Text>
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <View
+          style={[styles.progressTrack, { borderRadius: radii.pill, backgroundColor: colors.surfaceMuted }]}
+          onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => canSeek}
+          onResponderGrant={seekFromEvent}
+          onResponderMove={seekFromEvent}
+          accessibilityRole="adjustable"
+          accessibilityLabel={t("librarySource.reader.seekLabel")}
+          accessibilityValue={{
+            min: 0,
+            max: Math.max(0, Math.round(duration)),
+            now: Math.round(currentTime),
+            text: timeLabel,
+          }}
+          accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+          onAccessibilityAction={(event) => {
+            const delta = event.nativeEvent.actionName === "increment" ? 15 : -15;
+            seekTo(currentTime + delta);
+          }}
+        >
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${progress * 100}%`, borderRadius: radii.pill, backgroundColor: colors.accent },
+            ]}
+          />
+        </View>
+        <View style={styles.mediaTimeRow}>
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>{formatPlaybackTime(currentTime)}</Text>
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>{duration > 0 ? formatPlaybackTime(duration) : "--:--"}</Text>
+        </View>
+      </View>
+
+      <View style={[styles.transportRow, row, { gap: spacing.md }]}>
+        <Pressable
+          onPress={() => seekTo(currentTime - 15)}
+          disabled={!canSeek}
+          accessibilityRole="button"
+          accessibilityLabel={t("librarySource.reader.seekBackwardLabel")}
+          style={({ pressed }) => [
+            styles.transportButton,
+            { width: touchTarget.min, height: touchTarget.min, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted },
+            pressed && styles.pressed,
+            !canSeek && styles.disabled,
+          ]}
+        >
+          <Ionicons name="play-back" size={iconSizes.md} color={colors.textPrimary} />
+        </Pressable>
+
+        <Pressable
+          onPress={onPlayPause}
+          disabled={!audioStatus.isLoaded}
+          accessibilityRole="button"
+          accessibilityLabel={
+            complete
+              ? t("librarySource.reader.replayAudio")
+              : audioStatus.playing
+                ? t("librarySource.reader.pauseAudio")
+                : t("librarySource.reader.playAudio")
+          }
+          style={({ pressed }) => [
+            styles.playButton,
+            { width: 72, height: 72, borderRadius: radii.pill, backgroundColor: colors.accent },
+            pressed && styles.pressed,
+            !audioStatus.isLoaded && styles.disabled,
+          ]}
+        >
+          <Ionicons
+            name={complete ? "refresh" : audioStatus.playing ? "pause" : "play"}
+            size={32}
+            color={colors.onAccent}
+            style={!audioStatus.playing && !complete ? styles.playIconNudge : undefined}
+          />
+        </Pressable>
+
+        <Pressable
+          onPress={() => seekTo(currentTime + 15)}
+          disabled={!canSeek}
+          accessibilityRole="button"
+          accessibilityLabel={t("librarySource.reader.seekForwardLabel")}
+          style={({ pressed }) => [
+            styles.transportButton,
+            { width: touchTarget.min, height: touchTarget.min, borderRadius: radii.pill, backgroundColor: colors.surfaceMuted },
+            pressed && styles.pressed,
+            !canSeek && styles.disabled,
+          ]}
+        >
+          <Ionicons name="play-forward" size={iconSizes.md} color={colors.textPrimary} />
+        </Pressable>
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+          {t("librarySource.reader.playbackSpeed")}
+        </Text>
+        <View style={[styles.speedRow, row, { gap: spacing.xs }]}>
+          {AUDIO_PLAYBACK_RATES.map((rate) => {
+            const selected = speed === rate;
+            return (
+              <Pressable
+                key={rate}
+                onPress={() => onSpeed(rate)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={t("librarySource.reader.playbackSpeedOption", { speed: rate })}
+                style={({ pressed }) => [
+                  styles.speedButton,
+                  {
+                    minHeight: touchTarget.min,
+                    borderRadius: radii.pill,
+                    borderColor: selected ? colors.accent : colors.border,
+                    backgroundColor: selected ? colors.accentSubtle : colors.surface,
+                    paddingHorizontal: spacing.md,
+                  },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[typography.label, { color: selected ? colors.accent : colors.textPrimary }]}>
+                  {rate}x
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
 }
 
 function openFailedBodyKey(reason: OpenSourceErrorReason): string {
@@ -498,6 +775,15 @@ export default function LibrarySourceReaderScreen() {
                   setStatus("failed");
                 }}
               />
+            ) : readerKind === "audio-player" ? (
+              <AudioPlayerView
+                uri={readerUri}
+                title={source?.displayTitle ?? t("librarySource.reader.audioScreenLabel")}
+                onFailed={(error) => {
+                  logSourceReader("audio playback failed", { error: safeErrorDetail(error) });
+                  setStatus("failed");
+                }}
+              />
             ) : readerKind === "text-reader" ? (
               <FlatList
                 data={textChunks}
@@ -588,6 +874,19 @@ const styles = StyleSheet.create({
   image: { flex: 1, width: "100%", height: "100%" },
   textList: { flex: 1 },
   readerText: { lineHeight: 23 },
+  audioPanel: { flex: 1, justifyContent: "center" },
+  audioArtwork: { alignSelf: "center", width: 128, height: 128, alignItems: "center", justifyContent: "center" },
+  progressTrack: { height: 12, overflow: "hidden", direction: "ltr" },
+  progressFill: { height: "100%" },
+  mediaTimeRow: { flexDirection: "row", justifyContent: "space-between" },
+  transportRow: { alignItems: "center", justifyContent: "center" },
+  transportButton: { alignItems: "center", justifyContent: "center" },
+  playButton: { alignItems: "center", justifyContent: "center" },
+  playIconNudge: { marginLeft: 3 },
+  speedRow: { flexWrap: "wrap" },
+  speedButton: { alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  pressed: { opacity: 0.84 },
+  disabled: { opacity: 0.45 },
   docxHeading: { marginBottom: 4, marginTop: 12 },
   docxParagraph: { lineHeight: 23, marginBottom: 12 },
   docxListItem: { alignItems: "flex-start", marginBottom: 8 },
