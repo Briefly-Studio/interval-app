@@ -320,11 +320,16 @@ reach that same environment's own two tables.
 ## Lambda packaging
 
 `interval-dev-sync-push` / `interval-dev-sync-pull` package
-`backend/lambdas/sync-push/index.mjs` and `sync-pull/index.mjs` **directly and unmodified** —
-`lambda.Code.fromAsset(...)` points straight at those directories; no backend logic was rewritten,
-no `node_modules` bundled (both files import only `@aws-sdk/client-dynamodb`/`@aws-sdk/lib-dynamodb`, which the `nodejs24.x` Lambda runtime provides built in, exactly as Production runs
-today). Runtime `nodejs24.x`, architecture `arm64`, memory 128 MB, timeout 3 seconds — matching
-Production's live-confirmed configuration exactly (`docs/aws-current-state-audit.md`).
+`backend/lambdas/sync-push/` and `sync-pull/` (`lambda.Code.fromAsset(...)` points straight at
+those directories, `*.test.mjs` excluded from the package); no `node_modules` bundled (the files
+import only `@aws-sdk/client-dynamodb`/`@aws-sdk/lib-dynamodb`, which the `nodejs24.x` Lambda
+runtime provides built in, exactly as Production runs today). Runtime `nodejs24.x`, architecture
+`arm64`.
+
+**Memory 256 MB, timeout 15 seconds** (both sync Lambdas, Development and Staging). Raised from
+the original 128 MB / 3 s — which matched Production's live config — after a confirmed
+Development incident: see "Sync Lambda sizing incident (2026-08)" below. The presigned-URL
+Lambda (`interval-*-library-source-storage`) is unaffected and stays at 128 MB / 3 s.
 
 Environment variables:
 - `interval-dev-sync-push`: `RECORDS_TABLE=interval-dev-records`, `CHANGES_TABLE=interval-dev-changes`
@@ -337,6 +342,63 @@ Environment variables:
 only difference from Development is which table names get injected as environment variables. No
 Production table name, API ID, or Cognito identifier appears in any function's environment or
 anywhere else in this project.
+
+## Sync Lambda sizing incident (2026-08)
+
+**Observed:** Development sync began failing with `SYNC FAILED: Http500`, reproduced on canonical
+`v3.1-dev` (so independent of any feature branch). A read-only CloudShell/CloudWatch
+investigation found `interval-dev-sync-push` terminating at **exactly 3000 ms on every
+invocation** — warm invocations too, not just the one observed cold start (`Init Duration
+~330 ms`) — with API Gateway then returning 500 and the client mapping that to `Http500`. The
+DynamoDB tables were healthy (`ACTIVE`, ~100 items each); the pull Lambda's log group had no
+entries during the failures, confirming push fails first and the client never reaches pull.
+
+**Root cause:** the original `128 MB / 3 s` sizing (copied from Production's live config) left no
+operational margin. 128 MB is ~1/12th of a vCPU, and the push handler did two DynamoDB network
+round trips per dirty record, **sequentially** across records, with cold-start and AWS-SDK
+retry/backoff on top.
+
+**Fix (code + CDK only; deployment founder-gated):**
+- Both sync Lambdas → **256 MB / 15 s** (`infra/lib/interval-sync-stack.ts`). Not Lambda's
+  maximum — enough headroom for a bounded push, still well inside API Gateway's 29 s ceiling.
+- `sync-push` now processes records with **bounded concurrency** (`PUSH_CONCURRENCY = 10`,
+  `backend/lambdas/sync-push/lib.mjs`) instead of one-at-a-time. Records in a push are
+  independent (distinct sort keys; the client never emits two changes for one id per push), so
+  this preserves every conflict/idempotency invariant while cutting wall-clock.
+- `sync-push` caps changes per request (`MAX_CHANGES_PER_PUSH = 500`) → a deterministic **413**
+  instead of a slow timeout for an absurd payload; nothing is dropped.
+- Structured start/complete diagnostic logs on both handlers (`changes=…`, `accepted=…
+  rejected=… elapsedMs=…`) — no record content.
+- Client logs now distinguish push vs pull (`SYNC FAILED: Http500 (push)`); the stored
+  diagnostic code stays status-only.
+
+**Follow-up (independent audit of the fix):**
+- **Client chunks its push** — `SyncService` partitions the dirty set into batches of
+  `PUSH_BATCH_SIZE` (`src/cloud/sync/pushHelpers.mjs`, kept `<= MAX_CHANGES_PER_PUSH` by a parity
+  test) and pushes them **strictly sequentially**, processing each batch's acknowledgment before
+  the next. Without this, any backlog over 500 hit the server's 413 forever. Batch failure
+  semantics: earlier batches' accepted records are already clean, this and every later batch stay
+  dirty, the error propagates (sync stops before pull).
+- **Acknowledgement identity is `{entity, id}`, not `id`** — the push response `accepted` /
+  `rejected` arrays are now `[{entity, id}]` (rejected also carries a non-content `reason`). An
+  `id` alone is not unique across entity types, so `deck:123` accepted + `card:123` rejected no
+  longer risks marking the wrong record clean.
+- **Pull cursor derives from the row `SK`** (`C#<changeKey>`), which the key schema guarantees is
+  present — a row missing only the `changeKey` *attribute* no longer wedges the pull on one page.
+- Focused `node --test` coverage extended: client push partitioning (0/1/499/500/501/1000/1200),
+  client↔server limit parity, cross-entity acknowledgement, pull cursor fallback cases.
+
+**Incident rollback ≠ `cdk destroy`.** If a redeployed sync Lambda revision misbehaves, roll back
+by **redeploying the previous good revision**, not by destroying the stack (which would delete
+Development's Cognito accounts and DynamoDB data — see "Rollback / removal" below for the exact
+distinction). Concretely: `git checkout <prev-good-commit> -- infra backend/lambdas` (or check out
+the prior commit), `cd infra && npm ci && npm run build`, `npx cdk diff IntervalDevelopmentStack`
+(expect only the two sync Lambdas reverting), `npx cdk deploy IntervalDevelopmentStack`. This is
+an in-place function config + code update; nothing else changes.
+
+Production is not CDK-managed and was **not** touched. Whether Production's own `128 MB / 3 s`
+sync Lambdas warrant the same change is a separate, founder-gated question (its traffic/data
+shape differs and the 2026-08-08 audit saw no timeout evidence there).
 
 ## API Gateway / JWT authorization
 
@@ -559,15 +621,27 @@ throughout.
 
 ## Rollback / removal
 
-**Development** — `interval-dev-*` resources are fully disposable by design (`DESTROY` removal
-policy throughout — see "DynamoDB" and "Cognito" above):
+Two different operations — do not conflate them:
+
+**Reverting a bad deploy (incident rollback).** To undo a specific `cdk deploy` that regressed
+something (e.g. the sync Lambda sizing incident above), **redeploy the previous good revision** —
+never `cdk destroy`. Check out the prior commit (or `git checkout <prev> -- infra backend/lambdas`),
+`cd infra && npm ci && npm run build`, review `npx cdk diff IntervalDevelopmentStack` (it should
+show only the resources you changed reverting — for a Lambda change, just `Code` / `MemorySize` /
+`Timeout`), then `npx cdk deploy IntervalDevelopmentStack`. This is an in-place update: DynamoDB
+tables, the Cognito pool, the S3 bucket, IAM roles, and API Gateway are untouched, and
+Development's test accounts and synced data are preserved.
+
+**Decommissioning the whole environment.** `interval-dev-*` resources are disposable by design
+(`DESTROY` removal policy throughout — see "DynamoDB" and "Cognito" above), so a full teardown is:
 
 ```bash
 npx cdk destroy IntervalDevelopmentStack
 ```
 
-This deletes the 8 named Development resources, including their data, and their CDK/
-CloudFormation support constructs.
+This deletes the 8 named Development resources, **including all their data and every Development
+Cognito account** — it is a teardown, not a rollback. Only use it when the intent really is "this
+environment should stop existing", never as a response to a bad deploy.
 
 **Staging** — `interval-staging-*` DynamoDB tables, the Cognito user pool, and the Library source
 bucket all use `RETAIN` (see "Staging removal/deletion policy" above), so `cdk destroy

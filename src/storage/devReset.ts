@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SyncService } from "../cloud/sync/SyncService";
 import { deleteCardsForDeck } from "./cards";
+import { resetDiscoverProgress } from "./discover";
 import { getDecksAll } from "./decks";
 import { cursorKey, decksKey, sessionsKey } from "./keys";
 import type { WorkspaceScope } from "./workspaceScope";
@@ -11,6 +12,7 @@ async function wipeScope(scope: WorkspaceScope): Promise<void> {
   await AsyncStorage.removeItem(cursorKey(scope));
   await AsyncStorage.removeItem(decksKey(scope));
   await AsyncStorage.removeItem(sessionsKey(scope));
+  await resetDiscoverProgress(scope);
 }
 
 export async function resetLocalData(scope: WorkspaceScope): Promise<void> {
