@@ -30,8 +30,11 @@ integration wave is complete; **active integration and stabilization is now on `
 completed feature wave: source normalization foundation, sync reliability hardening, the AI
 Generation Foundation, Generate Study Deck (mock provider), the Discover Preview Foundation, the
 native DOCX reader, and the native Audio source player — see "v3.2 integrated features" below and
-`docs/branch-and-release-policy.md` for the full policy. The automated v3.2 stabilization audit
-passed; founder full-app canonical QA is still pending.
+`docs/branch-and-release-policy.md` for the full policy. **v3.2 feature intake is frozen** at
+`b460271` (see `docs/v3-beta-release-checklist.md`'s "v3.2 stabilization status"): the automated
+stabilization audit passed and founder canonical full-app QA passed on a Development build. The
+Staging RC has not started — it needs one founder-gated `cdk deploy IntervalStagingStack` (the
+`ea61356` sync-Lambda hardening) first. Production remains not approved.
 
 ### Legacy Briefly identifiers
 
@@ -583,10 +586,14 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   real model provider, selecting/deploying an AI backend, and defining prompt/rate/cost/abuse
   handling is a separate, founder-gated body of work. The mobile client must never hold a
   provider secret.
-- **Discover Production exposure is an unresolved founder decision.** Discover has no
-  `INTERVAL_ENV` gate, so a Production build shows it. It is fixture/local-only with no backend
-  and no cost, so this is not unsafe — but it is a product call the founder has not yet made.
-  Do not add a gate or decide this autonomously.
+- **Discover Production exposure — founder-decided for v3.2: Discover stays visible in
+  Production.** It has no `INTERVAL_ENV` gate by design — fixture/local-only, no backend, no
+  provider call, no cost, bounded, localized chrome, English fixture lesson content accepted for
+  this beta, Generate-from-Discover disabled. **Do not add a Production gate.** Future AI-backed
+  Discover (authenticated backend, provider-backed content generation, user locale passed as
+  generation context, content-language metadata on the response, no provider secret on mobile) is
+  separate later work. See `docs/discover-preview-foundation.md` and
+  `docs/v3-beta-release-checklist.md`.
 - **Discover progress and Deck Collections do not sync across devices.** Both are local-only in
   every environment (unlike Library metadata, which syncs in Development/Staging). Same device is
   consistent; a second device signed into the same account does not see the same Discover

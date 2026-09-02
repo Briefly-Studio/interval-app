@@ -18,7 +18,14 @@ capabilities" immediately below.
 
 ## v3.2 stabilization status
 
-Reconciled against canonical `v3.2-dev` `bc255e48bb73c4424066170e6beede848b315144`.
+**v3.2 FEATURE FREEZE — effective at canonical `v3.2-dev`
+`b460271df1eaa09ac339d6b137b37c51d838d9e2`.** From this point until Staging RC sign-off, only
+release blockers, safety/security fixes, broken-flow fixes, release/config corrections,
+documentation, and Staging-specific environment preparation are in scope. No feature expansion,
+UX redesign, new providers, new source formats, or Discover/AI feature expansion.
+
+The automated stabilization audit was reconciled against `bc255e48…` (the merge immediately
+before this docs commit; `b460271` adds only documentation on top of it — no code change).
 
 - **Automated v3.2 stabilization audit — [x] PASSED.** `git diff --check` clean; `npx tsc
   --noEmit` clean; `npm run lint` clean; `npm run test:sync` 39/39; `npm run test:ai` 20/20;
@@ -26,22 +33,30 @@ Reconciled against canonical `v3.2-dev` `bc255e48bb73c4424066170e6beede848b31514
   clean; `npx expo-doctor` 17/18 (known patch-drift baseline — 7 packages). No product-behavior
   release blocker identified. No secrets, no AI provider key on mobile, no token/claims/source
   content logging.
-- **Documentation reconciliation — [x] this document / mission** (`docs: reconcile repository
-  with v3.2`).
-- **Founder full-app canonical QA — [ ] PENDING / in progress.** The stabilization audit
-  produced a ~30-item full-app QA matrix; the founder has not yet completed a combined pass on
-  `v3.2-dev`. Do not mark this `[x]` on tooling evidence.
-- **Staging release candidate — [ ] not started.**
+- **Documentation reconciliation — [x] complete** (`docs: reconcile repository with v3.2`,
+  `docs: freeze v3.2 release boundary`).
+- **Founder canonical full-app QA — [x] PASSED (Development build).** Founder canonical full-app
+  QA passed for the integrated v3.2 Development build. Expected preview boundaries were observed:
+  Generate remains `[MOCK]` / TXT-only, Discover uses localized chrome with English fixture
+  lesson content, unsupported video remains "Open original". This is a Development-build pass; it
+  does not imply a Staging or Production pass.
+- **Staging release candidate — [ ] not started.** One founder-gated AWS deploy is a prerequisite
+  (`npx cdk deploy IntervalStagingStack` for the `ea61356` sync-Lambda hardening) — see "v3.2
+  Staging RC plan" below.
 - **Production release — [ ] not approved.** Production remains grandfathered; none of the v3.2
-  features have been widened to Production.
+  features have been widened to Production. Production's own sync Lambdas remain `128 MB / 3 s`
+  (a separate, founder-gated question, out of v3.2 scope).
 
-### Unresolved v3.2 release decision
+### v3.2 release decision — Discover Production exposure — RESOLVED
 
-- [ ] **Discover Production exposure.** Discover has no `INTERVAL_ENV` gate and is visible in a
-  Production build. It is fixture/local-only with no backend and no cost, so this is not unsafe,
-  but whether Discover should ship visible in Production is a **founder product decision that is
-  still pending**. Either add a gate or explicitly accept Production exposure before a Production
-  release.
+- [x] **Discover will remain visible in Production for v3.2.** Founder decision: Discover is
+  fixture/local-only, makes no AI provider call, has no backend content service, incurs no
+  runtime provider cost, is a bounded experience with localized chrome, English fixture lesson
+  content is accepted for this beta boundary, and Generate-from-Discover stays disabled. **Do not
+  add a Production gate.** Future AI-backed Discover is a separate, later effort: authenticated
+  backend, provider-backed content generation, user app-language/locale passed as generation
+  context, generated content returned in the requested language with explicit content-language
+  metadata, mobile never holding provider secrets.
 
 ---
 
@@ -53,12 +68,148 @@ Each reconciled onto canonical and integrated via its own `--no-ff` merge. No AW
 | Capability | Maturity | Environment exposure | Cloud/backend | Automated tests |
 |---|---|---|---|---|
 | Source normalization foundation | Implemented | all (domain layer) | none | (covered under `test:ai` context prep) |
-| Sync reliability hardening | Implemented, Development founder-QA verified | Dev/Staging Lambdas 256 MB / 15 s; Production still 128 MB / 3 s (founder-gated) | existing sync backend | `test:sync` — 39 |
-| AI Generation Foundation | Implemented — **mock provider only** | all (mock) | reference Lambda exists, **not deployed** | `test:ai` — 20 |
+| Sync reliability hardening (`ea61356`) | Code + CDK on canonical; **deployed + founder-QA verified on Development**; **Staging redeploy not confirmed from the repo** (see "v3.2 Staging RC plan") | client hardening ships in every build; server hardening needs a Staging deploy | existing sync backend (Lambda config + code only) | `test:sync` — 39 |
+| AI Generation Foundation | Implemented — **mock provider only** | all (mock) | reference Lambda exists in repo, **not in the CDK stack, not deployed** — do not deploy it | `test:ai` — 20 |
 | Generate Study Deck | Implemented, founder-QA verified — `[MOCK]` output | **Development/Staging only; hidden in Production** | none | (domain-covered) |
 | Discover Preview | Implemented, founder-QA verified | **currently ungated — visible in Production** (decision pending) | none | none |
 | DOCX reader | Implemented, founder-QA verified (native build) | all (local) | none | `test:docx` — 11 |
 | Audio source player | Implemented, founder native-runtime QA verified | all (local) | none — `audio` `uploadSupported: false` | none (pure helpers testable — future `test:audio`) |
+
+---
+
+## v3.2 Staging RC plan
+
+### AWS delta — what a v3.2 Staging RC needs
+
+**Client-only, no AWS change:** Discover, DOCX reader, Audio player, and the mock Generate UX are
+100% client-side. The AI reference Lambda (`backend/lambdas/ai-generate-study-deck/`) is **not**
+in the CDK stack (`infra/lib/interval-sync-stack.ts` only packages `sync-push`, `sync-pull`,
+`library-source-storage`) and must **not** be deployed — deploying it would create a fake
+provider-backed capability that does not exist.
+
+**One founder-gated AWS deploy is required — the sync-Lambda hardening (`ea61356`):**
+
+- `infra/lib/interval-sync-stack.ts` now sizes both sync Lambdas at **256 MB / 15 s** (up from
+  `128 MB / 3 s`) and excludes `*.test.mjs` from the Lambda asset; `backend/lambdas/sync-push/`
+  and `sync-pull/` were restructured (bounded concurrency, `MAX_CHANGES_PER_PUSH = 500` → 413,
+  `{entity,id}` acknowledgement identity, `SK`-derived pull cursor).
+- This was deployed to and founder-QA verified on **`IntervalDevelopmentStack`**. There is **no
+  Staging deployment record for `ea61356`** in `docs/cdk-infrastructure.md` — the "256 MB / 15 s
+  (Development and Staging)" wording there describes the shared CDK construct, not a confirmed
+  Staging deploy.
+- **Why it matters for Staging RC:** a v3.2 client's `parseAckList`
+  (`src/cloud/sync/pushHelpers.mjs`) deliberately has **no legacy `string[]` fallback** — it only
+  accepts `[{entity, id}]`. If Staging still runs the pre-`ea61356` `sync-push` (which returns an
+  id-only `accepted: [id, …]` array), the client drops every acknowledgement, marks nothing
+  clean, and re-pushes the same batch forever — **sync never converges**. The old `128 MB / 3 s`
+  sizing also risks the exact `Http500` 3000 ms timeout the 2026-08 Development incident showed.
+- **Action (founder, CloudShell):** confirm whether `IntervalStagingStack` was already redeployed
+  with `ea61356`; if not, deploy it. This is an in-place Lambda config + code update — the
+  `cdk diff` should show only `SyncPushFunction` / `SyncPullFunction` `Code` / `MemorySize` /
+  `Timeout` (plus the asset-exclude), and **zero** changes to DynamoDB tables, the Cognito pool,
+  the S3 bucket, IAM roles, or API routes.
+
+```
+# In AWS CloudShell, region us-east-2, confirmed to be the Interval account (read-only checks first)
+git clone <repo> && cd interval-app/infra
+npm ci
+npm run build                       # tsc
+npx cdk diff IntervalStagingStack   # REVIEW: expect only the two sync Lambdas (Code/Memory/Timeout) + asset exclude
+npx cdk deploy IntervalStagingStack # only after founder reviews the diff
+# read-only post-deploy: aws lambda get-function-configuration --function-name interval-staging-sync-push
+#                        (expect MemorySize 256, Timeout 15)
+```
+
+Rollback if a redeployed revision misbehaves: **redeploy the previous good revision**, never
+`cdk destroy` (see `docs/cdk-infrastructure.md` "Rollback / removal").
+
+### Staging client configuration
+
+Environment is a pure JS/manifest concern — `app.config.ts` reads `INTERVAL_ENV`,
+`EXPO_PUBLIC_API_BASE_URL`, and `EXPO_PUBLIC_COGNITO_*` from the local gitignored `.env` into
+`expo.extra`, and `src/config/environment.ts` reads them from `Constants.expoConfig.extra` at
+runtime. Nothing environment-specific touches `plugins`, `ios.bundleIdentifier`,
+`android.package`, or any native config. To point a build at Staging: set `.env`
+`INTERVAL_ENV=staging` plus the four Staging values (from `IntervalStagingStack` outputs — never
+committed), then `npx expo start -c`. No native rebuild is needed **for the environment switch
+itself**.
+
+### Native build
+
+v3.2 added `expo-audio` (a native module) + `expo-asset`. A Staging RC binary **must contain
+ExpoAudio**, i.e. be built from `bc255e4` / `801ba60` (Audio integration) or later —
+`b460271` is native-identical to `bc255e4` (docs-only on top).
+
+- If the founder's ExpoAudio-containing Development Build from Audio runtime QA is still
+  installed, pointing it at Staging (`.env` + `npx expo start -c`) is sufficient.
+- Otherwise, one native rebuild is required. **Recommended for a clean Staging RC** regardless:
+  rebuild once from the canonical worktree with `.env` set to Staging —
+  `cd /Users/joseangulo/Projects/interval-app && npx expo run:ios --device` (fallback: `xed ios`
+  → Run in Xcode). Then `npx expo start -c` from that worktree.
+
+### EAS / distribution
+
+`eas.json` has `development` and `development-simulator` profiles only, and the project is **not
+linked to an Expo account** (no `owner`, no `projectId`; `eas login` / `eas init` deliberately
+not run).
+
+- **Staging RC internal QA needs no EAS** — the founder-QA-verified path is local
+  `npx expo run:ios --device`.
+- **External beta / TestFlight** later requires, as separate founder-interactive work: `eas
+  login` + `eas init`; a `preview` (or `production`) EAS build profile; a **real bundle
+  identifier** (the current `com.anonymous.briefly-app` is a placeholder — App Store distribution
+  needs a reverse-DNS ID tied to the Apple Developer team); `eas build` + `eas submit` /
+  App Store Connect + TestFlight setup. None of this is a v3.2 Staging RC prerequisite.
+
+### Release-candidate identifier
+
+Following the established pattern (`v3.0-rc1` is the immutable tag at the founder-approved V3 RC
+checkpoint), the v3.2 RC tag is **`v3.2-rc1`**, created **only after Staging RC QA passes** — not
+now. Cut it on the exact `v3.2-dev` commit that passed Staging QA.
+
+### Staging RC QA matrix (Staging build pointed at `IntervalStagingStack`)
+
+Run **after** the sync-Lambda deploy above. ~18 checks, Staging-specific / high-risk surfaces:
+
+**Auth**
+1. Fresh Staging Cognito sign-up → sign-in → app usable.
+2. Kill & relaunch → session restored; still signed in.
+
+**Sync (the deploy-sensitive surface)**
+3. Create a deck + cards → they sync (status returns to "Up to date"), no `Http500`.
+4. Second Staging device / Simulator on the same account sees the deck + cards.
+5. Create a **generated** (`[MOCK]`) deck → it syncs and appears on the second device.
+6. Force Resync (if exposed) → converges, no duplication, no data loss.
+7. Offline: make an edit, kill network, reconnect → the edit pushes and converges.
+
+**Library (Staging source storage)**
+8. Create source metadata → syncs to the second device.
+9. Attach an original file → uploads to Staging private storage.
+10. Retrieve that original on the second device ("Open original").
+11. Archive / restore a source; delete / restore.
+
+**Readers**
+12. Open a PDF in-app.
+13. Open a `.docx` — normal content + a wide table (horizontal scroll as one unit).
+14. Open an audio source — "Listen in Interval"; play / pause / ±15 s seek / speed; navigate
+    away → playback stops; reopen → clean init.
+
+**Generate (Staging exposure)**
+15. TXT source → "Generate study deck" is visible → run → `[MOCK]` draft with provenance → save
+    once → exactly one deck → it syncs.
+
+**Discover**
+16. Discover is visible; open a lesson; bookmark; complete the bounded session (English fixture
+    content, localized chrome).
+
+**UI**
+17. Light / Dark spot check across a reader + Generate + Discover.
+18. Switch to Arabic → chrome RTL; an English `.docx`/TXT body stays LTR; audio progress bar
+    fills left→right.
+
+**Failure**
+19. Kill Metro / go offline mid-sync → app shows an honest offline/needs-attention state and
+    recovers on reconnect (no stuck spinner, no crash).
 
 ---
 

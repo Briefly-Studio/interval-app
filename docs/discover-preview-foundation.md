@@ -4,10 +4,14 @@
 `v3.2-dev`.** It is fixture/local-only — 10 built-in English lessons, a 7-lesson session budget,
 local bookmarks and per-workspace progress (`interval.discoverProgress.v1`), no AI, no network,
 no content backend, no cost. It is **not wired into sync** (progress is local-only everywhere).
-It currently has **no `INTERVAL_ENV` gate**, so it is visible in a Production build — whether it
-should ship visible in Production is a **founder product decision that is still pending**.
-Generate-from-Discover is deliberately disabled ("coming soon"). Everything below still
-describes the intended full product direction, not additional shipped behavior.
+It has **no `INTERVAL_ENV` gate by design** — **founder decision for v3.2: Discover ships visible
+in Production** (fixture/local-only, no backend, no provider call, no cost, bounded, localized
+chrome, English fixture lesson content accepted for this beta boundary, Generate-from-Discover
+disabled). Everything below still describes the intended full product direction, not additional
+shipped behavior — including the future AI-backed model where the authenticated backend receives
+the user's app language/locale as generation context and returns content in the requested
+language with explicit content-language metadata (the mobile client never holding provider
+secrets).
 
 Discover is a future Interval product pillar for the moment when a learner says, "I want to learn something new." It complements the existing Library and Deck flows, which begin from material the learner already has.
 
