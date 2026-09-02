@@ -1,5 +1,14 @@
 # Discover Preview Foundation
 
+**Status: the preview shell is implemented, founder runtime QA verified, and integrated into
+`v3.2-dev`.** It is fixture/local-only — 10 built-in English lessons, a 7-lesson session budget,
+local bookmarks and per-workspace progress (`interval.discoverProgress.v1`), no AI, no network,
+no content backend, no cost. It is **not wired into sync** (progress is local-only everywhere).
+It currently has **no `INTERVAL_ENV` gate**, so it is visible in a Production build — whether it
+should ship visible in Production is a **founder product decision that is still pending**.
+Generate-from-Discover is deliberately disabled ("coming soon"). Everything below still
+describes the intended full product direction, not additional shipped behavior.
+
 Discover is a future Interval product pillar for the moment when a learner says, "I want to learn something new." It complements the existing Library and Deck flows, which begin from material the learner already has.
 
 The intended loop is:

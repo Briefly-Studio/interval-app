@@ -106,8 +106,9 @@ this batch:
 - Every production screen's main title carries `accessibilityRole="header"`, so VoiceOver's/
   TalkBack's "navigate by headings" gesture works consistently across the app (added this batch —
   see §9 for the one screen this deliberately does **not** apply to and why).
-- English and Spanish accessibility copy is held to the same key-parity discipline as all other
-  Interval strings — no accessibility label or hint exists in only one language.
+- Accessibility copy is held to the same key-parity discipline as all other Interval strings —
+  every accessibility label and hint exists in all 13 locale files (`tsc` enforces the shape),
+  never in only one language.
 
 ## 4. Text-to-speech behavior
 
@@ -272,7 +273,8 @@ Before shipping any new screen or interactive control:
       `getAccessibilityPreferences().reduceMotionOverride`).
 - [ ] New text does not disable font scaling (no `allowFontScaling={false}`, no
       `maximumFontSizeMultiplier` unless a specific, documented reason exists).
-- [ ] New English strings have a Spanish counterpart, including accessibility copy.
+- [ ] New English strings have a counterpart in every locale file (`src/i18n/locales/*.ts`),
+      including accessibility copy — `tsc` fails otherwise.
 - [ ] If the feature reads or generates study content, speech/logging rules from §4 are followed
       (never auto-play, never log content).
 

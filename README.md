@@ -28,6 +28,23 @@ cross-device sync, and account ownership on top of that — it is never required
 - Library source collections, with a root-vs-filed organizational model: a source appears at the
   Library root only until it's filed into a collection, then lives in that collection's own view
 
+**Reading and listening to sources**
+- Open a Library source inside the app: embedded readers for PDF, images, plain text, and Word
+  `.docx` documents (structured native rendering, wide tables scroll horizontally — no Word UI,
+  no file conversion)
+- A playback-only audio player for audio sources (play/pause, ±15s seek, playback speed) — no
+  recording, no background playback
+- Any format without an embedded reader opens in the device's own viewer via the system share
+  sheet
+
+**Generating and discovering (preview features)**
+- Generate Study Deck — turn a text Library source into a draft deck you review, edit, and
+  explicitly save. This is a **preview**: cards are produced by a local, deterministic mock and
+  are prefixed `[MOCK]`; there is no production AI model, no network AI call, and this workflow
+  is only shown in internal Development/Staging builds
+- Discover — a bounded set of short built-in lessons to browse, bookmark, and complete; entirely
+  local, with no feed, no recommendations, and no backend
+
 **Cloud (optional account)**
 - Authentication via AWS Cognito (sign-up, sign-in, session restoration)
 - Offline-first sync for decks, cards, and study sessions once signed in — local changes queue and
@@ -40,9 +57,14 @@ cross-device sync, and account ownership on top of that — it is never required
   signed-in device — also enabled for Development and Staging/Beta, not yet Production
 
 **Accessibility and localization**
-- English and Spanish throughout, including accessibility labels and hints
+- 13 languages for all UI chrome, including accessibility labels and hints: English, Spanish,
+  French, Portuguese (Brazil), Italian, German, Dutch, Russian, Simplified Chinese, Japanese,
+  Korean, Hindi, and Arabic — including right-to-left layout for Arabic
 - A light/dark/warm appearance system
 - Screen-reader-friendly controls, Reduce Motion support, and no information conveyed by color alone
+
+Note: built-in document *content* (for example Discover lesson text) is currently English-only;
+only the app's own interface is fully localized.
 
 ---
 
@@ -166,6 +188,16 @@ breakdown.
 - [`docs/cdk-infrastructure.md`](docs/cdk-infrastructure.md) — implemented AWS CDK infrastructure
 - [`docs/library-and-source-architecture.md`](docs/library-and-source-architecture.md) —
   Library and study-source architecture, current and planned
+- [`docs/docx-reader.md`](docs/docx-reader.md) — the embedded DOCX reader
+- [`docs/audio-source-player.md`](docs/audio-source-player.md) — the audio source player
+- [`docs/generate-study-deck-ux.md`](docs/generate-study-deck-ux.md) — the Generate Study Deck
+  preview workflow (mock provider)
+- [`docs/discover-preview-foundation.md`](docs/discover-preview-foundation.md) — the Discover
+  preview
+- [`docs/ai-generation-foundation.md`](docs/ai-generation-foundation.md) — the provider-neutral
+  AI generation contract
+- [`docs/source-normalization-foundation.md`](docs/source-normalization-foundation.md) — the
+  shared normalized-source representation
 - [`docs/deck-collections.md`](docs/deck-collections.md) — Deck Collections design
 - [`docs/accessibility-foundation.md`](docs/accessibility-foundation.md) — accessibility
   requirements and current status

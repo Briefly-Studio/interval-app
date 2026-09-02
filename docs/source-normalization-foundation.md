@@ -1,10 +1,11 @@
 # Source Normalization Foundation
 
-**Status: implemented on `feat/source-normalization-foundation`, not yet integrated into
-`v3.1-dev`.** This document describes a domain/foundation layer only — no AI provider, model API,
-prompt, or generation feature exists anywhere in this batch. See CLAUDE.md's Documentation
-Hierarchy for how this fits alongside the rest of the Library/source architecture docs once
-integrated.
+**Status: implemented and integrated into `v3.2-dev`** (first integrated into `v3.1-dev`, then
+carried forward). This document describes a domain/foundation layer (`src/domain/normalization/`)
+— it produces a common `NormalizedSourceContent` shape from format-specific adapters. No AI
+provider, model API, prompt, or generation feature lives in this layer. The image and audio
+adapters are structural stubs — real OCR and transcription are not implemented. See CLAUDE.md's
+Documentation Hierarchy and its "v3.2 integrated features" section.
 
 ## Purpose
 

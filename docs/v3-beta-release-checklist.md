@@ -6,8 +6,59 @@ intentionally — see "Known accepted beta limitations" below).
 Items are pre-filled `[x]` **only** where this repository's own tooling confirmed them (current
 validation commands or static code facts), or where the founder has explicitly confirmed
 something in conversation. Everything else starts `[ ]` — do not mark an item passed without
-actually doing it. Last reconciled against commit `acb813f` (Beta Readiness + Interval rebrand,
-pushed to `origin/v3.0-dev`) plus founder simulator/device QA reported after that push.
+actually doing it.
+
+The bulk of this checklist below was **last reconciled against `acb813f`** (Beta Readiness +
+Interval rebrand, `origin/v3.0-dev`) and predates the `v3.1-dev` and `v3.2-dev` integration
+waves. The v3.0-era `[x]` items are historical evidence, not a current pass — re-verify at
+actual release time. The current picture is in "v3.2 stabilization status" and "v3.2 integrated
+capabilities" immediately below.
+
+---
+
+## v3.2 stabilization status
+
+Reconciled against canonical `v3.2-dev` `bc255e48bb73c4424066170e6beede848b315144`.
+
+- **Automated v3.2 stabilization audit — [x] PASSED.** `git diff --check` clean; `npx tsc
+  --noEmit` clean; `npm run lint` clean; `npm run test:sync` 39/39; `npm run test:ai` 20/20;
+  `npm run test:docx` 11/11; `node --check backend/lambdas/ai-generate-study-deck/index.mjs`
+  clean; `npx expo-doctor` 17/18 (known patch-drift baseline — 7 packages). No product-behavior
+  release blocker identified. No secrets, no AI provider key on mobile, no token/claims/source
+  content logging.
+- **Documentation reconciliation — [x] this document / mission** (`docs: reconcile repository
+  with v3.2`).
+- **Founder full-app canonical QA — [ ] PENDING / in progress.** The stabilization audit
+  produced a ~30-item full-app QA matrix; the founder has not yet completed a combined pass on
+  `v3.2-dev`. Do not mark this `[x]` on tooling evidence.
+- **Staging release candidate — [ ] not started.**
+- **Production release — [ ] not approved.** Production remains grandfathered; none of the v3.2
+  features have been widened to Production.
+
+### Unresolved v3.2 release decision
+
+- [ ] **Discover Production exposure.** Discover has no `INTERVAL_ENV` gate and is visible in a
+  Production build. It is fixture/local-only with no backend and no cost, so this is not unsafe,
+  but whether Discover should ship visible in Production is a **founder product decision that is
+  still pending**. Either add a gate or explicitly accept Production exposure before a Production
+  release.
+
+---
+
+## v3.2 integrated capabilities
+
+Each reconciled onto canonical and integrated via its own `--no-ff` merge. No AWS resource,
+`infra/` stack, or backend Lambda changed for any of them.
+
+| Capability | Maturity | Environment exposure | Cloud/backend | Automated tests |
+|---|---|---|---|---|
+| Source normalization foundation | Implemented | all (domain layer) | none | (covered under `test:ai` context prep) |
+| Sync reliability hardening | Implemented, Development founder-QA verified | Dev/Staging Lambdas 256 MB / 15 s; Production still 128 MB / 3 s (founder-gated) | existing sync backend | `test:sync` — 39 |
+| AI Generation Foundation | Implemented — **mock provider only** | all (mock) | reference Lambda exists, **not deployed** | `test:ai` — 20 |
+| Generate Study Deck | Implemented, founder-QA verified — `[MOCK]` output | **Development/Staging only; hidden in Production** | none | (domain-covered) |
+| Discover Preview | Implemented, founder-QA verified | **currently ungated — visible in Production** (decision pending) | none | none |
+| DOCX reader | Implemented, founder-QA verified (native build) | all (local) | none | `test:docx` — 11 |
+| Audio source player | Implemented, founder native-runtime QA verified | all (local) | none — `audio` `uploadSupported: false` | none (pure helpers testable — future `test:audio`) |
 
 ---
 
@@ -313,16 +364,39 @@ checklist, and not things a future contributor should "discover" and treat as ne
 4. **Recently Deleted tombstones can theoretically reappear** after a forced full resync — "soft
    delete and restore" is the honest promise; "permanently gone" is not currently guaranteed.
    See the in-code note in `app/recently-deleted.tsx`.
-5. **Expo SDK patch drift (8 packages)** — `expo`, `expo-constants`, `expo-file-system`,
-   `expo-font`, `expo-linking`, `expo-router`, `expo-splash-screen`, `expo-web-browser` are all
-   one or more patch versions behind what the installed Expo SDK expects. Investigated this
-   batch (`npx expo install --check`) and deliberately deferred rather than bundled into beta
-   cleanup — see the batch report for the exact recommended versions and the reasoning.
+5. **Expo SDK patch drift (7 packages)** — `expo`, `expo-file-system`, `expo-font`,
+   `expo-linking`, `expo-router`, `expo-splash-screen`, `expo-web-browser` are all one patch
+   version behind what the installed Expo SDK expects (`npx expo-doctor` 17/18). Tracked and
+   deliberately deferred, not a per-run regression. `expo-audio` / `expo-asset` (added in v3.2)
+   are not flagged.
 6. **Android has not received founder-level manual QA depth.** Expected to work (same codebase,
    no Android-specific code removed), but "should work" is not the same claim as "verified."
-7. **No automated test suite exists.** Every checklist item above requires a real manual pass;
-   none of this is enforced by CI.
+7. **No broad end-to-end / UI automated test suite exists.** There are three focused,
+   zero-dependency `node --test` unit suites — `test:sync` (39), `test:ai` (20), `test:docx`
+   (11), 70 tests — covering pure sync/AI/table-layout helpers only. Every checklist flow above
+   still requires a real manual pass; none of it is enforced by CI.
 8. **Accessibility is a foundation, not a certification.** Screen-reader semantics, text-to-speech,
    reduced-motion, and large-text support are implemented and code-verified (see
    `docs/accessibility-foundation.md`), but no VoiceOver/TalkBack device testing, no formal
    contrast audit, and no WCAG/ADA/Section 508/platform certification has been performed.
+
+### v3.2-specific accepted limitations
+
+9. **Generate Study Deck is a `[MOCK]` preview.** Cards come from a deterministic local mock, not
+   a model. The workflow is gated to Development/Staging and hidden in Production. Real
+   provider-backed generation is unstarted, founder-gated future work.
+10. **Discover is fixture/local-only and currently ungated by environment** — visible in a
+    Production build. Progress does not sync across devices. Production exposure is a pending
+    founder decision (see "Unresolved v3.2 release decision" above).
+11. **Discover progress and Deck Collections do not sync across devices** — local-only in every
+    environment.
+12. **Audio playback is local-only and has no dedicated automated tests.** Audio originals are
+    not accepted for cloud upload anywhere (`uploadSupported: false`), so cross-device audio
+    playback only works on a device that already holds a local copy. No background playback, no
+    recording.
+13. **No in-app video reader.** Video files (including large screen recordings) are handed off to
+    the OS via "Open original"; they are never routed to the Audio player. File size does not
+    affect this — classification is by MIME/extension only.
+14. **DOCX reader fidelity is deliberately partial.** Ordered lists render as bullets, no
+    pagination/exact fonts/tracked-changes, legacy binary `.doc` is unsupported. See
+    `docs/docx-reader.md`.

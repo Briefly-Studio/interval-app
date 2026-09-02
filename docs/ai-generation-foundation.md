@@ -1,12 +1,16 @@
 # AI Generation Foundation
 
-**Status: implemented on `feat/ai-generation-foundation`, not yet integrated into `v3.1-dev`.**
-This document describes a domain/service **contract and boundary** only. No AI provider, model
-API, prompt, or production generation UI exists anywhere in this batch — see "What is
-intentionally NOT implemented" below. Builds directly on top of the already-integrated
+**Status: implemented and integrated into `v3.2-dev`.** This document describes a domain/service
+**contract and boundary**. The only provider is the deterministic local mock
+(`src/domain/ai/mockProvider.ts`); **no real AI provider, provider SDK, model API, prompt, or
+network AI call exists**, and the reference backend Lambda
+(`backend/lambdas/ai-generate-study-deck/`) is a contract stub that is not referenced in `infra/`
+and not deployed — see "What is intentionally NOT implemented" below. The user-facing workflow
+built on this boundary is [Generate Study Deck](./generate-study-deck-ux.md) (also integrated
+into `v3.2-dev`, gated to Development/Staging). Builds on the
 [Source Normalization Foundation](./source-normalization-foundation.md)
-(`src/domain/normalization/`, merged into `v3.1-dev`). See CLAUDE.md's Documentation Hierarchy for
-how this fits alongside the rest of the Library/AI documentation once integrated.
+(`src/domain/normalization/`, also integrated). See CLAUDE.md's Documentation Hierarchy and its
+"v3.2 integrated features" section.
 
 ## Purpose
 

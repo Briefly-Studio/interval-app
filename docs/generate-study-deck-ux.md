@@ -1,6 +1,9 @@
 # Generate Study Deck — UX Shell
 
-**Status: implemented on `feat/ai-generate-deck-shell`, not merged into `v3.1-dev`.**
+**Status: implemented, founder runtime QA verified, and integrated into `v3.2-dev`.** Gated by
+`isGenerateStudyDeckEnabled()` to `INTERVAL_ENV` `development`/`staging` — hidden in Production.
+Generation still uses the deterministic local mock provider only; there is no production model
+provider, no network AI call, and no deployed AI backend.
 
 This is the first user-facing AI workflow in Interval: **Library source → Generate → choose
 options → review draft → edit / delete cards → Save as a real deck.** It is a UX/product shell
@@ -265,11 +268,12 @@ Unchanged from `ai-generation-foundation.md`'s "Next step to real provider integ
 
 ## Verification
 
-This repository (this branch) has no automated test harness — CLAUDE.md records that verification
-is founder runtime QA plus local static checks. The hardened AI-foundation branch adds a
-`node:test` harness, but that branch must **not** be merged here while the Generate worktree is
-dirty; a focused test suite for the remediated domain logic is deferred to that reconciliation.
-Logic is factored into pure, independently-testable functions to make that straightforward:
+As of `v3.2-dev`, the repository has three focused `node:test` suites (`test:sync`, `test:ai`,
+`test:docx`) but no broad app-level / UI harness — CLAUDE.md records that flow verification is
+founder runtime QA plus local static checks. The AI-foundation helpers this workflow builds on
+are covered by `npm run test:ai` (20 tests). There is no `test:generate` suite for the
+Generate-specific domain logic yet; it is factored into pure, independently-testable functions to
+make one straightforward:
 `mergeLineRanges` / `resolveProvenanceLabel` (`draftCardEditing.ts`), `validateDraftForSave` /
 `rollbackDeck` (`generateDeckSave.ts`), `detectContentDirection` (`i18n/contentDirection.ts`),
 `deriveGenerationAvailability` (`generationAvailability.ts`).

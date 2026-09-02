@@ -24,8 +24,14 @@ V3 beta is iOS-first. Android is buildable and expected to be core-flow compatib
 received the same testing depth. Authenticated web support is explicitly out of scope for this
 beta — see `docs/platform-scope.md` for the full platform-support decision and rationale.
 
-`v3.0-dev` is frozen at the approved V3 Release Candidate (tagged `v3.0-rc1`); active development
-continues on `v3.1-dev` — see `docs/branch-and-release-policy.md` for the full policy.
+`v3.0-dev` is frozen at the approved V3 Release Candidate (tagged `v3.0-rc1`). The `v3.1-dev`
+integration wave is complete; **active integration and stabilization is now on `v3.2-dev`**
+(canonical `bc255e4` at the time of the v3.2 stabilization audit). `v3.2-dev` contains the
+completed feature wave: source normalization foundation, sync reliability hardening, the AI
+Generation Foundation, Generate Study Deck (mock provider), the Discover Preview Foundation, the
+native DOCX reader, and the native Audio source player — see "v3.2 integrated features" below and
+`docs/branch-and-release-policy.md` for the full policy. The automated v3.2 stabilization audit
+passed; founder full-app canonical QA is still pending.
 
 ### Legacy Briefly identifiers
 
@@ -52,10 +58,12 @@ do not rename them for branding alone.
   lockfile churn.
 - **Expo `slug`** — `app.json`'s `"slug": "briefly-app"`. Not user-visible in the app itself, but
   is the identifier EAS/Expo's own infrastructure would use to associate this project with a
-  hosted project, update channel, or build history if one already exists. There is no `eas.json`
-  in this repo to confirm one way or the other, so changing it could silently disconnect the
-  project from infrastructure this repository can't see. Preserved out of caution; safe to
-  revisit once EAS project status is confirmed with the founder.
+  hosted project, update channel, or build history if one already exists. `eas.json` now exists
+  (build profiles only — `development` / `development-simulator`, no `projectId`, no `owner`), but
+  the project is still **not linked to an Expo account** (`eas login` / `eas init` deliberately
+  not run — see the tech-debt note). Changing the slug could silently disconnect the project from
+  infrastructure this repository can't see. Preserved out of caution; safe to revisit once EAS
+  project linkage is confirmed with the founder.
 - **iOS bundle identifier / Xcode product name** — `com.anonymous.briefly-app` /
   `brieflyapp` (visible only in `ios/brieflyapp.xcodeproj`, gitignored, locally generated).
   Explicitly out of scope per this batch's own instructions — bundle identifiers are a
@@ -89,8 +97,10 @@ For anything not covered directly in this file, these are the authoritative docu
     cross-device metadata sync, private original-file storage, and source open/preview are all
     deployed and founder-QA verified in both Development and Staging — see the document's own
     "Implementation status" section for the exact current/future split. Production remains
-    grandfathered and has not received cloud metadata sync or private source storage. Extraction,
-    OCR, AI generation, in-platform sharing, and Canvas integration remain specification-only.
+    grandfathered and has not received cloud metadata sync or private source storage. Embedded
+    local readers for PDF / image / text / DOCX and the Audio player **are now implemented** (see
+    items 19–24). Real provider-backed AI generation, OCR/transcription, in-platform sharing, and
+    Canvas integration remain specification-only.
 10. `docs/library-ui-foundation.md` — the implemented local-only Library UI foundation.
 11. `docs/library-cross-device-diagnosis.md` — historical diagnosis document. Accurate when
     written (Library metadata had no transport mechanism at all); now superseded for Development
@@ -107,6 +117,23 @@ For anything not covered directly in this file, these are the authoritative docu
 18. `docs/development-build-workflow.md` — the Expo Development Build migration. **Founder-QA
     verified on iOS Simulator and physical iPhone** — this is now the active development native
     runtime; see that document for the full record and EAS Build's separate, still-inactive status.
+19. `docs/source-normalization-foundation.md` — the provider-neutral `NormalizedSourceContent`
+    layer (`src/domain/normalization/`). **Implemented and integrated into `v3.2-dev`.**
+20. `docs/ai-generation-foundation.md` — the provider-neutral, provenance-aware AI service
+    contract and boundary (`src/domain/ai/`). **Implemented and integrated into `v3.2-dev`;
+    mock provider only** — no real provider SDK, prompt, network AI call, or deployed AI backend.
+21. `docs/generate-study-deck-ux.md` — the Library Source → Generate Study Deck workflow.
+    **Implemented, founder-QA verified, integrated into `v3.2-dev`; `[MOCK]` output only**, gated
+    to Development/Staging (hidden in Production).
+22. `docs/discover-preview-foundation.md` — the bounded fixture-based Discover preview.
+    **Implemented, founder-QA verified, integrated into `v3.2-dev`; local-only, no backend, and
+    currently NOT environment-gated** — see "Discover" below.
+23. `docs/docx-reader.md` — the native/client-only DOCX reader (`fflate`, structured blocks,
+    deterministic wide-table layout). **Implemented, founder-QA verified, integrated into
+    `v3.2-dev`.**
+24. `docs/audio-source-player.md` — the `expo-audio` playback-only Audio source player.
+    **Implemented, founder native-runtime QA verified, integrated into `v3.2-dev`; playback-only,
+    no recording, no background audio.**
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -278,6 +305,85 @@ and deployed. Guardrails when touching this area:
   silently reassign it" behavior into Add — see `docs/deck-collections.md`'s "Interaction model"
   section for why this was deliberately changed after founder QA.
 
+## v3.2 integrated features
+
+All of the following were reconciled onto the current canonical tree and integrated into
+`v3.2-dev` (each via its own `--no-ff` merge). None of them changed any AWS resource, `infra/`
+stack, or backend Lambda. Each has its own doc (see items 19–24 of the Documentation Hierarchy).
+
+### Source Normalization Foundation (`src/domain/normalization/`)
+
+Provider-neutral `NormalizedSourceContent` — a common shape (`chunks`, location metadata,
+`fullSourceIncluded`, `excludedChunkCount`) that PDF / text / image / DOCX / audio adapters all
+produce, so AI features consume one representation instead of format-specific code. **Implemented
+and integrated.** Pure domain code, no network, no AWS. The image and audio adapters are
+structural stubs — real OCR/transcription is not implemented.
+
+### AI Generation Foundation (`src/domain/ai/`) — mock provider only
+
+A provider-neutral, provenance-aware `ModelProvider` seam plus `generateStudyDeck()`,
+`validateGeneratedDeckResponse()`, and `prepareGenerationContext()`. **Implemented and
+integrated.** The only provider is `createMockProvider()` (`mock-v1`, deterministic, `[MOCK]`
+prefixes). **There is no real model provider, no provider SDK, no prompt, and no network AI
+call.** A reference backend Lambda (`backend/lambdas/ai-generate-study-deck/`) exists as a
+contract stub but is **not referenced in `infra/` and not deployed** — it imports no provider SDK
+and never reads a credential from the request. **The mobile client must never hold a provider
+key or secret.** Real provider-backed generation is a separate, founder-gated future change.
+`npm run test:ai` — 20 tests.
+
+### Generate Study Deck (`app/library/[id]/generate/**`) — `[MOCK]` output, gated
+
+Library Source → Generate → choose options → review draft → edit/delete cards → edit title →
+explicit Save → real `DeckRecord` + `CardRecord`s via the normal `addDeck`/`setCards` path (so a
+generated deck syncs exactly like any hand-made deck; **never add a source-origin field to
+`DeckRecord`** — Production sync path). **Implemented, founder-QA verified, integrated.** Gated by
+`isGenerateStudyDeckEnabled()` (`src/domain/ai/generateStudyDeckCapability.ts`) to
+`["development","staging"]` — **hidden in Production**. Do not widen that allow-list without
+explicit founder approval, and do not add a second scattered `INTERVAL_ENV` check for it.
+Safeguards to preserve: captured `sourceScope` + `sameScope` re-checks (stale scope blocks save),
+screen-level `savingRef`/`savedRef` and domain-level `saveInFlight` duplicate-save guards, typed
+non-throwing `SaveDraftOutcome`, deck rollback if card persistence fails, route/session id
+verification, discontiguous provenance ranges preserved (adjacent/overlapping merged), final
+`validateDraftForSave`, `[MOCK]` labels expected.
+
+### Discover Preview Foundation (`app/discover/**`) — local-only, currently ungated
+
+A bounded microlearning preview: 10 English fixture lessons (`src/content/discoverLessons.ts`),
+a finite 7-lesson session budget, a calm stop state, local bookmarks and per-workspace progress
+(`interval.discoverProgress.v1` via `scopedKey`), Generate-from-Discover disabled ("coming
+soon"). **Implemented, founder-QA verified, integrated.** **No AI, no network, no content
+backend, no cost.** Not wired into `src/cloud/sync/**` — progress is local-only everywhere (same
+posture as Deck Collections). Lesson *bodies* are explicitly English-only and pinned LTR; the
+chrome follows the active locale. **Discover currently has NO `INTERVAL_ENV` gate** — it is
+visible in a Production build. This is safe (local-only, no backend/cost) but whether it should
+ship visible in Production is a **founder product decision that is still pending** — do not add a
+gate or make that call without the founder.
+
+### Embedded source readers — PDF / image / text / DOCX / Audio (local, client-only)
+
+`app/library/[id]/reader.tsx` + `src/domain/sourceReader.ts` is the single centralized
+capability model. `resolveSourceReaderStrategy(source)` maps `sourceType` → one mutually
+exclusive strategy: `pdf-reader`, `image-reader`, `text-reader`, `docx-reader` (only when the
+resolved extension is `docx`), `audio-player`, else `unsupported`. Every kind has its own render
+branch and is reachable; `docx-reader` is the render chain's final fallthrough. Unsupported
+sources (video, `.xlsx`, `.pptx`, legacy `.doc`, encrypted DOCX, …) offer only "Open original"
+(OS handoff via `expo-sharing`).
+
+- **PDF**: `react-native-pdf` native view (pre-v3.2).
+- **image / text**: native `<Image>` / chunked FlatList (pre-v3.2).
+- **DOCX**: `fflate` 0.8.3, on-device structured parse, native rendering, no WebView, no cloud
+  conversion, deterministic wide-table layout (120 dp minimum column, wide tables horizontally
+  scroll as one unit). See `docs/docx-reader.md`. `npm run test:docx` — 11 tests.
+- **Audio**: `expo-audio ~1.1.1` + `expo-asset ~12.0.13`, **playback-only** (no recording, no
+  microphone permission, no background audio — `shouldPlayInBackground: false`), local source
+  resolution, play/pause/seek/speed, cleanup on navigation. `sourceType: "audio"` is decided by
+  audio MIME/extension or manual selection — **video is never treated as audio**, and **file
+  size never affects classification or reader selection**. `audio` is `uploadSupported: false`
+  (no cloud audio anywhere). See `docs/audio-source-player.md`. No dedicated test suite yet.
+
+Do not add a WebView, a cloud/document-conversion service, an AI-based renderer, a video reader,
+or a real AI provider to any of this without an explicit, founder-approved need.
+
 ## AWS Resources
 
 Named by resource/role, not by live identifier — live IDs are unnecessary coupling that goes
@@ -410,11 +516,19 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   separation milestone. The CDK `pointInTimeRecovery` API used in `infra/lib/interval-sync-stack.ts`
   is itself deprecated in favor of `pointInTimeRecoverySpecification` (a `cdk synth`-time warning
   only, not a functional issue) — remains unaddressed cleanup work.
-- No app-level automated test harness exists — all app verification is manual founder QA plus
-  local static checks (`tsc`, lint, `cdk synth`). The only automated tests are focused
-  pure-logic unit tests for the sync push/pull helpers (`npm run test:sync`, Node's built-in
-  `node --test`, zero added dependencies — `backend/lambdas/sync-{push,pull}/lib.test.mjs`,
-  which also cover the client push helpers in `src/cloud/sync/pushHelpers.mjs`).
+- No broad app-level / end-to-end / UI automated test harness exists — all app-flow verification
+  is manual founder QA plus local static checks (`tsc`, lint, `cdk synth`). What automated
+  coverage does exist is three focused, zero-dependency `node --test` suites of pure-logic unit
+  tests (70 tests total), not full application coverage:
+  - `npm run test:sync` (39) — sync push/pull helpers (`backend/lambdas/sync-{push,pull}/lib.test.mjs`),
+    also covering the client push helpers in `src/cloud/sync/pushHelpers.mjs`.
+  - `npm run test:ai` (20) — AI foundation helpers (`src/domain/ai/*.test.ts`,
+    `backend/lambdas/ai-generate-study-deck/*.test.mjs`) via `scripts/ai-test-loader.mjs`.
+  - `npm run test:docx` (11) — the pure `computeDocxTableLayout` table-sizing helper
+    (`src/domain/docxTableLayout.test.ts`).
+  There is no Audio-specific suite yet (`src/domain/sourceAudioPlayer.ts`'s pure helpers are a
+  reasonable future `test:audio`), and no automated coverage of the DOCX parser or any RN
+  rendering.
 - Development/Staging sync Lambdas were raised from `128 MB / 3 s` to `256 MB / 15 s` after a
   confirmed 2026-08 Development incident (`interval-dev-sync-push` timing out at exactly 3000 ms
   on every invocation → `Http500`), then further hardened after an independent audit of that
@@ -427,8 +541,11 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   need the same sizing change (separate, founder-gated). **Rollback for any of this is
   redeploy-the-previous-revision, never `cdk destroy IntervalDevelopmentStack`** (that is an
   environment teardown that deletes Development's Cognito accounts + DynamoDB data).
-- `expo-doctor` reports a known, accepted 17/18 due to 8 packages sitting one SDK patch version
-  behind — tracked, not a regression each time it's re-confirmed.
+- `expo-doctor` reports a known, accepted 17/18 due to 7 packages sitting one SDK patch version
+  behind (`expo`, `expo-file-system`, `expo-font`, `expo-linking`, `expo-router`,
+  `expo-splash-screen`, `expo-web-browser` as of the v3.2 stabilization audit) — tracked, not a
+  regression each time it's re-confirmed. `expo-audio` / `expo-asset` (added in v3.2) are **not**
+  flagged.
 - Whether Production's deployed Lambda functions match this repository's `backend/lambdas/`
   source has not been verified end-to-end (Production is not CDK-managed, so there is no
   build-time guarantee the way there is for Development/Staging — see "Current Backend Task
@@ -449,20 +566,42 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   (`docs/deck-collections.md`) remain local-only in every environment, including Development and
   Staging (unlike Library metadata above, which now syncs in both) — same device sees the same
   organization, a second device signed into the same account does not yet, anywhere.
-- Library source "Open original" hands the file to the OS-native share/viewer surface
-  (`expo-sharing`) rather than rendering it in-app — there is no embedded/in-app PDF (or other
-  document) reader implemented. Founder QA has confirmed a PDF can be retrieved and handed to iOS
-  as a real, correctly-typed `.pdf`, but broader QA of this flow has not yet passed, and this
-  should not be described as complete until it does. A true in-app document viewer would need a
-  native module Expo Go itself cannot provide — Interval's development native runtime is now an
-  Expo Development Build (see `docs/development-build-workflow.md`, founder-QA verified), which
-  removes that specific constraint, but building the viewer itself remains separate, unstarted
-  future work.
+- Embedded in-app source readers now exist for **PDF, image, text, DOCX, and audio**
+  (`app/library/[id]/reader.tsx` — see "Embedded source readers" and `docs/docx-reader.md` /
+  `docs/audio-source-player.md`). DOCX and Audio are founder-QA verified on a native Development
+  Build; PDF/image/text predate v3.2. "Open original" (`expo-sharing` OS handoff) remains the
+  fallback for every format without an embedded reader (video, `.xlsx`, `.pptx`, legacy `.doc`,
+  encrypted DOCX). Still not implemented in-app: any editing, annotation, highlighting, OCR, or
+  text extraction of an opened source, and any **video** reader (there is no `video` `SourceType`).
 - EAS Build is prepared (`eas.json`) but not yet linked to an Expo account/project — that step
   requires interactive founder action (`eas login`, `eas init`) and was deliberately not performed
   autonomously; local builds (`npx expo run:ios`) remain the founder-QA-verified path for both
   physical iPhone and Simulator. Do not run `eas login`/`eas init` against an assumed or default
   account.
+- **Real provider-backed AI generation is not implemented.** The AI Generation Foundation and the
+  Generate Study Deck UX are integrated, but generation is `createMockProvider()` only. Wiring a
+  real model provider, selecting/deploying an AI backend, and defining prompt/rate/cost/abuse
+  handling is a separate, founder-gated body of work. The mobile client must never hold a
+  provider secret.
+- **Discover Production exposure is an unresolved founder decision.** Discover has no
+  `INTERVAL_ENV` gate, so a Production build shows it. It is fixture/local-only with no backend
+  and no cost, so this is not unsafe — but it is a product call the founder has not yet made.
+  Do not add a gate or decide this autonomously.
+- **Discover progress and Deck Collections do not sync across devices.** Both are local-only in
+  every environment (unlike Library metadata, which syncs in Development/Staging). Same device is
+  consistent; a second device signed into the same account does not see the same Discover
+  progress or deck organization anywhere.
+- **No dedicated Audio automated test suite.** `src/domain/sourceAudioPlayer.ts`'s pure helpers
+  (`formatPlaybackTime`, `playbackProgress`, `clampPlaybackPosition`, `isPlaybackComplete`) are
+  trivially testable; a `test:audio` suite matching `test:docx` would be a small, worthwhile
+  addition.
+- **No video source support.** `SourceType` has no `video` member and the format table has no
+  `video/*` MIME or `.mp4`/`.mov` extension. Video files are correctly handed off via "Open
+  original", never routed to the Audio player. Adding in-app video (or extracting a video's audio
+  track) is out of scope and would be a deliberate future feature.
+- DOCX cache media (`Paths.cache/librarySourceReaderDocxMedia/<sourceId>`) is cleared on every
+  reader load, but shares the same known gap as the rest of the cache/retained-file story: there
+  is no proactive eviction policy for the canonical durable `librarySourceFiles/` store.
 
 ## Accessibility Guardrails
 
@@ -483,7 +622,11 @@ settings, or any new interactive control. Short version for every future change:
 6. Any text-to-speech goes through `src/accessibility/speech.ts`/`useSpeech.ts` — never call
    `expo-speech` directly elsewhere. Speech is always explicit-action-only (never auto-plays) and
    study content is never logged.
-7. New English strings — including accessibility labels/hints — need a Spanish counterpart.
+7. New English strings — including accessibility labels/hints — need a counterpart in **every**
+   locale file (`src/i18n/locales/*.ts`): `en, es, fr, pt-BR, it, de, nl, ru, zh-Hans, ja, ko,
+   hi, ar`. `en` is the source-of-truth shape and `tsc` fails if any locale is missing a key.
+   Document *bodies* (e.g. Discover lesson content) are deliberately English-only and are not a
+   translation obligation — only UI chrome/labels are.
 8. Accessibility is a foundation here, not a certification — do not claim WCAG/ADA/Section 508/
    platform certification in code comments, commit messages, or user-facing copy.
 

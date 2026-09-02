@@ -1,14 +1,19 @@
 # Library and Source Architecture
 
-**Status: substantially implemented in Development and Staging; large sections remain
-specification-only.** Local Library metadata/UI (every environment/guest), cross-device metadata
-sync, private original-file storage (deployed and founder-QA verified), and source open/preview
-are all implemented today in both Development and Staging — see "Implementation status" below for
-the precise current/future split. Production remains grandfathered and has not received cloud
-metadata sync or private source storage. Extraction, OCR, transcription, AI generation,
-in-platform sharing, and Canvas integration remain entirely unimplemented; the sections of this
-document describing those are still future/target architecture, not current behavior, except
-where "Implementation status" says otherwise.
+**Status: substantially implemented; large sections remain specification-only.** Local Library
+metadata/UI (every environment/guest), cross-device metadata sync and private original-file
+storage (Development and Staging, deployed and founder-QA verified), and source open/preview are
+all implemented today. As of `v3.2-dev`, **embedded in-app readers for PDF, image, text, and
+DOCX, plus a playback-only Audio player**, are also implemented and integrated (see
+`docs/docx-reader.md`, `docs/audio-source-player.md`, and the "Source open/preview" section
+below), along with the [Source Normalization Foundation](./source-normalization-foundation.md)
+and the mock-provider [Generate Study Deck](./generate-study-deck-ux.md) workflow (gated to
+Development/Staging). Production remains grandfathered and has not received cloud metadata sync
+or private source storage. **Still entirely unimplemented**: real provider-backed AI generation,
+OCR/transcription of source bytes, in-platform sharing, Canvas integration, and any in-app
+**video** reader. See "Implementation status" below for the precise current/future split; the
+sections of this document describing unimplemented capabilities are future/target architecture,
+not current behavior, except where "Implementation status" says otherwise.
 
 Where this document says "must" or "should," it is a requirement for whenever this is built, not
 a claim about what exists now. See `docs/branch-and-release-policy.md` for why none of this can
@@ -67,12 +72,34 @@ founder-QA verified in both):**
 - Explicitly NOT implemented by this: extraction, parsing, OCR, transcription, or any AI
   processing of the uploaded bytes — this batch stops at secure storage and on-demand,
   authenticated availability.
-- **Source open/preview** (Source Preview + Open Original batch): Source Detail now has an "Open
+- **Source open/preview** (Source Preview + Open Original batch): Source Detail has an "Open
   original" action — local-first resolution, on-demand cloud fallback with durable local retention,
   handed off to the OS-native viewer via `expo-sharing`. Available in both Development and Staging
   (it depends on the same source-storage capability gate above). See "Source open/preview" below
-  for the full architecture. Still explicitly not implemented: any embedded/in-app renderer,
-  extraction, annotation, or editing of the opened file.
+  for the full architecture.
+
+**Implemented now (embedded local readers, `v3.2-dev`, every environment/guest, no gating):**
+
+- **"Open in Interval" embedded readers** for PDF, image, plain text, and Word `.docx`
+  (`app/library/[id]/reader.tsx`, strategy resolved by `src/domain/sourceReader.ts`). The DOCX
+  reader parses on-device with `fflate` and renders native structured content with deterministic
+  wide-table layout — no WebView, no cloud/file conversion. See `docs/docx-reader.md`.
+- **"Listen in Interval" audio player** for audio sources (`expo-audio`, playback-only: no
+  recording, no microphone permission, no background audio). `sourceType: "audio"` is decided by
+  audio MIME/extension or manual selection; video is never treated as audio; file size never
+  affects classification. See `docs/audio-source-player.md`.
+- Any format without an embedded reader (video, `.xlsx`, `.pptx`, legacy `.doc`, encrypted DOCX)
+  still uses "Open original" / OS handoff only.
+- **Source Normalization Foundation** (`src/domain/normalization/`) — a common
+  `NormalizedSourceContent` shape produced by per-format adapters (the image and audio adapters
+  are structural stubs; no OCR/transcription). See `docs/source-normalization-foundation.md`.
+- **Generate Study Deck** — Library Source → Generate → review draft → save a real deck, using
+  the deterministic **mock provider only**. Gated to `INTERVAL_ENV` `development`/`staging`
+  (hidden in Production). See `docs/generate-study-deck-ux.md` and
+  `docs/ai-generation-foundation.md`.
+
+Still explicitly not implemented in-app for any opened source: extraction, OCR/transcription,
+annotation, highlighting, editing, or a video reader.
 
 **Not implemented (still future work, per this document's other sections):**
 
@@ -82,15 +109,18 @@ founder-QA verified in both):**
 - Guest-to-account source adoption (§18)
 - Library metadata sync in Production (Production is excluded by design; widening to it requires
   a separate, explicit founder-approved decision)
-- Extraction, OCR, or transcription of any uploaded original file
-- AI generation of any kind
+- Extraction, OCR, or transcription of any uploaded original file (the normalization image/audio
+  adapters are structural stubs only)
+- Real provider-backed AI generation of any kind (the integrated Generate Study Deck workflow is
+  `[MOCK]` output only, from a deterministic local provider — see `docs/ai-generation-foundation.md`)
 - Canvas integration
 - Notifications
 - Hosted/in-platform sharing (§5)
-- Environment separation (§15 Phase 3)
 - Automatic cleanup of orphaned cloud source objects (see "Delete behavior" below)
-- Any embedded/in-app document renderer, annotation, highlighting, or editing of an opened source
-  (see "Source open/preview" below — "Open original" hands off to the OS-native viewer only)
+- Any in-app **video** reader (there is no `video` `SourceType`)
+- Annotation, highlighting, or editing of an opened source, and OCR/text-extraction from a
+  rendered source (the embedded PDF/image/text/DOCX readers and the Audio player are
+  consumption-only — see `docs/docx-reader.md` / `docs/audio-source-player.md`)
 
 ## Root Library rule
 
