@@ -103,21 +103,36 @@ provider-backed capability that does not exist.
   id-only `accepted: [id, …]` array), the client drops every acknowledgement, marks nothing
   clean, and re-pushes the same batch forever — **sync never converges**. The old `128 MB / 3 s`
   sizing also risks the exact `Http500` 3000 ms timeout the 2026-08 Development incident showed.
-- **Action (founder, CloudShell):** confirm whether `IntervalStagingStack` was already redeployed
-  with `ea61356`; if not, deploy it. This is an in-place Lambda config + code update — the
-  `cdk diff` should show only `SyncPushFunction` / `SyncPullFunction` `Code` / `MemorySize` /
-  `Timeout` (plus the asset-exclude), and **zero** changes to DynamoDB tables, the Cognito pool,
-  the S3 bucket, IAM roles, or API routes.
+- **Repo/CDK side is verified ready** (checked against canonical `2fd9df6`): `cd infra && npm ci
+  && npm run build && npx cdk synth IntervalStagingStack` succeeds and synthesizes
+  `interval-staging-sync-push` and `interval-staging-sync-pull` at **`MemorySize: 256`,
+  `Timeout: 15`, `nodejs24.x`**, with `syncAssetExclude = ["*.test.mjs"]` on both; the
+  `library-source-storage` Lambda stays `128 / 3`. The `sync-push`/`sync-pull` asset dirs carry
+  the `ea61356` `lib.mjs` structure (`MAX_CHANGES_PER_PUSH = 500`, `PUSH_CONCURRENCY = 10`,
+  `classifyChange` / `decidePushOutcome`, `cursorForRow` SK-derived cursor).
+- **This deploy must be done from AWS CloudShell in the Interval AWS account.** It cannot be run
+  from the local development machine — that machine's default AWS credentials resolve to a
+  different account with zero Interval resources in `us-east-2` (the same account mismatch
+  `docs/aws-current-state-audit.md` records for the local Mac). Do not switch credential profiles
+  or run `cdk deploy` locally — it would attempt to create the whole Staging stack in the wrong
+  account.
+- **Action (founder, CloudShell):** confirm whether `IntervalStagingStack` already carries
+  `ea61356`; if not, deploy it. In-place Lambda config + code update — the `cdk diff` must show
+  only `SyncPushFunction` / `SyncPullFunction` `Code` / `MemorySize` / `Timeout` (plus the
+  asset-exclude), and **zero** changes to DynamoDB tables, the Cognito pool, the S3 bucket, IAM
+  roles, or API routes. If the diff is empty, Staging is already current — do not deploy.
 
 ```
 # In AWS CloudShell, region us-east-2, confirmed to be the Interval account (read-only checks first)
 git clone <repo> && cd interval-app/infra
 npm ci
 npm run build                       # tsc
-npx cdk diff IntervalStagingStack   # REVIEW: expect only the two sync Lambdas (Code/Memory/Timeout) + asset exclude
-npx cdk deploy IntervalStagingStack # only after founder reviews the diff
-# read-only post-deploy: aws lambda get-function-configuration --function-name interval-staging-sync-push
-#                        (expect MemorySize 256, Timeout 15)
+npx cdk diff IntervalStagingStack   # REVIEW: expect only the two sync Lambdas (Code/Memory/Timeout) + asset exclude, or empty
+npx cdk deploy IntervalStagingStack # only if the diff is non-empty AND matches exactly that scope
+# read-only post-deploy:
+#   aws lambda get-function-configuration --function-name interval-staging-sync-push  (expect MemorySize 256, Timeout 15)
+#   aws lambda get-function-configuration --function-name interval-staging-sync-pull  (expect MemorySize 256, Timeout 15)
+#   aws cloudformation describe-stacks --stack-name IntervalStagingStack --query "Stacks[0].StackStatus"  (UPDATE_COMPLETE)
 ```
 
 Rollback if a redeployed revision misbehaves: **redeploy the previous good revision**, never
