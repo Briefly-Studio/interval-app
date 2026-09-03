@@ -1,5 +1,6 @@
 // Theme Lab — top-level screen. Dev-only visual exploration; see app/theme-lab.tsx for the
-// route-level __DEV__ gate. Nothing on this screen reads or writes AsyncStorage, touches account
+// route-level isDevToolsEnabled() gate (src/config/devToolsCapability.ts). Nothing on this
+// screen reads or writes AsyncStorage, touches account
 // data, or calls AWS — every value shown is a static mock, and switching studies only changes
 // local React state for the duration this screen is open.
 
@@ -99,8 +100,9 @@ export function ThemeLabScreen() {
       {/* Development-only diagnostics — read directly from the canonical appearance store, not
           recomputed or duplicated here, so this can never drift from what production actually
           uses. Restrained: plain monospace key/value rows, no separate visual language from the
-          rest of this screen. __DEV__-gated at the route level (app/theme-lab.tsx) already, so
-          this never ships to production regardless. */}
+          rest of this screen. Environment-gated at the route level (app/theme-lab.tsx's
+          isDevToolsEnabled() check, src/config/devToolsCapability.ts) already, so this never
+          ships to Staging or Production regardless. */}
       <View style={styles.diagnosticsBlock}>
         <Text style={styles.diagnosticsTitle}>Production appearance state (live, canonical)</Text>
         <DiagnosticRow label="selectedMode" value={appearance.selectedMode} />

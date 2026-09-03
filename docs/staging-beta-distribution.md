@@ -140,11 +140,15 @@ eas.json
 consistent with how this repository already names everything else for this AWS environment
 (`IntervalStagingStack`, `INTERVAL_ENV=staging`, "Staging RC" throughout
 `docs/v3-beta-release-checklist.md`). The `"environment": "preview"` field is a *different*,
-EAS-internal concept (which EAS-hosted environment-variable scope this profile pulls from — EAS's
-own fixed vocabulary for that specific field is `development`/`preview`/`production`, unrelated to
-our own `INTERVAL_ENV` naming) — mapped to `preview` here since EAS has no `staging` slot for that
-field specifically; see "Environment variable strategy" below for why this distinction matters and
-what to verify before relying on it.
+EAS-internal concept (which EAS-hosted environment-variable scope this profile pulls from) —
+`development`/`preview`/`production` are EAS's own **standard/default** environment names (the
+ones `eas env:set`'s own `--help` text describes as "Default environments"), not the *only*
+schema-valid ones — the underlying `eas.json` field itself accepts any environment name matching
+`/^[a-z0-9_-]+$/` (3–100 characters), so a custom `staging`-named EAS environment is possible in
+principle. This repository deliberately still maps to the standard `preview` slot rather than
+creating a custom one, to stay on EAS's default/most-supported path — `"environment": "preview"`
+is unchanged by this note. See "Environment variable strategy" below for why this distinction
+matters and what to verify before relying on it.
 
 - **`staging`** — the primary, recommended profile: `distribution: "store"` builds a binary
   signed for App Store Connect / TestFlight submission (`eas submit` after `eas build`).
@@ -185,9 +189,12 @@ EXPO_PUBLIC_COGNITO_APP_CLIENT_ID
 - **Required mechanism: EAS-hosted environment variables**, scoped to the `preview`
   environment-variable environment (matching this profile's `"environment": "preview"` field) —
   created once the project is linked to an EAS account (see "Apple/EAS account state" below), via
-  either the `eas env:create` CLI command or the expo.dev project dashboard. **This repository has
-  not verified the exact current `eas env:create` flag syntax against a live linked account** (the
-  project isn't linked — see below) — confirm current syntax with `eas env:create --help` (or the
+  either the `eas env:set` CLI command or the expo.dev project dashboard. **`eas env:create` is
+  deprecated** (confirmed directly against the installed `eas-cli` package: it is marked `hidden`
+  and its own description reads "deprecated, use eas env:set") — use `eas env:set` instead; both
+  commands accept the same `--environment`, `--name`, and `--value` flags. **This repository has
+  not verified the exact current `eas env:set` flag syntax against a live linked account** (the
+  project isn't linked — see below) — confirm current syntax with `eas env:set --help` (or the
   dashboard UI) at the time this is actually set up, rather than trusting a possibly-stale example
   here. Conceptually: one variable per name above, values taken from `IntervalStagingStack`'s real
   CDK outputs (`docs/cdk-infrastructure.md`), scoped to the `preview` EAS environment, visibility
@@ -283,13 +290,13 @@ authentication/approval:
 ```
 eas login                          # link this machine to the Interval Expo account
 eas init                           # link this repository to an EAS project (writes extra.eas.projectId to app.json)
-eas env:create --environment preview --name EXPO_PUBLIC_API_BASE_URL ...          # repeat for the other 3 Staging values
+eas env:set --environment preview --name EXPO_PUBLIC_API_BASE_URL --value ...    # repeat for the other 3 Staging values (eas env:create is deprecated — use env:set)
 eas build --profile staging --platform ios       # (once Apple Developer Program + App Store Connect app record exist)
 eas build --profile staging-internal --platform ios   # (ad-hoc fallback, sooner)
 eas submit --profile staging --platform ios      # after a successful `staging` build, to reach TestFlight
 ```
 
-Verify exact current flags for `eas env:create` (and any other command above) with `--help` or the
+Verify exact current flags for `eas env:set` (and any other command above) with `--help` or the
 expo.dev dashboard at the time each step is actually performed — not asserted here as guaranteed
 current syntax, since this repository's tooling was not exercised against a live linked account.
 
