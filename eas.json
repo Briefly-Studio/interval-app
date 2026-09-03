@@ -13,6 +13,18 @@
       "ios": {
         "simulator": true
       }
+    },
+    "staging": {
+      "distribution": "store",
+      "developmentClient": false,
+      "environment": "preview",
+      "env": {
+        "INTERVAL_ENV": "staging"
+      }
+    },
+    "staging-internal": {
+      "extends": "staging",
+      "distribution": "internal"
     }
   }
 }

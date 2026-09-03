@@ -11,6 +11,7 @@ import { onSyncComplete } from "../src/cloud/sync/syncSignal";
 import type { SyncStatus } from "../src/cloud/sync/syncState";
 import { SYNC_STATUS_KEYS } from "../src/cloud/sync/syncStatusCopy";
 import { useSyncState } from "../src/cloud/sync/useSyncState";
+import { isDevToolsEnabled } from "../src/config/devToolsCapability";
 import { getHomeGreeting } from "../src/content/timeGreeting";
 import { sortDeckCollectionsCanonical } from "../src/domain/deckCollectionOrder";
 import { getAssignedDeckIds, getUnfiledDecks } from "../src/domain/deckCollectionMembership";
@@ -238,13 +239,14 @@ export default function DecksHome() {
   const deckCountForCollection = (collection: DeckCollectionRecord) =>
     collection.deckIds.filter((id) => assignedDeckIds.has(id)).length;
   const hasCollections = collections.length > 0;
+  const devToolsEnabled = isDevToolsEnabled();
 
   return (
     <Screen>
       <HomeHeader
-        onTitleLongPress={__DEV__ ? () => router.push({ pathname: "/dev-tools" as any }) : undefined}
+        onTitleLongPress={devToolsEnabled ? () => router.push({ pathname: "/dev-tools" as any }) : undefined}
       >
-        {__DEV__ && (
+        {devToolsEnabled && (
           <IconButton
             name="construct-outline"
             accessibilityLabel={t("home.devToolsLabel")}

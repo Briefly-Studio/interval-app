@@ -1,12 +1,15 @@
 // Development-only Library fixture data — never imported or reachable from production code
-// paths. See app/dev-tools.tsx, which is itself gated behind `if (!__DEV__)` and has no entry
-// point reachable from production navigation (see docs/platform-scope.md's "Development-only
-// route guards" section).
+// paths. See app/dev-tools.tsx, which is itself gated behind isDevToolsEnabled() (keyed to
+// INTERVAL_ENV, not the JS bundle's __DEV__ build mode — see src/config/devToolsCapability.ts)
+// and has no entry point reachable from production navigation (see docs/platform-scope.md's
+// "Development-only route guards" section). The guards below mirror that same gate as
+// defense-in-depth, in case either function is ever called from somewhere other than that screen.
 //
 // Fixtures are entirely generic placeholder study-topic names, not real school, professor,
 // account, or personal information — safe to ship in source control and safe to display.
 // Nothing here creates a file, a binary, or any content beyond metadata.
 
+import { isDevToolsEnabled } from "../config/devToolsCapability";
 import { makeId } from "../models/deck";
 import type { LibrarySource } from "../models/librarySource";
 import type { SourceCollection } from "../models/sourceCollection";
@@ -45,7 +48,7 @@ function baseFixture(overrides: Partial<LibrarySource> & Pick<LibrarySource, "di
 // call more than once; each call appends a fresh batch rather than deduplicating, since this is a
 // throwaway dev aid, not production data.
 export async function seedDevLibraryFixtures(scope: WorkspaceScope): Promise<void> {
-  if (!__DEV__) return;
+  if (!isDevToolsEnabled()) return;
 
   const calculusCollection: SourceCollection = { id: makeId(), name: "Calculus", createdAt: new Date().toISOString() };
   const examPrepCollection: SourceCollection = { id: makeId(), name: "Exam Prep", createdAt: new Date().toISOString() };
@@ -116,7 +119,7 @@ export async function seedDevLibraryFixtures(scope: WorkspaceScope): Promise<voi
 // decks/cards/sessions/accounts. Requires the caller to have already confirmed with the user
 // (see app/dev-tools.tsx); this function itself performs no confirmation.
 export async function resetDevLibraryFixtures(scope: WorkspaceScope): Promise<void> {
-  if (!__DEV__) return;
+  if (!isDevToolsEnabled()) return;
   await setLibrarySources(scope, []);
   await setSourceCollections(scope, []);
   // Touch both read paths once so any in-memory callers relying on getLibrarySources'

@@ -2,26 +2,28 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { isDevToolsEnabled } from "../src/config/devToolsCapability";
 import { ThemeLabScreen } from "../src/devTools/themeLab/ThemeLabScreen";
 import { IconButton } from "../src/ui/IconButton";
 import { Screen } from "../src/ui/Screen";
 import { spacing, typography } from "../src/ui/theme";
 
-// Development-only route, following the same __DEV__ gate already used by app/dev-tools.tsx.
+// Development-only route, following the same environment gate used by app/dev-tools.tsx (see
+// src/config/devToolsCapability.ts — keyed to INTERVAL_ENV, not __DEV__).
 // Reached from Developer tools → Theme Lab, not from any ordinary user-facing navigation. Renders
 // a fully isolated, self-contained visual exploration (src/devTools/themeLab/) — no production
 // screen, component, or token file is imported, changed, or affected by this route existing.
 export default function ThemeLabRoute() {
   const router = useRouter();
 
-  if (!__DEV__) {
+  if (!isDevToolsEnabled()) {
     return (
       <Screen>
         <View style={styles.header}>
           <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
           <Text style={typography.title} accessibilityRole="header">Theme Lab</Text>
         </View>
-        <Text style={typography.secondary}>This screen is only available in development.</Text>
+        <Text style={typography.secondary}>This screen is only available in the Development environment.</Text>
       </Screen>
     );
   }

@@ -85,11 +85,22 @@ exposing anything at runtime).
 
 ## Development-only route guards
 
-`app/dev-tools.tsx` and `app/theme-lab.tsx` both gate their actual content behind `if (!__DEV__)`.
-As of this batch, their entry points are gated too, not just their content: the Home screen's
-long-press-to-open-Dev-Tools gesture (`app/index.tsx`) and its `__DEV__`-only gear icon both now
-only register at all in development builds (`onTitleLongPress` is `undefined` in production, so
-React Native never even attaches the long-press gesture recognizer) — previously the long-press
-itself was always active, and a production user who found it would land on dev-tools.tsx's own
-"only available in development" stub rather than being unable to navigate there at all. Theme Lab
-has no entry point outside Dev Tools, so gating Dev Tools' entry covers it too.
+`app/dev-tools.tsx` and `app/theme-lab.tsx` both gate their actual content behind
+`isDevToolsEnabled()` (`src/config/devToolsCapability.ts`). Their entry points are gated the same
+way, not just their content: the Home screen's long-press-to-open-Dev-Tools gesture
+(`app/index.tsx`) and its gear icon both now only register at all when `isDevToolsEnabled()` is
+true (`onTitleLongPress` is `undefined` otherwise, so React Native never even attaches the
+long-press gesture recognizer) — a user who somehow found the gesture would land on
+dev-tools.tsx's own "only available in the Development environment" stub rather than being unable
+to navigate there at all. Theme Lab has no entry point outside Dev Tools, so gating Dev Tools'
+entry covers it too.
+
+**As of the Staging beta distribution work, this gate is keyed to `INTERVAL_ENV`
+(`isDevToolsEnabled()` returns true only when `getEnvironmentConfig().isDevelopment` is true),
+not to `__DEV__`** (whether the current JS bundle was built in Metro/development mode). These are
+independent axes — a Staging build must never show developer tooling even if it happens to be a
+Debug-configuration build pointed at Staging for internal testing, and a Development build must
+keep showing it even when compiled in a Release configuration. `isDevToolsEnabled()` fails closed
+(returns `false`) if `INTERVAL_ENV` can't be read at all. See
+`docs/staging-beta-distribution.md`'s "Dev Tools gating" section for the full rationale and the
+production-like Staging distribution this enables.
