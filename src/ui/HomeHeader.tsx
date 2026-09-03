@@ -7,7 +7,7 @@ import { useTheme } from "@/src/theme";
 type HomeHeaderProps = {
   /** Preserves the existing hidden dev-tools entry point (long-press on the wordmark). */
   onTitleLongPress?: () => void;
-  /** Right-side controls — account button and, in dev builds, the dev-tools gear. */
+  /** Right-side controls — account button and, in the Development environment, the dev-tools gear. */
   children?: ReactNode;
 };
 

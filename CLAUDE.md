@@ -137,6 +137,11 @@ For anything not covered directly in this file, these are the authoritative docu
 24. `docs/audio-source-player.md` — the `expo-audio` playback-only Audio source player.
     **Implemented, founder native-runtime QA verified, integrated into `v3.2-dev`; playback-only,
     no recording, no background audio.**
+25. `docs/staging-beta-distribution.md` — the production-like Staging beta distribution
+    foundation: EAS build profiles, environment-keyed Dev Tools gating (`isDevToolsEnabled()`,
+    replacing `__DEV__`), and the App Store/TestFlight distribution plan. **Implemented on
+    `release/v3.2-staging-distribution`, not yet merged into `v3.2-dev`; no EAS account linkage,
+    no App Store submission, no bundle identifier change.**
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -576,11 +581,18 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   fallback for every format without an embedded reader (video, `.xlsx`, `.pptx`, legacy `.doc`,
   encrypted DOCX). Still not implemented in-app: any editing, annotation, highlighting, OCR, or
   text extraction of an opened source, and any **video** reader (there is no `video` `SourceType`).
-- EAS Build is prepared (`eas.json`) but not yet linked to an Expo account/project — that step
-  requires interactive founder action (`eas login`, `eas init`) and was deliberately not performed
-  autonomously; local builds (`npx expo run:ios`) remain the founder-QA-verified path for both
-  physical iPhone and Simulator. Do not run `eas login`/`eas init` against an assumed or default
-  account.
+- EAS Build now also has `staging`/`staging-internal` profiles (`eas.json`, see
+  `docs/staging-beta-distribution.md`) alongside `development`/`development-simulator`, but the
+  project is still **not linked to an Expo account/project** — that step requires interactive
+  founder action (`eas login`, `eas init`) and was deliberately not performed autonomously; local
+  builds (`npx expo run:ios`) remain the founder-QA-verified path for both physical iPhone and
+  Simulator. Do not run `eas login`/`eas init` against an assumed or default account. The Staging
+  profiles also need EAS-hosted environment variables created (Staging's real
+  `EXPO_PUBLIC_API_BASE_URL`/Cognito values — see that doc's "Environment variable strategy") and
+  an App Store Connect app record before a real TestFlight build can go out; the current
+  `com.anonymous.briefly-app`/`com.anonymous.brieflyapp` bundle identifiers are still placeholders
+  not suitable for that submission (see the same doc's "App identifier audit" — no identifier was
+  changed).
 - **Real provider-backed AI generation is not implemented.** The AI Generation Foundation and the
   Generate Study Deck UX are integrated, but generation is `createMockProvider()` only. Wiring a
   real model provider, selecting/deploying an AI backend, and defining prompt/rate/cost/abuse
