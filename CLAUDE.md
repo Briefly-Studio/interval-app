@@ -157,9 +157,9 @@ For anything not covered directly in this file, these are the authoritative docu
     no recording, no background audio.**
 25. `docs/staging-beta-distribution.md` — the production-like Staging beta distribution
     foundation: EAS build profiles, environment-keyed Dev Tools gating (`isDevToolsEnabled()`,
-    replacing `__DEV__`), and the App Store/TestFlight distribution plan. **Implemented on
-    `release/v3.2-staging-distribution`, not yet merged into `v3.2-dev`; no EAS account linkage,
-    no App Store submission, no bundle identifier change.**
+    replacing `__DEV__`), and the App Store/TestFlight distribution plan. **Independently audited
+    and integrated into `v3.2-dev` and `v3.3-dev`; no EAS account linkage, no App Store submission,
+    no bundle identifier change, no beta build produced yet.**
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own

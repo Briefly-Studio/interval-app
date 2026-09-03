@@ -1,9 +1,10 @@
 # Staging Beta Distribution Foundation
 
-**Status: implemented on `release/v3.2-staging-distribution`, cut from the frozen `v3.2-dev`
-baseline (`4f0593e`), not yet merged.** This document describes a release-engineering/build-
-configuration foundation only — no product feature, no AWS resource, and no App Store submission
-exists as a result of this batch. See `docs/branch-and-release-policy.md` for the branch model and
+**Status: independently audited and integrated into `v3.2-dev`** (merge commit `130cbda`, on top
+of the frozen `4f0593e` baseline) **and forward-integrated into `v3.3-dev`** (merge commit
+`318e6b9`). This document describes a release-engineering/build-configuration foundation only — no
+product feature, no AWS resource, and no App Store submission exists as a result of this batch.
+See `docs/branch-and-release-policy.md` for the branch model and
 `docs/v3-beta-release-checklist.md` for the overall v3.2 Staging RC status this feeds into.
 
 ## Purpose
@@ -362,7 +363,9 @@ additionally gated off by `isDevToolsEnabled()` regardless).
 - No bundle identifier change.
 - No App Store Connect submission, no TestFlight build actually produced.
 - No `v3.2-rc1` tag created.
-- No merge into `v3.2-dev` — this branch (`release/v3.2-staging-distribution`) awaits review.
+- No beta build (`eas build`/`eas submit`) — only the branch integration described above was
+  performed. `release/v3.2-staging-distribution` is preserved as the historical, independently
+  audited release-engineering branch (not deleted).
 - No v3.3 feature work, no real AI, no PDF/DOCX Generate, no OCR, no transcription, no Discover
   architecture change, no DOCX/Audio reader change, no sync behavior change.
 - No dependency upgrade (Expo, CDK, or otherwise) and no `npm audit fix`.
