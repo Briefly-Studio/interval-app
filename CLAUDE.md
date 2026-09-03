@@ -25,16 +25,34 @@ received the same testing depth. Authenticated web support is explicitly out of 
 beta — see `docs/platform-scope.md` for the full platform-support decision and rationale.
 
 `v3.0-dev` is frozen at the approved V3 Release Candidate (tagged `v3.0-rc1`). The `v3.1-dev`
-integration wave is complete; **active integration and stabilization is now on `v3.2-dev`**
-(canonical `bc255e4` at the time of the v3.2 stabilization audit). `v3.2-dev` contains the
-completed feature wave: source normalization foundation, sync reliability hardening, the AI
-Generation Foundation, Generate Study Deck (mock provider), the Discover Preview Foundation, the
-native DOCX reader, and the native Audio source player — see "v3.2 integrated features" below and
-`docs/branch-and-release-policy.md` for the full policy. **v3.2 feature intake is frozen** at
-`b460271` (see `docs/v3-beta-release-checklist.md`'s "v3.2 stabilization status"): the automated
-stabilization audit passed and founder canonical full-app QA passed on a Development build. The
-Staging RC has not started — it needs one founder-gated `cdk deploy IntervalStagingStack` (the
-`ea61356` sync-Lambda hardening) first. Production remains not approved.
+integration wave is complete. **`v3.2-dev` is now frozen as the stable beta/release maintenance
+line**, at `4f0593e` (the exact commit that closed out the v3.2 stabilization audit and Staging
+infrastructure prerequisite — see below); it takes only release blockers, beta-found bugs,
+safety/security fixes, data-integrity fixes, and release-specific documentation from here forward,
+never new feature work. `v3.2-dev` contains the completed feature wave: source normalization
+foundation, sync reliability hardening, the AI Generation Foundation, Generate Study Deck (mock
+provider), the Discover Preview Foundation, the native DOCX reader, and the native Audio source
+player — see "v3.2 integrated features" below and `docs/branch-and-release-policy.md` for the full
+policy. **v3.2 feature intake remains frozen** (originally at `b460271`; see
+`docs/v3-beta-release-checklist.md`'s "v3.2 stabilization status"): the automated stabilization
+audit passed and founder canonical full-app QA passed on a Development build. **The Staging RC
+infrastructure prerequisite has now PASSED** — the founder deployed the `ea61356` sync-Lambda
+hardening to `IntervalStagingStack` via AWS CloudShell (both sync Lambdas confirmed `256 MB / 15 s
+/ nodejs24.x`; `library-source-storage` unchanged at `128 MB / 3 s`; final `npx cdk diff
+IntervalStagingStack` returned zero differences). **Staging client/beta RC QA and the beta
+distribution build have not started yet** — see `docs/v3-beta-release-checklist.md`'s "v3.2
+Staging RC plan" for the remaining steps. No `v3.2-rc1` tag exists yet; it is cut only after
+Staging RC QA passes. Production remains not approved.
+
+**`v3.3-dev` is now the active development line**, cut from that exact `4f0593e` v3.2 freeze
+baseline. It carries responsibility for all post-v3.2 feature work — most immediately, real
+backend AI provider integration (replacing the `[MOCK]` Generate Study Deck provider), PDF/DOCX
+normalization feeding real Generate, and later image OCR / audio transcription / AI-backed
+Discover — none of which is implemented yet at the branch cut itself. See
+`docs/branch-and-release-policy.md`'s "Current state" and "Forward-fix policy" for the full
+v3.2/v3.3 branch discipline: a bug found in v3.2 beta is fixed on `v3.2-dev` first, validated,
+released if needed, and only then reconciled forward into `v3.3-dev` — `v3.3-dev` must never
+regress a bug already fixed in `v3.2-dev`.
 
 ### Legacy Briefly identifiers
 

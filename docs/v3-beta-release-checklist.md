@@ -40,9 +40,26 @@ before this docs commit; `b460271` adds only documentation on top of it — no c
   Generate remains `[MOCK]` / TXT-only, Discover uses localized chrome with English fixture
   lesson content, unsupported video remains "Open original". This is a Development-build pass; it
   does not imply a Staging or Production pass.
-- **Staging release candidate — [ ] not started.** One founder-gated AWS deploy is a prerequisite
-  (`npx cdk deploy IntervalStagingStack` for the `ea61356` sync-Lambda hardening) — see "v3.2
-  Staging RC plan" below.
+- **Staging infrastructure prerequisite — [x] PASSED.** The founder deployed the `ea61356`
+  sync-Lambda hardening to `IntervalStagingStack` from AWS CloudShell. Confirmed post-deploy:
+  `interval-staging-sync-push` and `interval-staging-sync-pull` both `MemorySize: 256`,
+  `Timeout: 15`, `Runtime: nodejs24.x`; `interval-staging-library-source-storage` unchanged at
+  `MemorySize: 128`, `Timeout: 3`, `Runtime: nodejs24.x`. A Library Lambda asset delta noticed
+  before deploy was investigated and found to be additive-only (two legacy MIME types,
+  `application/vnd.ms-powerpoint` and `application/vnd.ms-excel`, already present in the allow
+  list) — not a drift concern. Final `npx cdk diff IntervalStagingStack` returned **"Number of
+  stacks with differences: 0."** See "v3.2 Staging RC plan" below for what this unblocks and what
+  is still pending.
+- **Staging client/beta RC QA — [ ] pending.** Infrastructure is ready; the Staging RC QA matrix
+  below (auth, sync, Library, readers, Generate, Discover) has not been run against a Staging
+  build yet.
+- **Beta distribution build — [ ] pending.** No production-like Staging binary exists yet — see
+  "EAS / distribution" below and the upcoming Production-like Staging Distribution Foundation work
+  (Dev Tools gating for external testers).
+- **`v3.2-dev` is now frozen as the release/beta maintenance line** at
+  `4f0593eef1a6a9a3708758408f82cfb38e05f3ab` (this stabilization + the Staging infrastructure
+  prerequisite above). `v3.3-dev`, cut from that exact commit, is the active development branch —
+  see `docs/branch-and-release-policy.md`.
 - **Production release — [ ] not approved.** Production remains grandfathered; none of the v3.2
   features have been widened to Production. Production's own sync Lambdas remain `128 MB / 3 s`
   (a separate, founder-gated question, out of v3.2 scope).
@@ -68,7 +85,7 @@ Each reconciled onto canonical and integrated via its own `--no-ff` merge. No AW
 | Capability | Maturity | Environment exposure | Cloud/backend | Automated tests |
 |---|---|---|---|---|
 | Source normalization foundation | Implemented | all (domain layer) | none | (covered under `test:ai` context prep) |
-| Sync reliability hardening (`ea61356`) | Code + CDK on canonical; **deployed + founder-QA verified on Development**; **Staging redeploy not confirmed from the repo** (see "v3.2 Staging RC plan") | client hardening ships in every build; server hardening needs a Staging deploy | existing sync backend (Lambda config + code only) | `test:sync` — 39 |
+| Sync reliability hardening (`ea61356`) | Code + CDK on canonical; **deployed + founder-QA verified on Development**; **deployed to Staging** (CloudShell, `cdk diff IntervalStagingStack` now clean — see "v3.2 Staging RC plan") | client hardening ships in every build; server hardening now live on both Development and Staging | existing sync backend (Lambda config + code only) | `test:sync` — 39 |
 | AI Generation Foundation | Implemented — **mock provider only** | all (mock) | reference Lambda exists in repo, **not in the CDK stack, not deployed** — do not deploy it | `test:ai` — 20 |
 | Generate Study Deck | Implemented, founder-QA verified — `[MOCK]` output | **Development/Staging only; hidden in Production** | none | (domain-covered) |
 | Discover Preview | Implemented, founder-QA verified | **currently ungated — visible in Production** (decision pending) | none | none |
@@ -87,16 +104,19 @@ in the CDK stack (`infra/lib/interval-sync-stack.ts` only packages `sync-push`, 
 `library-source-storage`) and must **not** be deployed — deploying it would create a fake
 provider-backed capability that does not exist.
 
-**One founder-gated AWS deploy is required — the sync-Lambda hardening (`ea61356`):**
+**Founder-gated AWS deploy — the sync-Lambda hardening (`ea61356`) — [x] DONE.** Deployed via AWS
+CloudShell; `IntervalStagingStack` reached `UPDATE_COMPLETE`; final `npx cdk diff
+IntervalStagingStack` returned zero differences. Detail retained below for the record.
 
 - `infra/lib/interval-sync-stack.ts` now sizes both sync Lambdas at **256 MB / 15 s** (up from
   `128 MB / 3 s`) and excludes `*.test.mjs` from the Lambda asset; `backend/lambdas/sync-push/`
   and `sync-pull/` were restructured (bounded concurrency, `MAX_CHANGES_PER_PUSH = 500` → 413,
   `{entity,id}` acknowledgement identity, `SK`-derived pull cursor).
-- This was deployed to and founder-QA verified on **`IntervalDevelopmentStack`**. There is **no
-  Staging deployment record for `ea61356`** in `docs/cdk-infrastructure.md` — the "256 MB / 15 s
-  (Development and Staging)" wording there describes the shared CDK construct, not a confirmed
-  Staging deploy.
+- This was deployed to and founder-QA verified on **`IntervalDevelopmentStack`** first. It is now
+  **also deployed to `IntervalStagingStack`** (CloudShell, confirmed `UPDATE_COMPLETE`,
+  `interval-staging-sync-push`/`interval-staging-sync-pull` both `256 MB / 15 s / nodejs24.x`) —
+  the "256 MB / 15 s (Development and Staging)" wording in `docs/cdk-infrastructure.md` now
+  reflects a confirmed Staging deploy, not just the shared CDK construct.
 - **Why it matters for Staging RC:** a v3.2 client's `parseAckList`
   (`src/cloud/sync/pushHelpers.mjs`) deliberately has **no legacy `string[]` fallback** — it only
   accepts `[{entity, id}]`. If Staging still runs the pre-`ea61356` `sync-push` (which returns an
@@ -116,11 +136,14 @@ provider-backed capability that does not exist.
   `docs/aws-current-state-audit.md` records for the local Mac). Do not switch credential profiles
   or run `cdk deploy` locally — it would attempt to create the whole Staging stack in the wrong
   account.
-- **Action (founder, CloudShell):** confirm whether `IntervalStagingStack` already carries
-  `ea61356`; if not, deploy it. In-place Lambda config + code update — the `cdk diff` must show
-  only `SyncPushFunction` / `SyncPullFunction` `Code` / `MemorySize` / `Timeout` (plus the
-  asset-exclude), and **zero** changes to DynamoDB tables, the Cognito pool, the S3 bucket, IAM
-  roles, or API routes. If the diff is empty, Staging is already current — do not deploy.
+- **Action (founder, CloudShell) — [x] DONE.** `IntervalStagingStack` was confirmed not to carry
+  `ea61356` and was deployed. Before deploying, a Library Lambda asset delta noticed in the diff
+  was investigated: the only difference between the deployed and canonical
+  `library-source-storage` source was two additive legacy MIME types already intended for the
+  allow list (`application/vnd.ms-powerpoint`, `application/vnd.ms-excel`) — not an unexpected
+  drift, so the deploy proceeded. In-place Lambda config + code update only — no change to
+  DynamoDB tables, the Cognito pool, the S3 bucket, IAM roles, or API routes. Final `npx cdk diff
+  IntervalStagingStack` returned **"Number of stacks with differences: 0."**
 
 ```
 # In AWS CloudShell, region us-east-2, confirmed to be the Interval account (read-only checks first)

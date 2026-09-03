@@ -12,21 +12,47 @@ repository. It reflects a real decision the founder made, not a proposal.
 - **The `v3.1-dev` integration wave is complete.** It carried the localization, source-viewer /
   source-preview, source-normalization, sync-reliability, and AI-foundation work off their
   feature branches via founder-QA'd `--no-ff` merges.
-- **`v3.2-dev` is the active branch.** It contains everything in `v3.1-dev` plus the completed
-  feature wave — Generate Study Deck (mock provider), Discover Preview, the DOCX reader, and the
-  Audio source player. As of the v3.2 feature freeze it sits at
-  `b460271df1eaa09ac339d6b137b37c51d838d9e2`. See `docs/v3-beta-release-checklist.md` for the
-  v3.2 stabilization and Staging-RC status.
+- **`v3.2-dev` is now the frozen release/beta maintenance line**, at
+  `4f0593eef1a6a9a3708758408f82cfb38e05f3ab` — the commit that closed out the v3.2 stabilization
+  audit and the Staging infrastructure prerequisite (the `ea61356` sync-Lambda hardening deploy to
+  `IntervalStagingStack`; `cdk diff IntervalStagingStack` now shows zero differences). It contains
+  everything in `v3.1-dev` plus the completed v3.2 feature wave — Generate Study Deck (mock
+  provider), Discover Preview, the DOCX reader, and the Audio source player. See
+  `docs/v3-beta-release-checklist.md` for the full v3.2 stabilization and Staging-RC status:
+  Staging client/beta RC QA and the beta distribution build have not started yet; no `v3.2-rc1`
+  tag exists yet.
+- **`v3.3-dev` is the active development branch**, cut from that exact `4f0593e` v3.2 freeze
+  baseline. It carries responsibility for all post-v3.2 feature work — real backend AI provider
+  integration, PDF/DOCX normalization feeding real Generate, later image OCR / audio
+  transcription / AI-backed Discover, and other explicitly approved post-v3.2 development. No
+  post-v3.2 feature was implemented at the branch cut itself.
 
 ## What happens where
 
-- Active feature and stabilization work is on `v3.2-dev`. During a feature freeze (declared in
-  the release checklist) only release blockers, safety/security fixes, broken-flow fixes,
-  config/release corrections, documentation, and environment preparation land there.
+- **`v3.2-dev` is frozen release/beta maintenance.** Only release blockers, beta-found bugs,
+  safety/security fixes, data-integrity fixes, and release-specific documentation land there — no
+  real AI, no new Generate source formats, no new Discover architecture, no unrelated UX
+  expansion, no feature experiments, no broad refactors, no dependency modernization.
+- **`v3.3-dev` is where active feature and stabilization work happens now.**
 - `v3.0-dev` receives no new feature work. It exists to represent "the state that was tested and
   approved," not to keep evolving.
 - Future waves follow the same discipline that built `v3.1-dev` and `v3.2-dev`: feature branch →
-  reconcile with canonical → founder QA → explicit `--no-ff` merge.
+  reconcile with canonical → founder QA → explicit `--no-ff` merge, now against `v3.3-dev`.
+
+## Forward-fix policy (v3.2 → v3.3)
+
+If a bug is discovered by v3.2 Staging/beta testers, once external beta distribution is live:
+
+1. Fix it on `v3.2-dev` (the release line), branching a dedicated fix branch from `v3.2-dev`'s
+   current tip if the fix needs its own review/QA cycle before landing.
+2. Validate it (static checks; founder runtime QA per CLAUDE.md's Engineering Rules).
+3. Land it on `v3.2-dev`; produce a new RC/build from `v3.2-dev` if the fix needs to reach testers.
+4. Reconcile the same validated fix forward into `v3.3-dev` (merge/cherry-pick, whichever
+   reconciles cleanest) — do not let a v3.2 bug fix exist only on the old release line.
+
+The goal: `v3.3-dev` must never regress a bug that was already fixed in `v3.2-dev`. This mirrors
+the existing hotfix discipline below, applied to the current release/development pair instead of
+the historical `v3.0-dev` checkpoint.
 
 ## Hotfixes
 
