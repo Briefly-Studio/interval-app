@@ -9,6 +9,7 @@ import { isLibrarySourceStorageEnabled, isSourceFileAvailableOnThisDevice } from
 import { isLibraryMetadataCloudSyncEnabled } from "../src/cloud/sync/libraryMetadataSyncCapability";
 import { SyncService } from "../src/cloud/sync/SyncService";
 import { getEnvironmentConfig } from "../src/config/environment";
+import { isDevToolsEnabled } from "../src/config/devToolsCapability";
 import { resetDevLibraryFixtures, seedDevLibraryFixtures } from "../src/domain/librarySeed";
 import { useTranslation } from "../src/i18n";
 import { ForceResyncUnsyncedChangesError, forceFullResyncPrep, resetLocalData } from "../src/storage/devReset";
@@ -90,7 +91,7 @@ export default function DevToolsScreen() {
     }, [scope])
   );
 
-  if (!__DEV__) {
+  if (!isDevToolsEnabled()) {
     return (
       <Screen>
         <View style={[styles.header, { gap: spacing.sm }]}>
@@ -98,7 +99,7 @@ export default function DevToolsScreen() {
           <Text style={[typography.title, { color: colors.textPrimary }]} accessibilityRole="header">Developer tools</Text>
         </View>
         <Text style={[typography.secondary, { color: colors.textSecondary }]}>
-          This screen is only available in development.
+          This screen is only available in the Development environment.
         </Text>
       </Screen>
     );
