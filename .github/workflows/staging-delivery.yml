@@ -64,4 +64,4 @@ jobs:
       - name: Trigger Staging iOS build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform ios --profile staging --non-interactive
+        run: eas build --platform ios --profile staging --non-interactive --auto-submit
