@@ -27,5 +27,12 @@
       "extends": "staging",
       "distribution": "internal"
     }
+  },
+  "submit": {
+    "staging": {
+      "ios": {
+        "ascAppId": "6809260111"
+      }
+    }
   }
 }
