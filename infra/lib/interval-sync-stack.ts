@@ -371,6 +371,136 @@ export class IntervalSyncStack extends cdk.Stack {
     }
 
     // ---------------------------------------------------------------------
+    // AI Generate Study Deck Lambda — Development only. Phase B of the Bedrock/Nova 2 Lite
+    // integration (Phase A: backend/lambdas/ai-generate-study-deck/, src/domain/ai/,
+    // src/cloud/ai/ — see docs/ai-generation-foundation.md). Deliberately narrower than the
+    // Library source storage block above (development || staging): real provider-backed AI
+    // generation stays Development-only until its own separate, founder-approved decision to
+    // widen it — this matches the mobile-side gate exactly (src/domain/ai/providerSelection.ts's
+    // USE_BACKEND_PROVIDER, which is false by default and even when true only ever activates in
+    // Development). Deploying this (an explicit, separate `cdk deploy IntervalDevelopmentStack`)
+    // and flipping USE_BACKEND_PROVIDER are both still separate, founder-gated steps after this
+    // code lands — see docs/ai-generation-foundation.md's Phase B section. Production is never
+    // instantiated by this stack at all (see this file's class comment), so this is unreachable
+    // there regardless.
+    // ---------------------------------------------------------------------
+    if (environmentName === "development") {
+      const aiGenerateStudyDeckRole = new iam.Role(this, "AiGenerateStudyDeckRole", {
+        roleName: names.aiGenerateStudyDeckRole,
+        assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+        ],
+      });
+
+      // Amazon Nova 2 Lite has no direct in-region invocation path from us-east-2 — verified
+      // directly against AWS's own Bedrock regional-compatibility documentation before writing
+      // this (not assumed): us-east-2 reaches Nova 2 Lite only through a cross-Region
+      // (system-defined) inference profile, never a bare foundation-model id. "us." is the
+      // correct geography-scoped profile prefix for a us-east-2-sourced call (keeps inference
+      // within the US; "global." would allow routing anywhere worldwide). See
+      // docs/ai-generation-foundation.md's "Bedrock model/region verification" section for the
+      // full source-of-truth record — this is the one identifier Phase A's own code deliberately
+      // never hardcodes (src/domain/ai/ and backend/lambdas/ai-generate-study-deck/index.mjs);
+      // this is the one place in the whole repository it's written down, as an environment
+      // variable value, never a product constant.
+      const NOVA_2_LITE_FOUNDATION_MODEL_ID = "amazon.nova-2-lite-v1:0";
+      const NOVA_2_LITE_INFERENCE_PROFILE_ID = "us.amazon.nova-2-lite-v1:0";
+
+      // Calling a model THROUGH a cross-Region inference profile requires IAM permission on BOTH
+      // the inference-profile resource AND the underlying foundation-model resource — verified
+      // directly against AWS's own IAM identity-based-policy-examples documentation ("Minimal
+      // policy for Amazon Bedrock Playground chat" lists exactly this pair together, and its own
+      // closing note says to replace that example's wildcards with "the specific model and
+      // inference profile ARNs" to restrict access). The foundation-model ARN's region segment
+      // is wildcarded (never its model-id segment) because cross-Region inference inherently
+      // routes to one of several destination regions internally — IAM evaluates the call as if
+      // made against whichever destination region Bedrock actually selects, not just this
+      // stack's own region. No `bedrock:*` and no resource-level `*` anywhere in this block.
+      aiGenerateStudyDeckRole.addToPolicy(
+        new iam.PolicyStatement({
+          sid: "BedrockInvokeNovaLite",
+          // bedrock:InvokeModel is the correct action even though Phase A's code calls the
+          // Converse API, not InvokeModel directly — verified directly against AWS's own
+          // inference-prerequisites documentation: "bedrock:InvokeModel – Required to carry out
+          // model invocation. Allows the role to call the InvokeModel and Converse API
+          // operations." No separate bedrock:Converse action exists. Streaming permission
+          // (bedrock:InvokeModelWithResponseStream) is deliberately omitted — Phase A's code uses
+          // ConverseCommand, never ConverseStreamCommand; this repository does not introduce
+          // streaming.
+          actions: ["bedrock:InvokeModel"],
+          resources: [
+            `arn:aws:bedrock:*::foundation-model/${NOVA_2_LITE_FOUNDATION_MODEL_ID}`,
+            `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/${NOVA_2_LITE_INFERENCE_PROFILE_ID}`,
+          ],
+        })
+      );
+
+      // Required specifically because invocation goes through a cross-Region inference profile
+      // rather than a direct foundation-model id — verified directly against AWS's own IAM
+      // prerequisites-for-inference documentation: "bedrock:GetInferenceProfile – Required to
+      // run inference with an inference profile." Scoped to only the one profile this Lambda
+      // ever calls.
+      aiGenerateStudyDeckRole.addToPolicy(
+        new iam.PolicyStatement({
+          sid: "BedrockGetNovaLiteInferenceProfile",
+          actions: ["bedrock:GetInferenceProfile"],
+          resources: [`arn:aws:bedrock:${this.region}:${this.account}:inference-profile/${NOVA_2_LITE_INFERENCE_PROFILE_ID}`],
+        })
+      );
+
+      // Timing contract, restated from Phase A (src/domain/ai/limits.ts's
+      // GENERATION_LIMITS.requestTimeoutMs=25_000 and backend/lambdas/ai-generate-study-deck/
+      // bedrockClient.mjs's BEDROCK_CALL_TIMEOUT_MS=20_000) so this Lambda's own CDK timeout
+      // stays consistent with both: the Bedrock call itself is independently bounded to 20s, the
+      // overall app-level request budget is 25s, and both stay under API Gateway HTTP API's
+      // fixed, non-configurable 29s integration ceiling. 28s here leaves the smallest possible
+      // margin under that 29s ceiling, after the 25s app budget already accounts for cold start
+      // and request/response validation — never increased merely to "be safe," since widening it
+      // further would itself approach the 29s ceiling again. Memory (512 MB) is its own
+      // independent choice, not copied from the sync Lambdas' 256 MB (no DynamoDB round trips
+      // here) or the presigned-URL Lambda's 128 MB (this Lambda does JSON parsing of a model
+      // response plus the AWS SDK Bedrock client's own overhead, a meaningfully different
+      // workload from either).
+      const aiGenerateStudyDeckFunction = new lambda.Function(this, "AiGenerateStudyDeckFunction", {
+        ...commonLambdaProps,
+        role: aiGenerateStudyDeckRole,
+        memorySize: 512,
+        timeout: cdk.Duration.seconds(28),
+        functionName: names.aiGenerateStudyDeck,
+        // Packages this directory exactly as committed, node_modules included — see
+        // backend/lambdas/ai-generate-study-deck/package.json's own header comment and
+        // docs/cdk-infrastructure.md's "AI Generate Study Deck Lambda" section for why this
+        // Lambda (uniquely among this stack's four Lambdas) needs its own node_modules:
+        // @aws-sdk/client-bedrock-runtime is not reliably bundled in the Lambda Node.js runtime
+        // the way @aws-sdk/client-dynamodb is for the sync Lambdas. `npm ci` MUST be run inside
+        // that directory before `cdk synth`/`cdk deploy` — this is a build-step requirement, not
+        // something CDK enforces for you; `lambda.Code.fromAsset` packages whatever is actually
+        // on disk at synth time, nothing more and nothing less.
+        code: lambda.Code.fromAsset(path.join(__dirname, "../../backend/lambdas/ai-generate-study-deck"), {
+          exclude: ["*.test.mjs"],
+        }),
+        environment: {
+          // Never a product/domain constant — read only from here, exactly as Phase A's
+          // callModelProvider() expects (backend/lambdas/ai-generate-study-deck/index.mjs).
+          // Changing the configured model later (e.g. a future Claude Haiku routing decision) is
+          // a one-line change to this value, never a code change.
+          BEDROCK_MODEL_ID: NOVA_2_LITE_INFERENCE_PROFILE_ID,
+        },
+      });
+
+      // Same Cognito JWT authorizer as every other authenticated route on this API — no second
+      // identity system, no unauthenticated route. Path matches src/cloud/ai/http.ts's
+      // GENERATE_STUDY_DECK_PATH constant exactly.
+      httpApi.addRoutes({
+        path: "/ai/generate-study-deck",
+        methods: [apigwv2.HttpMethod.POST],
+        integration: new apigwv2Integrations.HttpLambdaIntegration("AiGenerateStudyDeckIntegration", aiGenerateStudyDeckFunction),
+        authorizer: jwtAuthorizer,
+      });
+    }
+
+    // ---------------------------------------------------------------------
     // Outputs — public identifiers only (matching the existing Production "AWS Resources"
     // section in CLAUDE.md's own precedent of documenting these plainly). No secret exists for
     // any of these; the app client has no client secret.
