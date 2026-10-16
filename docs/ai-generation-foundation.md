@@ -415,22 +415,40 @@ No recommendation is made or implied by this section beyond "the contract above 
 change regardless of which provider is chosen later" — an actual provider selection is explicit
 future, founder-approved work.
 
-## Next step to real provider integration
+## Next step to real provider integration — status
 
-1. Founder selects a provider (see "Provider landscape" above — non-binding input only).
-2. Implement one real `ModelProvider` (e.g. `openAiProvider.ts` or similar) that calls the chosen
-   provider's structured-output API server-side and maps its response into the same
-   `ModelProviderOutcome` shape `mockProvider.ts` already returns — no change needed to
-   `aiService.ts`, `contextPreparation.ts`, or `responseValidation.ts`.
-3. Deploy `ai-generate-study-deck`'s real counterpart via CDK (its own explicit, founder-approved
-   AWS change — new Lambda, new API Gateway route, new IAM policy, the provider credential stored
-   as a Lambda environment variable/secret, never in client code) and wire a real
-   `GenerationRateLimiter` backed by DynamoDB.
-4. Build the production "Generate" UI/review screen — a separate, future UX batch, explicitly out
-   of scope here.
-5. Build "Save accepted deck" — turning an approved `GeneratedDeckDraft` into a real
-   `DeckRecord`/`CardRecord[]` — also explicitly out of scope here.
+This section originally described five future steps. The founder has since selected a provider,
+and the first two steps are now implemented code (still undeployed, still fail-closed/inactive on
+the mobile side) — see the Bedrock integration's own Phase A and Phase B reports for the full
+record. Updated status:
 
-No AI provider (OpenAI, Anthropic, Bedrock, Gemini, or otherwise) is named, selected, or called
-anywhere in this batch's code or in this document as an implemented choice — only referenced
-above as non-binding future-decision context.
+1. **Done.** Founder selected **AWS Bedrock, Amazon Nova 2 Lite** as the first real model
+   (`us.amazon.nova-2-lite-v1:0`, a cross-Region inference profile — Nova 2 Lite has no direct
+   in-region invocation path from `us-east-2`; verified against AWS's own documentation, not
+   guessed — see `docs/cdk-infrastructure.md`'s "Bedrock model/region verification" section).
+2. **Done (Phase A).** `src/domain/ai/backendProvider.ts` implements the real, backend-calling
+   `ModelProvider`; `backend/lambdas/ai-generate-study-deck/bedrockClient.mjs` implements the real
+   Bedrock Converse API call. No change was needed to `aiService.ts`, `contextPreparation.ts`, or
+   `responseValidation.ts` — exactly as this section originally predicted. The model identifier is
+   read only from `BEDROCK_MODEL_ID` at runtime, never hardcoded as a product constant, so a
+   future model/provider change (e.g. routing some requests to Claude Haiku) does not require
+   touching this seam again.
+3. **Partially done (Phase B).** The CDK change — new dedicated IAM role, new Lambda, new API
+   Gateway route — is **implemented in `infra/lib/interval-sync-stack.ts`, Development-only, NOT
+   yet deployed** (see `docs/cdk-infrastructure.md`'s "AI Generate Study Deck Lambda" section).
+   Bedrock requires no stored provider credential — IAM alone is sufficient, so no Lambda
+   environment-variable secret or Secrets Manager entry was needed. **A real `GenerationRateLimiter`
+   backed by DynamoDB is explicitly NOT implemented** — `checkRateLimit()` remains a NOOP; this is
+   a disclosed, deliberate gap, acceptable through an initial Development-only founder smoke test
+   but required before any Staging deployment (see `docs/cdk-infrastructure.md`'s "Rate
+   limiting" section).
+4. Build the production "Generate" UI/review screen — still a separate concern from this
+   foundation document; see `docs/generate-study-deck-ux.md` for its own status.
+5. Build "Save accepted deck" — also tracked separately; see `docs/generate-study-deck-ux.md`.
+
+**Remaining before the mobile app can ever make a real Bedrock-backed generation call:** an
+explicit, founder-approved `cdk deploy IntervalDevelopmentStack` (not yet run), followed by
+flipping `src/domain/ai/providerSelection.ts`'s `USE_BACKEND_PROVIDER` to `true` (also not yet
+done) — both remain deliberate, separate, founder-gated steps, not a side effect of Phase A or
+Phase B landing. Amazon Nova 2 Lite via AWS Bedrock is now named, selected, and implemented in
+code in this repository — it is not deployed, and the mobile app cannot reach it yet.

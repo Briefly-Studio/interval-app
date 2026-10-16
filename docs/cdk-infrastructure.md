@@ -37,6 +37,13 @@ keys, short-lived non-persisted upload/download URLs, and a second Development d
 account confirmed able to securely retrieve the cloud original. See "Library source storage" below
 for the full design.
 
+**AI Generate Study Deck Lambda — implemented in CDK, NOT yet deployed.** Phase B of the Bedrock/
+Nova 2 Lite integration (Phase A: `backend/lambdas/ai-generate-study-deck/`, `src/domain/ai/`,
+`src/cloud/ai/` — see `docs/ai-generation-foundation.md`) added a dedicated IAM role, Lambda, and
+one authenticated API route to `infra/lib/interval-sync-stack.ts`, **Development-only**. This is
+code only — no `cdk deploy` has been run for it. Development deployment is pending founder
+approval. See "AI Generate Study Deck Lambda" below for the full design.
+
 **Staging Library Feature Parity, deployed to Staging and founder-QA verified:** a later batch
 extended the identical Library metadata cloud sync and private source-storage capability to
 Staging — reusing the exact same `IntervalSyncStack` construct and conditional (now
@@ -89,10 +96,12 @@ automatically from CloudShell's own authenticated session; nothing here needs to
 
 ## Development resource names
 
-Eleven application resources, per `docs/environment-separation-plan.md` §4's naming standard for
+Thirteen application resources, per `docs/environment-separation-plan.md` §4's naming standard for
 the original eight, plus three Library-source-storage resources added by the Library Organization
-+ Private Source Storage batch (see "Library source storage" below) — **all deployed and
-founder-QA verified**:
++ Private Source Storage batch (see "Library source storage" below), plus two AI Generate Study
+Deck resources added by Phase B of the Bedrock integration (see "AI Generate Study Deck Lambda"
+below — **implemented in CDK, not yet deployed**, unlike every other row in this table, which is
+**deployed and founder-QA verified**):
 
 | Resource | Name |
 |---|---|
@@ -107,6 +116,8 @@ founder-QA verified**:
 | Lambda (library source storage) | `interval-dev-library-source-storage` |
 | IAM role (library source storage only) | `interval-dev-library-source-storage-role` |
 | S3 bucket (library source originals) | CloudFormation-auto-generated, no fixed name — see "Library source storage" below |
+| Lambda (AI Generate Study Deck) — **not yet deployed** | `interval-dev-ai-generate-study-deck` |
+| IAM role (AI Generate Study Deck only) — **not yet deployed** | `interval-dev-ai-generate-study-deck-role` |
 
 CloudFormation stack name: **`IntervalDevelopmentStack`**.
 
@@ -169,6 +180,142 @@ because of a third conditional branch.
   `/sync/push`/`/sync/pull`, behind that same stack's Cognito JWT authorizer (so a Development
   token is rejected by Staging's routes and vice versa, identically to the sync routes). No
   unauthenticated route exists for either.
+
+## AI Generate Study Deck Lambda
+
+**Status: implemented in `infra/lib/interval-sync-stack.ts`, NOT yet deployed.** Phase B of the
+Bedrock/Nova 2 Lite integration — Phase A (`backend/lambdas/ai-generate-study-deck/`,
+`src/domain/ai/`, `src/cloud/ai/`) is already merged and already fully tested against injected
+fakes (`npm run test:ai`), but until this section's resources are actually deployed via an
+explicit, separate, founder-approved `cdk deploy IntervalDevelopmentStack`, nothing in this
+Lambda can be reached — the mobile app has no route to call, and
+`src/domain/ai/providerSelection.ts`'s `USE_BACKEND_PROVIDER` stays `false` regardless. See
+`docs/ai-generation-foundation.md`'s Phase B section for the full status record.
+
+**Development-only by design** — deliberately narrower than the Library source storage
+conditional above (`development || staging`). Real provider-backed AI generation stays
+Development-only until its own separate, later, founder-approved decision to widen it; this
+matches the mobile-side gate in `providerSelection.ts` exactly. Production is never instantiated
+by this CDK app at all, so it has none of this regardless.
+
+### Bedrock model/region verification (source of truth)
+
+Verified directly against AWS's own documentation before writing any IAM or Lambda code — not
+assumed, not guessed:
+
+- **Amazon Nova 2 Lite has no direct in-region invocation path from `us-east-2`.** AWS's Bedrock
+  regional-compatibility documentation lists `us-east-2` as supporting Nova 2 Lite only through a
+  cross-Region (system-defined) inference profile — never the bare foundation-model id.
+- **The correct profile for a `us-east-2`-sourced call is the `us.` (US geography) prefix** —
+  `us.amazon.nova-2-lite-v1:0` — rather than `global.`, which would allow routing to any
+  commercial AWS region worldwide. Geography-scoped profiles keep inference within the US.
+- **Calling a model through a cross-Region inference profile requires IAM permission on BOTH the
+  inference-profile resource and the underlying foundation-model resource** — confirmed against
+  AWS's own IAM identity-based-policy-examples documentation ("Minimal policy for Amazon Bedrock
+  Playground chat" lists exactly this pair together, with a closing note to replace its wildcards
+  with "the specific model and inference profile ARNs" to restrict access).
+- **`bedrock:InvokeModel` is the correct — and sufficient — IAM action for the Converse API**,
+  confirmed against AWS's own inference-prerequisites documentation: "`bedrock:InvokeModel` –
+  Required to carry out model invocation. Allows the role to call the `InvokeModel` and
+  `Converse` API operations." No separate `bedrock:Converse` action exists.
+- **`bedrock:GetInferenceProfile` is additionally required** specifically because invocation goes
+  through an inference profile rather than a direct foundation-model id — same AWS
+  inference-prerequisites documentation: "`bedrock:GetInferenceProfile` – Required to run
+  inference with an inference profile."
+- **Not yet verified** (cannot be, without deploying): whether Nova 2 Lite / this specific
+  inference profile is actually *enabled* for model access in this AWS account. Model access is a
+  per-account, console/API-level opt-in separate from IAM — before any real deploy, run a
+  read-only `aws bedrock list-inference-profiles --region us-east-2` (or check the Bedrock
+  console's "Model access" page) to confirm, the same way every other AWS state check in this
+  project is read-only-first.
+
+### IAM — `interval-dev-ai-generate-study-deck-role`
+
+Dedicated to this one Lambda — never shared with `SyncLambdaRole` or the library-source-storage
+role. Least privilege, two statements, no `bedrock:*`, no `Resource: "*"`:
+
+| Statement | Actions | Resource |
+|---|---|---|
+| `BedrockInvokeNovaLite` | `bedrock:InvokeModel` | `arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0` **and** `arn:aws:bedrock:us-east-2:<account>:inference-profile/us.amazon.nova-2-lite-v1:0` |
+| `BedrockGetNovaLiteInferenceProfile` | `bedrock:GetInferenceProfile` | `arn:aws:bedrock:us-east-2:<account>:inference-profile/us.amazon.nova-2-lite-v1:0` |
+
+The foundation-model ARN's **region segment** is wildcarded (never its model-id segment) because
+cross-Region inference inherently routes to one of several destination regions internally — IAM
+evaluates the call as if made against whichever destination region Bedrock actually selects, not
+just this stack's own region. This is the one documented, justified wildcard this role needs; see
+"Bedrock model/region verification" above for why. No streaming permission
+(`bedrock:InvokeModelWithResponseStream`) — Phase A's code uses the Converse API's non-streaming
+`ConverseCommand`, never `ConverseStreamCommand`. Plus the standard `AWSLambdaBasicExecutionRole`
+managed policy (CloudWatch Logs only), same as every other Lambda in this project.
+
+### Lambda — `interval-dev-ai-generate-study-deck`
+
+Packages `backend/lambdas/ai-generate-study-deck/` directly via `lambda.Code.fromAsset(...)`
+(`*.test.mjs` excluded), `nodejs24.x` runtime, `arm64` architecture — same conventions as every
+other Lambda in this project. Handler: `index.handler` (`handleGenerateStudyDeck`, Phase A).
+
+**Memory 512 MB, timeout 28 seconds** — deliberately not copied from either existing Lambda
+sizing precedent. Not the sync Lambdas' 256 MB/15 s (no DynamoDB round trips here); not the
+presigned-URL Lambda's 128 MB/3 s (this Lambda parses a model response and carries the AWS SDK
+Bedrock client's own overhead, a meaningfully heavier workload). The 28 s timeout is deliberately
+tight against API Gateway HTTP API's fixed, non-configurable 29-second integration ceiling — Phase
+A's own timing contract (`src/domain/ai/limits.ts`'s `GENERATION_LIMITS.requestTimeoutMs=25_000`,
+`backend/lambdas/ai-generate-study-deck/bedrockClient.mjs`'s `BEDROCK_CALL_TIMEOUT_MS=20_000`)
+already bounds the Bedrock call itself to 20 s within a 25 s app-level budget; 28 s on the Lambda
+function itself is the smallest margin above that budget, not a reason to widen the budget further.
+
+Environment variables: `BEDROCK_MODEL_ID=us.amazon.nova-2-lite-v1:0` — the one place in this
+entire project the model/profile identifier is written down; `backend/lambdas/
+ai-generate-study-deck/index.mjs` reads it from `process.env` only, never as a hardcoded product
+constant (see "Bedrock model/region verification" above for the identifier's own source of
+truth). No secret, no AWS credential, no Cognito identifier, no endpoint literal in this or any
+other environment variable on this function.
+
+### Packaging — the one Lambda in this project with its own `node_modules`
+
+`backend/lambdas/ai-generate-study-deck/package.json` + `package-lock.json` (Phase A) declare
+`@aws-sdk/client-bedrock-runtime` as a scoped dependency of this Lambda only — unlike the other
+three Lambdas in this project, which bundle zero `node_modules` and rely entirely on what the
+`nodejs24.x` Lambda runtime provides built in (`@aws-sdk/client-dynamodb`/`@aws-sdk/
+lib-dynamodb`, a long-standing runtime-bundled module). `@aws-sdk/client-bedrock-runtime` is not
+reliably bundled the same way — not assumed, genuinely unverifiable without deploying — so this
+Lambda bundles its own copy, the same `node_modules`-alongside-`package.json` pattern `infra/`
+itself already uses for its own dependencies. `node_modules` here is gitignored, same as
+everywhere else in this repository.
+
+**`lambda.Code.fromAsset(...)` packages this directory exactly as it finds it on disk at synth
+time — nothing more.** This means **`npm ci` must be run inside
+`backend/lambdas/ai-generate-study-deck/` before every `cdk synth`/`cdk deploy`** — a documented
+build-step requirement, not something CDK enforces or performs for you, and not something to
+assume is already done. This was verified directly: `npx cdk synth IntervalDevelopmentStack`
+after running that `npm ci` step produces a template whose `AiGenerateStudyDeckFunction` resource
+references a real synthesized asset containing the dependency; nothing about CDK's own bundling
+behavior was changed to make this work (no `NodejsFunction`/esbuild construct introduced).
+
+### API route
+
+`POST /ai/generate-study-deck`, added to this stack's own existing `HttpApi` (`interval-dev-sync-api`)
+alongside `/sync/push`, `/sync/pull`, and the Library source-storage routes — same Cognito JWT
+authorizer, same `AWS_PROXY`/`2.0` integration style as every other route in this project. No new
+API Gateway resource, no new user pool, no second identity system. The path matches
+`src/cloud/ai/http.ts`'s `GENERATE_STUDY_DECK_PATH` constant exactly — verified by direct
+comparison, not assumed.
+
+### Rate limiting — explicitly deferred, explicitly flagged
+
+Phase A's `checkRateLimit()` (`backend/lambdas/ai-generate-study-deck/index.mjs`) remains a NOOP
+placeholder — always allows. Phase B does not add a persistent limiter: building one (a durable,
+atomic, per-user counter — e.g. a new DynamoDB table or access pattern, plus the IAM to use it)
+is not trivial, and is explicitly out of scope for "wire the already-implemented backend into
+Development infrastructure." **This is a real, currently-unmitigated gap: once this Lambda is
+deployed and the mobile switch is flipped, real paid Bedrock requests are not currently limited
+per user, per day, or by concurrency**, despite `src/domain/ai/limits.ts`'s
+`GENERATION_LIMITS.maxRequestsPerUserPerDay`/`maxConcurrentRequestsPerUser` already existing as
+*contract* values. Recommendation: acceptable to leave deferred through an initial
+Development-only founder smoke test (Development is founder-only, disposable, and bounded by the
+founder's own usage) — but a real, durable limiter must land in its own dedicated batch **before**
+any Staging deployment of this Lambda, since Staging is where real external beta-tester accounts
+exist.
 
 ## Staging resource names
 
@@ -317,6 +464,10 @@ this project.
 tables, Production's tables, or any other resource. Each environment's shared role can only ever
 reach that same environment's own two tables.
 
+`interval-dev-ai-generate-study-deck-role` (Development only, **implemented, not yet deployed**)
+is a separate, dedicated role with Bedrock permissions only — see "AI Generate Study Deck Lambda"
+above for the full statement-by-statement IAM design and its AWS-documentation source of truth.
+
 ## Lambda packaging
 
 `interval-dev-sync-push` / `interval-dev-sync-pull` package
@@ -342,6 +493,11 @@ Environment variables:
 only difference from Development is which table names get injected as environment variables. No
 Production table name, API ID, or Cognito identifier appears in any function's environment or
 anywhere else in this project.
+
+`interval-dev-ai-generate-study-deck` (Development only, **implemented, not yet deployed**) is
+the one Lambda in this project that bundles its own `node_modules` rather than relying on the
+runtime-provided SDK — see "AI Generate Study Deck Lambda" above for the full packaging record,
+including the `npm ci` build-step requirement this introduces.
 
 ## Sync Lambda sizing incident (2026-08)
 
@@ -417,6 +573,10 @@ Integrations are `AWS_PROXY` with payload format `2.0`, matching Production.
 `interval-staging-user-pool`/`interval-staging-mobile` — a request bearing a Development or
 Production token is rejected by Staging's authorizer, and vice versa. Each environment's API can
 only ever be reached with that same environment's own tokens.
+
+`POST /ai/generate-study-deck` (Development only, **implemented, not yet deployed**) was added to
+`interval-dev-sync-api` alongside the routes above, behind the identical Cognito JWT authorizer —
+see "AI Generate Study Deck Lambda" above.
 
 ## Tagging
 

@@ -25,6 +25,12 @@ export interface IntervalResourceNames {
   // names can't safely be deterministic the way every other resource in this file is.
   librarySourceStorage: string;
   librarySourceStorageRole: string;
+  // AI Generate Study Deck Lambda (Phase A: backend/lambdas/ai-generate-study-deck/; Phase B
+  // wires it into this stack). Computed for every environment here, same as every other name in
+  // this file — only the STACK decides which environments actually get this resource created;
+  // this file remains pure naming, never a feature gate.
+  aiGenerateStudyDeck: string;
+  aiGenerateStudyDeckRole: string;
 }
 
 const ENVIRONMENT_PREFIX: Record<IntervalEnvironmentName, string> = {
@@ -46,5 +52,7 @@ export function resourceNamesFor(environmentName: IntervalEnvironmentName): Inte
     syncLambdaRole: `${prefix}-sync-lambda-role`,
     librarySourceStorage: `${prefix}-library-source-storage`,
     librarySourceStorageRole: `${prefix}-library-source-storage-role`,
+    aiGenerateStudyDeck: `${prefix}-ai-generate-study-deck`,
+    aiGenerateStudyDeckRole: `${prefix}-ai-generate-study-deck-role`,
   };
 }
