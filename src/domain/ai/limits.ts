@@ -14,7 +14,15 @@ export const GENERATION_LIMITS = {
    * cap must exist) is established now. */
   maxRequestsPerUserPerDay: 20,
   maxConcurrentRequestsPerUser: 1,
-  requestTimeoutMs: 30_000,
+  // Was 30_000 — reduced to stay safely below API Gateway HTTP API's fixed, non-configurable
+  // 29-second integration timeout. 30s exceeded that ceiling: API Gateway would return a generic
+  // 504 at 29s while the backend Lambda still believed it had 1 more second, producing a failure
+  // that never reaches the Lambda's own structured error response. 25s leaves ~4s of margin for
+  // Lambda cold start, request validation, and response validation/serialization outside the
+  // Bedrock call itself (which is independently bounded to 20s — see
+  // backend/lambdas/ai-generate-study-deck/bedrockClient.mjs's BEDROCK_CALL_TIMEOUT_MS). Mirrored,
+  // not imported, in that Lambda's own restated LIMITS — keep both in sync if this ever changes.
+  requestTimeoutMs: 25_000,
 } as const;
 
 /**
