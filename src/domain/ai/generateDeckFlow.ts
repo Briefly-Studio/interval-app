@@ -7,16 +7,17 @@ import {
   startGenerateDeckSession,
   type DraftProvenanceEntry,
 } from "./generateDeckSession";
-import { createMockProvider } from "./mockProvider";
+import { selectModelProvider } from "./providerSelection";
 import type { GenerationErrorCode, GenerationOptions } from "./types";
 
 // Orchestrates one end-to-end generation attempt for the UX shell:
-//   normalizeSource → availability guard → generateStudyDeck(mock provider) → populate the
+//   normalizeSource → availability guard → generateStudyDeck(selected provider) → populate the
 //   in-memory draft session for the review screen.
 //
 // This is the only place the screens touch the AI service boundary. UI components never import
-// mockProvider / aiService directly — they call runGenerateDeckFlow and then read the session.
-// Swapping the mock for a real (backend-calling) provider later is a one-line change here.
+// mockProvider / backendProvider / aiService directly — they call runGenerateDeckFlow and then
+// read the session. Which provider actually runs is decided entirely by
+// providerSelection.ts's selectModelProvider() — never hardcoded here.
 
 export type GenerateDeckFlowOutcome =
   | { status: "ready" }
@@ -64,7 +65,7 @@ export async function runGenerateDeckFlow(
     return { status: "unavailable", state: availability.state as Exclude<GenerationAvailabilityState, "ready"> };
   }
 
-  const outcome = await generateStudyDeck(createMockProvider(), {
+  const outcome = await generateStudyDeck(selectModelProvider(), {
     sourceTitle: source.displayTitle,
     normalizedContent: normalization.content,
     options,
