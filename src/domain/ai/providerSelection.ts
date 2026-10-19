@@ -26,14 +26,17 @@ import { createMockProvider } from "./mockProvider";
 // internals, or adds a genuine router behind this same seam — neither requires touching
 // aiService.ts, generateDeckFlow.ts, or any domain contract type.
 //
-// USE_BACKEND_PROVIDER defaults to false because nothing has actually been deployed yet in this
-// batch (Phase A has no CDK changes — see docs/ai-generation-foundation.md and the Bedrock
-// integration implementation report): flipping it to true today would just make every real
-// generation attempt fail with a network error, since there is no live endpoint to call. This is
-// the explicit, obvious, one-line way to exercise the backend-calling path locally once a
-// Development deployment exists (Phase B+) — a deliberate, founder-reviewed code change, never an
-// automatic runtime toggle.
-const USE_BACKEND_PROVIDER = false;
+// USE_BACKEND_PROVIDER was false through Phase A/Phase B (no live endpoint existed yet to call).
+// The Development backend is now deployed and has been smoke-tested end to end — mobile-shaped
+// request → Development Lambda → Bedrock Converse → Amazon Nova 2 Lite → a validated study deck
+// response — so this is now flipped to true, the deliberate, founder-reviewed step this constant
+// was always meant to gate (see its own original comment history). It remains a single, explicit,
+// obvious constant, never an automatic runtime toggle: flipping it back to false instantly reverts
+// every environment to the mock provider, with zero other code change, which is exactly why this
+// stayed a one-line seam rather than a feature-flag framework. The function below still only ever
+// activates the backend provider in the Development environment regardless of this constant's
+// value — Staging and Production are unaffected by this change.
+const USE_BACKEND_PROVIDER = true;
 
 /**
  * Even when USE_BACKEND_PROVIDER is true, the backend provider is only ever selected in the
