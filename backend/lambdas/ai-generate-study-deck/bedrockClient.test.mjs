@@ -201,3 +201,71 @@ test("runGeneration: an unrecognized thrown error maps safely to provider-unavai
   assert.equal(result.status, "error");
   assert.equal(result.code, "provider-unavailable");
 });
+
+// Diagnostic logging — captures console.log calls for the duration of one test only, restoring
+// the original immediately after (try/finally), so no test can leak a capture into another.
+async function withCapturedLogs(fn) {
+  const calls = [];
+  const original = console.log;
+  console.log = (...args) => calls.push(args);
+  try {
+    await fn(calls);
+  } finally {
+    console.log = original;
+  }
+}
+
+test("runGeneration: logs only the fixed-prefix diagnostic and the safe exception category — never the message, stack, or error object", async () => {
+  await withCapturedLogs(async (calls) => {
+    const sensitiveMessage = "AccessDenied for arn:aws:iam::123456789012:role/secret-detail";
+    const fakeClient = {
+      send: async () => {
+        const error = new Error(sensitiveMessage);
+        error.name = "SomeNeverSeenException";
+        throw error;
+      },
+    };
+    const result = await runGeneration(fakeClient, FakeCommand, "test-model-id", baseRequest(), baseContext());
+
+    // Contract unchanged: still maps to the existing provider-unavailable catch-all.
+    assert.equal(result.status, "error");
+    assert.equal(result.code, "provider-unavailable");
+
+    // Exactly one log call, with exactly the fixed prefix and the bare category string.
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0], ["[ai-generate-study-deck] bedrock provider error:", "SomeNeverSeenException"]);
+
+    // The logged call must never contain the message, anywhere in its arguments — not as the
+    // logged value, not concatenated into the prefix, not nested in an object.
+    const serializedCall = JSON.stringify(calls[0]);
+    assert.doesNotMatch(serializedCall, /AccessDenied|123456789012|secret-detail/);
+    // And never the raw Error object itself (only a plain string category).
+    assert.equal(typeof calls[0][1], "string");
+  });
+});
+
+test("runGeneration: throttling still logs its category and still maps to rate-limited — contract unchanged", async () => {
+  await withCapturedLogs(async (calls) => {
+    const fakeClient = {
+      send: async () => {
+        const error = new Error("rate exceeded detail that must not be logged");
+        error.name = "ThrottlingException";
+        throw error;
+      },
+    };
+    const result = await runGeneration(fakeClient, FakeCommand, "test-model-id", baseRequest(), baseContext());
+    assert.equal(result.status, "error");
+    assert.equal(result.code, "rate-limited");
+    assert.deepEqual(calls[0], ["[ai-generate-study-deck] bedrock provider error:", "ThrottlingException"]);
+    assert.doesNotMatch(JSON.stringify(calls[0]), /rate exceeded detail/);
+  });
+});
+
+test("runGeneration: a successful call never logs the bedrock-provider-error diagnostic", async () => {
+  await withCapturedLogs(async (calls) => {
+    const fakeClient = { send: async () => converseResponseWithText('{"title":"T","cards":[]}') };
+    const result = await runGeneration(fakeClient, FakeCommand, "test-model-id", baseRequest(), baseContext());
+    assert.equal(result.status, "ok");
+    assert.equal(calls.length, 0);
+  });
+});
