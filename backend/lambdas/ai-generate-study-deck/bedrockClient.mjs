@@ -168,7 +168,13 @@ export async function runGeneration(client, CommandCtor, modelId, request, conte
   try {
     response = await client.send(new CommandCtor(params), { abortSignal: controller.signal });
   } catch (error) {
-    const { code } = classifyBedrockError(error);
+    const { code, category } = classifyBedrockError(error);
+    // Exception class name only — never the message, stack, or error object itself (see this
+    // repository's logging guardrails, CLAUDE.md, and index.mjs's identical convention for its
+    // own top-level catch). This is the one diagnostic line that previously didn't exist: the
+    // classified category was already computed by classifyBedrockError() above but never
+    // reached a log, leaving CloudWatch with no signal at all when a real Bedrock call fails.
+    console.log("[ai-generate-study-deck] bedrock provider error:", category);
     return { status: "error", code };
   } finally {
     clearTimeout(timer);
