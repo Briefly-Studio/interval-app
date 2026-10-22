@@ -2,7 +2,9 @@ import type { LibrarySourceRecord } from "../../models/librarySource";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import { normalizeSource } from "../normalization/normalizeSource";
 import { generateStudyDeck } from "./aiService";
+import { prepareGenerationContext } from "./contextPreparation";
 import { deriveGenerationAvailability, type GenerationAvailabilityState } from "./generationAvailability";
+import { type GenerationCoverage, summarizeGenerationCoverage } from "./generationCoverage";
 import {
   startGenerateDeckSession,
   type DraftProvenanceEntry,
@@ -30,13 +32,25 @@ export type GenerateDeckFlowOutcome =
  * re-runs normalization when the user actually generates; normalization is deterministic and
  * cheap for the TXT sources this batch supports, so the small duplication is deliberate rather
  * than threading a large NormalizedSourceContent through screen state.
+ *
+ * `coverage` (only present when `canGenerate`) runs the SAME `prepareGenerationContext` call
+ * `runGenerateDeckFlow`/`generateStudyDeck` will use for the actual generation, with the same
+ * default budget — it is not a second, independent size computation, and it does not depend on
+ * `options` (card count/difficulty/style never affect context selection). This lets the options
+ * screen disclose up front whether the source will fit before the user taps Generate.
  */
 export async function checkGenerationAvailability(source: LibrarySourceRecord): Promise<{
   state: GenerationAvailabilityState;
   canGenerate: boolean;
+  coverage: GenerationCoverage | null;
 }> {
   const normalization = await normalizeSource(source);
-  return deriveGenerationAvailability(normalization);
+  const availability = deriveGenerationAvailability(normalization);
+  if (!availability.canGenerate) {
+    return { ...availability, coverage: null };
+  }
+  const context = prepareGenerationContext(normalization.content);
+  return { ...availability, coverage: summarizeGenerationCoverage(context) };
 }
 
 function buildProvenanceMap(chunks: { id: string; provenance: DraftProvenanceEntry }[]): Record<string, DraftProvenanceEntry> {
@@ -83,6 +97,11 @@ export async function runGenerateDeckFlow(
     draft: outcome.draft,
     provenanceByChunkId: buildProvenanceMap(normalization.content.chunks),
     options,
+    coverage: summarizeGenerationCoverage({
+      fullSourceIncluded: outcome.draft.generation.fullSourceIncluded,
+      chunkCount: outcome.draft.generation.selectedChunkIds.length,
+      excludedChunkCount: outcome.draft.generation.excludedChunkCount,
+    }),
   });
 
   return { status: "ready" };

@@ -5,8 +5,9 @@ import type { LibrarySourceRecord } from "../../models/librarySource";
 import { prepareViewerInput } from "../sourceViewer";
 import { normalizeAudioSource } from "./audioAdapter";
 import { normalizeImageSource } from "./imageAdapter";
-import { normalizePdfSource } from "./pdfAdapter";
-import { inspectTextForNormalization, normalizeTextSource } from "./textAdapter";
+import { normalizePdfTextSource } from "./pdfAdapter";
+import { extractPdfPageTexts } from "./pdfTextExtraction";
+import { inspectTextForNormalization, MAX_NORMALIZATION_TEXT_BYTES, normalizeTextSource } from "./textAdapter";
 import { NORMALIZATION_VERSION, type ExtractionStatus, type NormalizationResult, type NormalizedSourceContent } from "./types";
 
 // Centralized adapter dispatch — the ONE place a future AI feature (or this file's own future
@@ -66,13 +67,14 @@ function result(status: ExtractionStatus, content: NormalizedSourceContent): Nor
  * layer, cache, DynamoDB, or S3; calling this twice for the same source does the same work twice,
  * deterministically producing the same result both times (see chunking.ts).
  *
- * PDF and DOCX intentionally never attempt local-first/cloud-fallback file resolution at all —
- * their result (`pending-extraction`) is fixed regardless of whether the file is actually
- * available on this device or in the cloud, so resolving/downloading it first would be wasted
- * I/O (and, for a cloud-only source, an unnecessary network fetch) for an answer that's already
- * known. Image and audio metadata come entirely from already-known LibrarySourceRecord fields,
- * for the same reason. Only the `text` adapter — the one adapter that can actually produce
- * content in this batch — ever resolves/reads the underlying file.
+ * DOCX intentionally never attempts local-first/cloud-fallback file resolution at all — its
+ * result (`pending-extraction`) is fixed regardless of whether the file is actually available on
+ * this device or in the cloud, so resolving/downloading it first would be wasted I/O (and, for a
+ * cloud-only source, an unnecessary network fetch) for an answer that's already known. Image and
+ * audio metadata come entirely from already-known LibrarySourceRecord fields, for the same
+ * reason. `text` and `pdf` are the two adapters that actually resolve/read the underlying file —
+ * `pdf` via native text extraction (pdfTextExtraction.ts), never OCR; see pdfAdapter.ts's own
+ * header comment for the full PDF data flow.
  */
 export async function normalizeSource(source: LibrarySourceRecord): Promise<NormalizationResult> {
   logNormalization("start", { sourceType: source.sourceType });
@@ -105,16 +107,100 @@ export async function normalizeSource(source: LibrarySourceRecord): Promise<Norm
   }
 
   if (source.sourceType === "pdf") {
-    const outcome = normalizePdfSource({
+    const resolved = await resolveSourceOriginal(source);
+    if (resolved.status === "error") {
+      logNormalization("resolution failed", { sourceType: source.sourceType, reason: resolved.reason });
+      return result("failed", stubContent(source, "failed", "pdf-text-v1", `source-resolution-${resolved.reason}`, source.fileSize));
+    }
+
+    const input = await prepareViewerInput(resolved.uri, source);
+    if (!input.usedStagedCopy) {
+      logNormalization("staging failed", { sourceType: source.sourceType });
+      return result("failed", stubContent(source, "failed", "pdf-text-v1", "could-not-stage-local-copy", source.fileSize));
+    }
+
+    const extraction = await extractPdfPageTexts(input.uri);
+
+    if (extraction.status === "unavailable") {
+      // The native extraction module genuinely isn't loaded in this runtime (e.g. Expo Go, or a
+      // build that hasn't picked up the native dependency yet) — this is a capability-not-ready
+      // state, not evidence the PDF itself is unreadable, so it gets the same honest
+      // `pending-extraction` treatment (and the same "not ready for generation yet" UI copy)
+      // this adapter used before real extraction existed, rather than a scarier `failed`.
+      logNormalization("done", { sourceType: source.sourceType, status: "pending-extraction" });
+      return result(
+        "pending-extraction",
+        stubContent(source, "pending-extraction", "pdf-pending-v1", "native-pdf-extraction-module-unavailable", source.fileSize)
+      );
+    }
+    if (extraction.status === "password-protected") {
+      logNormalization("done", { sourceType: source.sourceType, status: "failed" });
+      return result("failed", stubContent(source, "failed", "pdf-text-v1", "password-protected", source.fileSize));
+    }
+    if (extraction.status === "too-many-pages") {
+      logNormalization("done", { sourceType: source.sourceType, status: "too-large" });
+      return result("too-large", stubContent(source, "too-large", "pdf-text-v1", "exceeds-max-page-count-for-extraction", source.fileSize));
+    }
+    if (extraction.status === "failed") {
+      logNormalization("done", { sourceType: source.sourceType, status: "failed" });
+      return result("failed", stubContent(source, "failed", "pdf-text-v1", extraction.reason, source.fileSize));
+    }
+    if (extraction.status === "empty") {
+      // Legitimately no usable text — most commonly a scanned/image-only PDF. Never OCR'd, never
+      // invented; "empty" is the same honest status a zero-byte TXT file gets, and reuses the
+      // same "nothing to generate from" UI copy.
+      logNormalization("done", { sourceType: source.sourceType, status: "empty" });
+      return result("empty", {
+        sourceId: source.id,
+        sourceType: source.sourceType,
+        title: source.displayTitle,
+        originalName: source.originalName,
+        language: source.sourceLanguage,
+        contentKind: "text",
+        chunks: [],
+        metadata: { byteSize: source.fileSize, pageCount: source.pageCount },
+        extraction: { status: "empty", adapter: "pdf-text-v1", reason: "no-extractable-text-possibly-scanned" },
+        normalizationVersion: NORMALIZATION_VERSION,
+      });
+    }
+
+    // extraction.status === "ready" — real, non-empty, page-ordered text. Size-gated the same
+    // way the text adapter gates raw file bytes, applied here to total extracted characters
+    // (PDF file size doesn't predict extracted-text size the way a plain-text file's byte size
+    // does — a large PDF can be mostly images with little text, or a small one can be dense).
+    const totalExtractedChars = extraction.pages.reduce((sum, pageText) => sum + pageText.length, 0);
+    if (totalExtractedChars > MAX_NORMALIZATION_TEXT_BYTES) {
+      logNormalization("done", { sourceType: source.sourceType, status: "too-large" });
+      return result("too-large", stubContent(source, "too-large", "pdf-text-v1", "exceeds-10mb-normalization-limit", source.fileSize));
+    }
+
+    const outcome = normalizePdfTextSource({
       sourceId: source.id,
       sourceType: source.sourceType,
       title: source.displayTitle,
       originalName: source.originalName,
       language: source.sourceLanguage,
       byteSize: source.fileSize,
-      pageCount: source.pageCount,
+      pages: extraction.pages,
     });
-    logNormalization("done", { sourceType: source.sourceType, status: outcome.status, adapter: outcome.content.extraction.adapter });
+
+    if (outcome.status === "too-large") {
+      logNormalization("done", { sourceType: source.sourceType, status: "too-large" });
+      return result("too-large", stubContent(source, "too-large", "pdf-text-v1", "exceeds-chunk-count-safety-ceiling", source.fileSize));
+    }
+    if (outcome.status === "failed") {
+      logNormalization("done", { sourceType: source.sourceType, status: "failed" });
+      return result("failed", stubContent(source, "failed", "pdf-text-v1", "pdf-text-normalization-failed", source.fileSize));
+    }
+
+    logNormalization("done", {
+      sourceType: source.sourceType,
+      status: outcome.status,
+      adapter: outcome.content.extraction.adapter,
+      chunkCount: outcome.content.chunks.length,
+      byteSize: outcome.content.metadata.byteSize,
+    });
+
     return result(outcome.status, outcome.content);
   }
 

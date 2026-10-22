@@ -160,6 +160,11 @@ For anything not covered directly in this file, these are the authoritative docu
     replacing `__DEV__`), and the App Store/TestFlight distribution plan. **Independently audited
     and integrated into `v3.2-dev` and `v3.3-dev`; no EAS account linkage, no App Store submission,
     no bundle identifier change, no beta build produced yet.**
+26. `docs/ai-pdf-generation.md` — extends Generate Study Deck to PDF sources with extractable
+    text, via a new native text-extraction module (`expo-pdf-text-extract`) feeding the existing,
+    unchanged `NormalizedSourceContent`/AI generation pipeline. **Implemented on
+    `feat/ai-pdf-generation`, not yet merged, not yet committed; no OCR; requires a native
+    Development Build rebuild not yet performed.**
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own

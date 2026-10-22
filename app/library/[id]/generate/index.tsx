@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
@@ -6,8 +7,9 @@ import { AuthService } from "../../../../src/auth/AuthService";
 import { AVAILABILITY_COPY_KEYS, type GenerationAvailabilityState } from "../../../../src/domain/ai/generationAvailability";
 import { isGenerateStudyDeckEnabled } from "../../../../src/domain/ai/generateStudyDeckCapability";
 import { checkGenerationAvailability, GENERATION_ERROR_COPY_KEYS, runGenerateDeckFlow } from "../../../../src/domain/ai/generateDeckFlow";
+import { deriveCardCountHintKind, hasTrustworthyChunkScope, type GenerationCoverage } from "../../../../src/domain/ai/generationCoverage";
 import { CARD_COUNT_CHOICES, CARD_STYLE_CHOICES, DIFFICULTY_CHOICES } from "../../../../src/domain/ai/generationOptionsUi";
-import { DEFAULT_GENERATION_OPTIONS } from "../../../../src/domain/ai/generationOptions";
+import { DEFAULT_GENERATION_OPTIONS, resolveRequestedCardCount } from "../../../../src/domain/ai/generationOptions";
 import type { CardCountOption, CardStyleOption, DifficultyOption, GenerationErrorCode } from "../../../../src/domain/ai/types";
 import { useTranslation } from "../../../../src/i18n";
 import { useLayoutDirection } from "../../../../src/i18n/direction";
@@ -40,6 +42,10 @@ export default function GenerateStudyDeckScreen() {
 
   const [source, setSource] = useState<LibrarySourceRecord | null>(null);
   const [screenState, setScreenState] = useState<ScreenState>({ phase: "loading" });
+  // Whether the whole source will fit this generation's context budget — computed up front (see
+  // checkGenerationAvailability's "coverage" doc comment) so the disclosure below is accurate
+  // BEFORE the user ever taps Generate, not just after. null while unknown/unavailable.
+  const [coverage, setCoverage] = useState<GenerationCoverage | null>(null);
 
   const [cardCount, setCardCount] = useState<CardCountOption>(
     typeof DEFAULT_GENERATION_OPTIONS.cardCount === "number" ? "medium" : DEFAULT_GENERATION_OPTIONS.cardCount
@@ -74,6 +80,7 @@ export default function GenerateStudyDeckScreen() {
       return;
     }
     const availability = await checkGenerationAvailability(found);
+    setCoverage(availability.coverage);
     if (availability.canGenerate) {
       setScreenState({ phase: "options" });
     } else {
@@ -188,6 +195,11 @@ export default function GenerateStudyDeckScreen() {
   }
 
   // phase === "options"
+  const sourceWillBePartial = coverage !== null && !coverage.fullSourceIncluded;
+  const trustworthyScope = coverage !== null && hasTrustworthyChunkScope(coverage);
+  const cardCountHintKind = deriveCardCountHintKind(coverage?.fullSourceIncluded ?? true);
+  const resolvedCardCount = resolveRequestedCardCount(cardCount);
+
   return (
     <Screen scroll>
       {header}
@@ -200,6 +212,26 @@ export default function GenerateStudyDeckScreen() {
         <Text style={[typography.caption, text, { color: colors.textSecondary }]}>{t("generateDeck.devPreviewNotice")}</Text>
       </View>
 
+      {sourceWillBePartial ? (
+        <View
+          style={[styles.noticeRow, { gap: spacing.xs, borderColor: colors.warning, backgroundColor: colors.warningSurface, borderRadius: spacing.sm }]}
+          accessibilityRole="text"
+        >
+          <View style={[styles.noticeTitleRow, row, { gap: spacing.sm }]}>
+            <Ionicons name="information-circle-outline" size={20} color={colors.warning} />
+            <Text style={[typography.label, text, styles.noticeTitleText, { color: colors.warning }]}>
+              {t("generateDeck.coverage.setupPartialTitle")}
+            </Text>
+          </View>
+          <Text style={[typography.caption, text, { color: colors.textSecondary }]}>{t("generateDeck.coverage.setupPartialBody")}</Text>
+          {trustworthyScope && coverage ? (
+            <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+              {t("generateDeck.coverage.scopeSummary", { included: coverage.includedChunkCount, total: coverage.totalChunkCount })}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
       <Card style={{ gap: spacing.lg }}>
         <View style={{ gap: spacing.xs }}>
           <Text style={[typography.label, text, { color: colors.textPrimary }]}>{t("generateDeck.options.cardCountLabel")}</Text>
@@ -209,6 +241,11 @@ export default function GenerateStudyDeckScreen() {
             onChange={setCardCount}
             items={CARD_COUNT_CHOICES.map((c) => ({ value: c.value, label: t(c.labelKey as any), description: t(c.descriptionKey as any) }))}
           />
+          <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+            {cardCountHintKind === "partial"
+              ? t("generateDeck.coverage.cardCountHintPartial", { count: resolvedCardCount })
+              : t("generateDeck.coverage.cardCountHintFull")}
+          </Text>
         </View>
 
         <View style={{ gap: spacing.xs }}>
@@ -243,4 +280,6 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 48 },
   centeredText: { textAlign: "center" },
   noticeRow: { borderWidth: 1, padding: 12 },
+  noticeTitleRow: { alignItems: "center" },
+  noticeTitleText: { flex: 1 },
 });

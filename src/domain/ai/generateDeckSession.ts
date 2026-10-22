@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import type { ChunkProvenance } from "../normalization/types";
+import type { GenerationCoverage } from "./generationCoverage";
 import type { GeneratedDeckDraft, GenerationOptions } from "./types";
 
 // In-memory, single-slot holder for the ONE Generate Study Deck draft the user is currently
@@ -49,7 +50,14 @@ export type GenerateDeckSession = {
   options: GenerationOptions;
   providerId: string;
   requestedCardCount: number;
-  fullSourceIncluded: boolean;
+  /** How much of the source was actually used for this generation (including
+   * `fullSourceIncluded`) — see src/domain/ai/generationCoverage.ts. Captured once at generation
+   * time so the review screen's coverage/fewer-cards copy never has to recompute it. */
+  coverage: GenerationCoverage;
+  /** The card count generation itself produced, BEFORE any review-screen deletion — distinct
+   * from `cards.length`, which shrinks as the user deletes cards. Used to judge "fewer cards than
+   * requested" against what generation actually returned, never against the user's own edits. */
+  generatedCardCount: number;
   /** Set once the user changes the title or any card, or deletes a card — drives the
    * discard-confirmation prompt so an untouched draft can be abandoned without a nag. */
   edited: boolean;
@@ -62,6 +70,7 @@ type StartSessionInput = {
   draft: GeneratedDeckDraft;
   provenanceByChunkId: Record<string, DraftProvenanceEntry>;
   options: GenerationOptions;
+  coverage: GenerationCoverage;
 };
 
 let session: GenerateDeckSession | null = null;
@@ -96,7 +105,8 @@ export function startGenerateDeckSession(input: StartSessionInput): void {
     options: input.options,
     providerId: input.draft.generation.providerId,
     requestedCardCount: input.draft.generation.requestedCardCount,
-    fullSourceIncluded: input.draft.generation.fullSourceIncluded,
+    coverage: input.coverage,
+    generatedCardCount: input.draft.generation.resultingCardCount,
     edited: false,
   };
   emit();
