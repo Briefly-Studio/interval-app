@@ -11,7 +11,8 @@
     "lint": "expo lint",
     "test:sync": "node --test backend/lambdas/sync-push/*.test.mjs backend/lambdas/sync-pull/*.test.mjs",
     "test:ai": "npm --prefix backend/lambdas/ai-generate-study-deck ci --silent --no-audit --no-fund && node --import ./scripts/ai-test-loader.mjs --test src/domain/ai/*.test.ts src/cloud/ai/*.test.ts src/domain/normalization/*.test.ts backend/lambdas/ai-generate-study-deck/*.test.mjs",
-    "test:docx": "node --test src/domain/docxTableLayout.test.ts"
+    "test:docx": "node --test src/domain/docxTableLayout.test.ts",
+    "test:scheduling": "node --import ./scripts/ai-test-loader.mjs --test src/domain/scheduling/*.test.ts src/models/cardScheduling.test.ts src/models/reviewEvent.test.ts"
   },
   "dependencies": {
     "@config-plugins/react-native-blob-util": "12.0.0",
@@ -56,7 +57,8 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.5.1"
+    "react-native-worklets": "0.5.1",
+    "ts-fsrs": "5.4.2"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",

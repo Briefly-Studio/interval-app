@@ -927,8 +927,25 @@ const en = {
     emptyTitle: "No cards yet",
     emptyDescription: "Cards need a front and a back to start studying.",
     addFirstCardButton: "Add your first card",
-    startReview: "Start review",
+    studyDueCardsButton: "Study Due Cards",
+    studyAllCardsButton: "Study All Cards",
     startQuiz: "Start quiz",
+    caughtUpTitle: "You're caught up",
+    caughtUpBody: "No cards are due right now.",
+    schedulingSummary: {
+      dueNow: {
+        one: "{{count}} due now",
+        other: "{{count}} due now",
+      },
+      new: {
+        one: "{{count}} new",
+        other: "{{count}} new",
+      },
+      notDueYet: {
+        one: "{{count}} not due yet",
+        other: "{{count}} not due yet",
+      },
+    },
     statsToggle: "Stats",
     statsToday: "Today: {{sessions}} sessions • {{minutes}} min",
     statsWeek: "Last 7 days: {{sessions}} sessions",
@@ -1185,6 +1202,30 @@ const en = {
     finishEarlyBody: {
       one: "This will log a review session for {{count}} card.",
       other: "This will log a review session for {{count}} cards.",
+    },
+    dueSessionUnavailableTitle: "No longer available",
+    dueSessionUnavailableBody: "These cards were removed before you could study them.",
+    backToDeckButton: "Back to deck",
+    rating: {
+      prompt: "How well did you remember this?",
+      explanation: "Your answer determines when this card appears again.",
+      again: "Again",
+      hard: "Hard",
+      good: "Good",
+      easy: "Easy",
+      accessibleSuffix: "review again in {{interval}}",
+      inMinutes: {
+        one: "{{count}} min",
+        other: "{{count}} min",
+      },
+      inMinutesFull: {
+        one: "{{count}} minute",
+        other: "{{count}} minutes",
+      },
+      inDays: {
+        one: "{{count}} day",
+        other: "{{count}} days",
+      },
     },
   },
   reviewResults: {

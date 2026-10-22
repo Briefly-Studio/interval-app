@@ -918,8 +918,25 @@ const fr = {
     emptyTitle: "Aucune carte pour l'instant",
     emptyDescription: "Les cartes ont besoin d'un recto et d'un verso pour commencer à étudier.",
     addFirstCardButton: "Ajoutez votre première carte",
-    startReview: "Commencer la révision",
+    studyDueCardsButton: "Réviser les cartes à revoir",
+    studyAllCardsButton: "Réviser toutes les cartes",
     startQuiz: "Commencer le quiz",
+    caughtUpTitle: "Vous êtes à jour",
+    caughtUpBody: "Aucune carte à revoir pour le moment.",
+    schedulingSummary: {
+      dueNow: {
+        one: "{{count}} à revoir",
+        other: "{{count}} à revoir",
+      },
+      new: {
+        one: "{{count}} nouvelle",
+        other: "{{count}} nouvelles",
+      },
+      notDueYet: {
+        one: "{{count}} pas encore due",
+        other: "{{count}} pas encore dues",
+      },
+    },
     statsToggle: "Statistiques",
     statsToday: "Aujourd'hui : {{sessions}} sessions • {{minutes}} min",
     statsWeek: "7 derniers jours : {{sessions}} sessions",
@@ -1173,6 +1190,30 @@ const fr = {
     finishEarlyBody: {
       one: "Cela enregistrera une session de révision pour {{count}} carte.",
       other: "Cela enregistrera une session de révision pour {{count}} cartes.",
+    },
+    dueSessionUnavailableTitle: "Plus disponible",
+    dueSessionUnavailableBody: "Ces cartes ont été supprimées avant que vous puissiez les réviser.",
+    backToDeckButton: "Retour au paquet",
+    rating: {
+      prompt: "Dans quelle mesure vous en souveniez-vous ?",
+      explanation: "Votre réponse déterminera quand cette carte réapparaîtra.",
+      again: "À revoir",
+      hard: "Difficile",
+      good: "Bien",
+      easy: "Facile",
+      accessibleSuffix: "revoir dans {{interval}}",
+      inMinutes: {
+        one: "{{count}} min",
+        other: "{{count}} min",
+      },
+      inMinutesFull: {
+        one: "{{count}} minute",
+        other: "{{count}} minutes",
+      },
+      inDays: {
+        one: "{{count}} jour",
+        other: "{{count}} jours",
+      },
     },
   },
   reviewResults: {

@@ -887,8 +887,25 @@ const hi = {
     emptyTitle: "अभी तक कोई कार्ड नहीं है",
     emptyDescription: "पढ़ाई शुरू करने के लिए कार्ड में फ्रंट और बैक होना ज़रूरी है।",
     addFirstCardButton: "अपना पहला कार्ड जोड़ें",
-    startReview: "रिव्यू शुरू करें",
+    studyDueCardsButton: "ड्यू कार्ड पढ़ें",
+    studyAllCardsButton: "सभी कार्ड पढ़ें",
     startQuiz: "क्विज़ शुरू करें",
+    caughtUpTitle: "आप अप टू डेट हैं",
+    caughtUpBody: "अभी कोई कार्ड ड्यू नहीं है।",
+    schedulingSummary: {
+      dueNow: {
+        one: "{{count}} ड्यू",
+        other: "{{count}} ड्यू",
+      },
+      new: {
+        one: "{{count}} नया",
+        other: "{{count}} नए",
+      },
+      notDueYet: {
+        one: "{{count}} अभी ड्यू नहीं",
+        other: "{{count}} अभी ड्यू नहीं",
+      },
+    },
     statsToggle: "आंकड़े",
     statsToday: "आज: {{sessions}} सेशन • {{minutes}} मिनट",
     statsWeek: "पिछले 7 दिन: {{sessions}} सेशन",
@@ -1139,6 +1156,30 @@ const hi = {
     finishEarlyTitle: "रिव्यू जल्दी खत्म करें?",
     finishEarlyBody: {
       other: "इससे {{count}} कार्ड के लिए रिव्यू सेशन दर्ज होगा।",
+    },
+    dueSessionUnavailableTitle: "अब उपलब्ध नहीं",
+    dueSessionUnavailableBody: "आपके पढ़ने से पहले ये कार्ड हटा दिए गए।",
+    backToDeckButton: "डेक पर वापस जाएँ",
+    rating: {
+      prompt: "आपको यह कितनी अच्छी तरह याद था?",
+      explanation: "आपका जवाब तय करता है कि यह कार्ड फिर कब दिखेगा।",
+      again: "फिर से",
+      hard: "कठिन",
+      good: "ठीक",
+      easy: "आसान",
+      accessibleSuffix: "{{interval}} में फिर से रिव्यू करें",
+      inMinutes: {
+        one: "{{count}} मिनट",
+        other: "{{count}} मिनट",
+      },
+      inMinutesFull: {
+        one: "{{count}} मिनट",
+        other: "{{count}} मिनट",
+      },
+      inDays: {
+        one: "{{count}} दिन",
+        other: "{{count}} दिन",
+      },
     },
   },
   reviewResults: {

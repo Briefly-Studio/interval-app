@@ -886,8 +886,22 @@ const ja = {
     emptyTitle: "カードがまだありません",
     emptyDescription: "学習を始めるには、表面と裏面が必要です。",
     addFirstCardButton: "最初のカードを追加",
-    startReview: "復習を開始",
+    studyDueCardsButton: "復習期限のカードを学習",
+    studyAllCardsButton: "すべてのカードを学習",
     startQuiz: "クイズを開始",
+    caughtUpTitle: "すべて終わりました",
+    caughtUpBody: "今は復習が必要なカードはありません。",
+    schedulingSummary: {
+      dueNow: {
+        other: "復習期限 {{count}}枚",
+      },
+      new: {
+        other: "新規 {{count}}枚",
+      },
+      notDueYet: {
+        other: "未期限 {{count}}枚",
+      },
+    },
     statsToggle: "統計",
     statsToday: "今日：{{sessions}}回のセッション • {{minutes}}分",
     statsWeek: "過去7日間：{{sessions}}回のセッション",
@@ -1137,6 +1151,27 @@ const ja = {
     finishEarlyTitle: "復習を早めに終了しますか？",
     finishEarlyBody: {
       other: "{{count}}枚のカードで復習セッションが記録されます。",
+    },
+    dueSessionUnavailableTitle: "利用できません",
+    dueSessionUnavailableBody: "これらのカードは学習前に削除されました。",
+    backToDeckButton: "デッキに戻る",
+    rating: {
+      prompt: "どのくらい覚えていましたか？",
+      explanation: "あなたの回答によって、このカードが次に表示されるタイミングが決まります。",
+      again: "もう一度",
+      hard: "難しい",
+      good: "普通",
+      easy: "簡単",
+      accessibleSuffix: "{{interval}}後に再度復習",
+      inMinutes: {
+        other: "{{count}}分",
+      },
+      inMinutesFull: {
+        other: "{{count}}分",
+      },
+      inDays: {
+        other: "{{count}}日",
+      },
     },
   },
   reviewResults: {

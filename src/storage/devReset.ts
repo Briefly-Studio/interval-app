@@ -1,14 +1,28 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SyncService } from "../cloud/sync/SyncService";
+import { deleteCardSchedulingForDeck } from "./cardScheduling";
 import { deleteCardsForDeck } from "./cards";
 import { resetDiscoverProgress } from "./discover";
 import { getDecksAll } from "./decks";
 import { cursorKey, decksKey, sessionsKey } from "./keys";
+import { deleteReviewEventsForDeck } from "./reviewEvents";
 import type { WorkspaceScope } from "./workspaceScope";
 
 async function wipeScope(scope: WorkspaceScope): Promise<void> {
   const decks = await getDecksAll(scope);
-  await Promise.all(decks.map((deck) => deleteCardsForDeck(scope, deck.id)));
+  await Promise.all(
+    decks.map(async (deck) => {
+      await deleteCardsForDeck(scope, deck.id);
+      // Scheduling state and review history are local-only (not synced in this batch — see
+      // docs/spaced-repetition-foundation.md) and so, unlike decks/cards/sessions, have no cloud
+      // copy a Force Resync could restore afterward. Wiped here anyway for consistency with
+      // every other local-only store this reset already clears (Discover progress below) —
+      // leaving them behind would be stale, orphaned data a dev reset is explicitly meant to
+      // avoid.
+      await deleteCardSchedulingForDeck(scope, deck.id);
+      await deleteReviewEventsForDeck(scope, deck.id);
+    })
+  );
   await AsyncStorage.removeItem(cursorKey(scope));
   await AsyncStorage.removeItem(decksKey(scope));
   await AsyncStorage.removeItem(sessionsKey(scope));

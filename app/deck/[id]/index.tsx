@@ -5,12 +5,18 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native
 
 import { AuthService } from "../../../src/auth/AuthService";
 import { computeDeckStats } from "../../../src/domain/deckStats";
+import { buildDefaultReviewQueue, selectDueCards, selectFutureCards, selectNewCards } from "../../../src/domain/scheduling/dueSelection";
+import { resolveCardSchedulingState } from "../../../src/domain/scheduling/migration";
+import { setPendingReviewQueue } from "../../../src/domain/scheduling/reviewQueueSession";
+import type { CardSchedulingState } from "../../../src/domain/scheduling/types";
 import { formatDuration, formatTimestamp } from "../../../src/domain/sessionFormat";
 import { useTranslation } from "../../../src/i18n";
+import { useLayoutDirection } from "../../../src/i18n/direction";
 import type { TranslationKey } from "../../../src/i18n";
 import type { Card } from "../../../src/models/card";
 import type { Deck } from "../../../src/models/deck";
 import type { StudySession } from "../../../src/models/session";
+import { getCardSchedulingMap } from "../../../src/storage/cardScheduling";
 import { deleteCard, getCards, updateAllCardsDifficulty } from "../../../src/storage/cards";
 import { getDeckById } from "../../../src/storage/decks";
 import { getSessionsForDeck } from "../../../src/storage/sessions";
@@ -36,6 +42,7 @@ export default function DeckDetails() {
   const router = useRouter();
   const { t, plural, language } = useTranslation();
   const { colors, iconSizes, spacing, touchTarget, typography } = useTheme();
+  const { row } = useLayoutDirection();
 
   const params = useLocalSearchParams();
   const idParam = params.id;
@@ -49,6 +56,7 @@ export default function DeckDetails() {
   const [deck, setDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
   const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [schedulingMap, setSchedulingMap] = useState<Record<string, CardSchedulingState>>({});
   const [loaded, setLoaded] = useState(false);
   const [difficultyFilter, setDifficultyFilter] = useState<
     "all" | "hard" | "medium" | "easy"
@@ -75,11 +83,13 @@ export default function DeckDetails() {
         const d = await getDeckById(scope, id);
         const c = await getCards(scope, id);
         const s = await getSessionsForDeck(scope, id);
+        const scheduling = await getCardSchedulingMap(scope, id);
 
         if (alive) {
           setDeck(d);
           setCards(c);
           setSessions(s);
+          setSchedulingMap(scheduling);
           setLoaded(true);
         }
       })();
@@ -94,6 +104,44 @@ export default function DeckDetails() {
   const goReview = () => router.push(`/deck/${id}/review`);
   const goQuiz = () => router.push(`/deck/${id}/quiz`);
   const goHistory = () => router.push(`/deck/${id}/history`);
+
+  // Resolved once per load/focus (never persisted — see resolveCardSchedulingState) so the
+  // counts below and "Study Due Cards"' own queue are always computed from the exact same
+  // classification, never two independently-drifting notions of "due." `cards` here is already
+  // the live (non-deleted) list (getCards, not getCardsAll) — deleted cards never participate.
+  const schedulableEntries = useMemo(() => {
+    const now = new Date();
+    return cards.map((card) => ({
+      cardId: card.id,
+      card,
+      schedulingState: resolveCardSchedulingState(card.id, now, schedulingMap[card.id]),
+    }));
+  }, [cards, schedulingMap]);
+
+  const schedulingCounts = useMemo(() => {
+    const now = new Date();
+    return {
+      due: selectDueCards(schedulableEntries, now).length,
+      new: selectNewCards(schedulableEntries).length,
+      notDue: selectFutureCards(schedulableEntries, now).length,
+    };
+  }, [schedulableEntries]);
+
+  // "Study Due Cards" means exactly that — due/overdue cards only, via the existing
+  // buildDefaultReviewQueue helper with newCardLimit: 0 so brand-new cards are deliberately
+  // excluded (see docs/spaced-repetition-foundation.md's "Study Due Cards behavior" section for
+  // why "zero due cards" must mean "you're caught up" even when new cards still exist — reusing
+  // the exact same pure helper rather than a second, parallel due-only implementation).
+  const goStudyDueCards = () => {
+    const now = new Date();
+    const queue = buildDefaultReviewQueue(schedulableEntries, now, { newCardLimit: 0 });
+    if (queue.length === 0) {
+      Alert.alert(t("deckDetail.caughtUpTitle"), t("deckDetail.caughtUpBody"));
+      return;
+    }
+    setPendingReviewQueue(id, queue.map((entry) => entry.cardId));
+    router.push(`/deck/${id}/review`);
+  };
 
   const confirmDeleteCard = (card: Card) => {
     if (deletingCardIds.has(card.id)) return;
@@ -273,8 +321,18 @@ export default function DeckDetails() {
         {t("deckDetail.createdOn", { date: new Date(deck.createdAt).toLocaleString() })}
       </Text>
 
-      <View style={[styles.studyRow, { gap: spacing.sm }]}>
-        <Button label={t("deckDetail.startReview")} variant="primary" onPress={goReview} style={styles.flex1} />
+      <Text style={[typography.caption, { color: colors.textSecondary }]} accessibilityRole="text">
+        {plural("deckDetail.schedulingSummary.dueNow", schedulingCounts.due, { count: schedulingCounts.due })}
+        {" · "}
+        {plural("deckDetail.schedulingSummary.new", schedulingCounts.new, { count: schedulingCounts.new })}
+        {" · "}
+        {plural("deckDetail.schedulingSummary.notDueYet", schedulingCounts.notDue, { count: schedulingCounts.notDue })}
+      </Text>
+
+      <Button label={t("deckDetail.studyDueCardsButton")} variant="primary" fullWidth onPress={goStudyDueCards} />
+
+      <View style={[styles.studyRow, row, { gap: spacing.sm }]}>
+        <Button label={t("deckDetail.studyAllCardsButton")} variant="secondary" onPress={goReview} style={styles.flex1} />
         <Button label={t("deckDetail.startQuiz")} variant="secondary" onPress={goQuiz} style={styles.flex1} />
       </View>
 
