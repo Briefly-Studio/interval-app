@@ -46,7 +46,11 @@ export type ChunkProvenance = {
   /** 1-based page number — populated only by an adapter with genuine page-aware extraction. */
   page?: number;
   /** Half-open character offset range [start, end) into the adapter's own NORMALIZED text (after
-   * line-ending normalization) — not the raw source bytes. Always populated for text-kind chunks. */
+   * line-ending normalization) — not the raw source bytes. Always populated for text-kind chunks.
+   * This is ONE coordinate space per source, not one per section/page — a multi-page format
+   * (contentKind "text", e.g. PDF) must offset each page's local range into the whole
+   * concatenated-document text, never leave ranges page-relative; see pdfAdapter.ts and
+   * docs/ai-pdf-generation.md's "Document text coordinate system" for the worked example. */
   charRange?: { start: number; end: number };
   /** 1-based, inclusive line range — populated whenever the source is meaningfully line-oriented. */
   lineRange?: { start: number; end: number };

@@ -63,15 +63,83 @@ layer already does the `sourceType` → status work; this shell only decides wha
 
 | Normalization status | Source types (today) | Shell behavior |
 | --- | --- | --- |
-| `ready` | **TXT** (`text-v1` adapter) | Generation allowed — the gold-standard path |
-| `empty` | TXT with no extractable text | "No usable text" — honest, no generation |
-| `too-large` | TXT over the 10 MB normalization ceiling | "Source is too large" |
-| `pending-extraction` | **PDF**, **DOCX** | "Not ready for generation yet" — honest not-ready state; extraction isn't integrated on this branch |
+| `ready` | **TXT** (`text-v1` adapter), **PDF with extractable text** (`pdf-text-v1` adapter) | Generation allowed |
+| `empty` | TXT with no extractable text; **PDF with no extractable text (most commonly a scanned/image-only PDF — no OCR)** | "No usable text" — honest, no generation |
+| `too-large` | TXT over the 10 MB normalization ceiling; **PDF whose extracted text exceeds that same ceiling, or whose page count exceeds the extraction page ceiling** | "Source is too large" |
+| `pending-extraction` | **DOCX** (always); **PDF only if the native text-extraction module isn't loaded in this runtime** (e.g. Expo Go, or a build that hasn't picked up the native dependency yet) | "Not ready for generation yet" — honest not-ready state |
 | `unsupported` | image, audio, pptx, xlsx | "Not supported" |
-| `failed` | any text source that couldn't be resolved/read | Friendly failure state with Retry |
+| `failed` | any text/PDF source that couldn't be resolved/read, or a password-protected/corrupted PDF | Friendly failure state with Retry |
 
 Internal `ExtractionStatus` / `GenerationErrorCode` values are never shown to the user — every
 state has a localized title/body pair.
+
+## Source coverage disclosure
+
+**Status: implemented, pending founder runtime QA.** Static checks (`tsc`, lint, `test:ai`)
+pass; this has not yet been exercised on a real build against an actual large source — see
+"Founder QA matrix" steps 22–25 below.
+
+**Problem this fixes:** founder QA on a large PDF (193-page *The Great Gatsby*) requesting a
+25-card "Large" deck produced only 9 cards. Generation itself was correct — the model only
+received the bounded subset of the source that fits one generation's context budget and
+correctly refused to invent cards from material it never saw — but the UI never made that
+boundedness clear before the user chose a card count, so "25 cards" read as a promise rather
+than a maximum.
+
+`src/domain/ai/generationCoverage.ts` is the generic (not PDF-specific) decision layer for this:
+
+- `summarizeGenerationCoverage()` reshapes the **existing** context-preparation fields
+  (`GenerationContext.fullSourceIncluded` / `chunkCount` / `excludedChunkCount`, already computed
+  by `contextPreparation.ts` for every generation) into `{ fullSourceIncluded,
+  includedChunkCount, totalChunkCount }` — `totalChunkCount` is simply `included + excluded`.
+  **No second, independent source-size computation was added anywhere.**
+- `hasTrustworthyChunkScope()` gates whether a specific "using X of Y" figure is shown — false
+  only for the one edge case where the numbers wouldn't be meaningful (e.g. a source somehow
+  reporting zero total chunks); the caller falls back to a plain, non-numeric sentence instead of
+  ever inventing a number.
+- `deriveFewerCardsExplanation()` decides which of two honest explanations applies when the
+  result has fewer cards than requested: **"full-source"** (the whole source was used; the
+  material itself didn't support more useful cards — a legitimate, non-error outcome) or
+  **"partial-source"** (only part of the source was available, so incomplete coverage is an
+  additional, honest explanation). A zero-card result and a result that met/exceeded the request
+  are both `"none"` — handled by the pre-existing "no cards" / no-message paths instead.
+
+None of this branches on `sourceType`/PDF/TXT — a large TXT and a large PDF are described
+identically, satisfying the "implement generically, don't fork by source type" requirement.
+
+**Setup screen** (`app/library/[id]/generate/index.tsx`): `checkGenerationAvailability` now also
+runs `prepareGenerationContext` on the normalized content (the SAME call `generateStudyDeck` will
+make, with the same default budget — not a duplicate size computation) so the screen knows
+up front, before the user ever taps Generate, whether the source will fit:
+
+- **Full source fits:** no extra warning box — the normal, low-friction experience is unchanged.
+- **Source will be partial:** a prominent disclosure box (`generateDeck.coverage.setupPartialTitle`
+  / `setupPartialBody`, plus `scopeSummary` — e.g. "Using 12 of 143 sections of this source" —
+  when `hasTrustworthyChunkScope`) explains this BEFORE the user chooses a card count.
+- Under the card-count picker, a caption always clarifies that counts are maximum targets, not
+  guarantees (`cardCountHintFull`), switching to a reason-specific version
+  (`cardCountHintPartial`, "You requested up to N cards. Because only part of this source can be
+  used in one generation, Interval may create fewer.") when the source is partial. The
+  `cardCountSmallHint` / `MediumHint` / `LargeHint` presets themselves were reworded from "About N
+  cards" to "Up to N cards" — "about" wrongly implied the result could land either above or below
+  the target; "up to" matches the real maximum-target semantics.
+
+**Review screen** (`app/library/[id]/generate/review.tsx`): shows the coverage note (numeric when
+trustworthy, else the plain sentence) whenever `!fullSourceIncluded`, and — distinctly — a
+"fewer cards than requested" explanation when `generatedCardCount < requestedCardCount`:
+`fewerCardsFullSource` ("Interval created fewer cards based on the available source material")
+for case A, or `fewerCardsPartialSource(WithScope)` ("Created 9 cards using 12 of 143 sections of
+this source") for case B. The two never double up: when the combined "fewer cards, partial
+source" sentence already cites the chunk scope, the separate plain coverage note is suppressed.
+Neither message ever implies the model/provider failed or claims certainty about private model
+reasoning — both are deliberately framed as legitimate, non-error outcomes.
+
+**What this does not do:** no RAG, embeddings, vector search, multi-pass summarization,
+multi-model generation, automatic chapter summarization, page-range/topic selection, a larger
+context limit, retries to fill a requested card count, or a forced minimum card count. No invented
+page ranges — `scopeSummary` only ever cites chunk counts, which are always exact (never a
+"percent of document" estimate). Whole-document generation for very large sources remains future,
+founder-gated work (see "Limitations").
 
 ## Mock-provider status
 
@@ -95,7 +163,11 @@ synced. It holds:
 - `deckTitle` — editable, seeded from the generated title
 - `cards[]` — `{ id, front, back, sourceChunkIds }`, editable / deletable
 - `provenanceByChunkId` — chunk id → real `{ lineRange, page, heading }` from normalization
-- `options`, `providerId`, `requestedCardCount`, `fullSourceIncluded`
+- `options`, `providerId`, `requestedCardCount`
+- `coverage` — `{ fullSourceIncluded, includedChunkCount, totalChunkCount }`, captured once at
+  generation time (see "Source coverage disclosure" below)
+- `generatedCardCount` — the card count generation itself produced, BEFORE any review-screen
+  deletion; distinct from `cards.length`, which shrinks as the user deletes cards
 - `edited` — set on any title/card change or deletion; drives the discard-confirmation prompt
 
 If the app is killed mid-review the draft is simply gone. That is the intended behavior for
@@ -242,9 +314,14 @@ localized message. No raw error, stack trace, or internal code is ever shown.
 
 - Mock provider only — card content is placeholder text, not real generated study material.
 - No deck→source link persisted (see above).
-- PDF / DOCX show an honest not-ready state; image / audio / pptx / xlsx are unsupported.
+- PDF with extractable text is generation-eligible; DOCX still shows an honest not-ready state;
+  image / audio / pptx / xlsx are unsupported. Scanned/image-only PDFs correctly show "no usable
+  text" (no OCR).
 - No page-range or chunk selection UI — the whole (budgeted) source is used; a partial-context
-  generation is disclosed with a note on the review screen.
+  generation is now disclosed BEFORE generation on the options screen, and again with chunk-scope
+  detail on the review screen (see "Source coverage disclosure"). Whole-document generation for a
+  source larger than one context budget (true multi-pass/RAG-style coverage) remains future,
+  founder-gated work — nothing in this batch attempts it.
 - No regenerate / "generate more cards" action, and no "add card" flow — a fully-emptied draft
   must be discarded and regenerated.
 - Draft is in-memory only and does not survive an app restart.
@@ -268,15 +345,19 @@ Unchanged from `ai-generation-foundation.md`'s "Next step to real provider integ
 
 ## Verification
 
-As of `v3.2-dev`, the repository has three focused `node:test` suites (`test:sync`, `test:ai`,
+As of `v3.3-dev`, the repository has three focused `node:test` suites (`test:sync`, `test:ai`,
 `test:docx`) but no broad app-level / UI harness — CLAUDE.md records that flow verification is
 founder runtime QA plus local static checks. The AI-foundation helpers this workflow builds on
-are covered by `npm run test:ai` (20 tests). There is no `test:generate` suite for the
-Generate-specific domain logic yet; it is factored into pure, independently-testable functions to
-make one straightforward:
+are covered by `npm run test:ai` (92 tests, including PDF normalization and AI-generate-study-deck
+Lambda helpers under the same glob). There is no `test:generate` suite for the Generate-specific
+domain logic yet; it is factored into pure, independently-testable functions to make one
+straightforward:
 `mergeLineRanges` / `resolveProvenanceLabel` (`draftCardEditing.ts`), `validateDraftForSave` /
 `rollbackDeck` (`generateDeckSave.ts`), `detectContentDirection` (`i18n/contentDirection.ts`),
-`deriveGenerationAvailability` (`generationAvailability.ts`).
+`deriveGenerationAvailability` (`generationAvailability.ts`),
+`summarizeGenerationCoverage` / `hasTrustworthyChunkScope` / `deriveCardCountHintKind` /
+`deriveFewerCardsExplanation` (`generationCoverage.ts`, 14 tests of its own — see "Source coverage
+disclosure").
 
 ### Founder QA matrix
 
@@ -294,23 +375,46 @@ make one straightforward:
     deck.
 11. Force Resync (signed in) — confirm the new deck and its cards sync with normal
     `dirty`/`rev` semantics.
-12. Repeat with a **PDF** source — confirm the honest "not ready for generation yet" message.
-13. Repeat with an **image** source — confirm the "not supported" message.
-14. Test light / dark / warm themes.
-15. Test Arabic UI — confirm RTL layout of the options and review screens; confirm English card
+12. Repeat with a **PDF** source that has real extractable text — confirm generation proceeds
+    normally (see docs/ai-pdf-generation.md's own QA steps for the full PDF-specific checklist).
+13. Repeat with a **DOCX** source — confirm the honest "not ready for generation yet" message.
+14. Repeat with an **image** source — confirm the "not supported" message.
+15. Test light / dark / warm themes.
+16. Test Arabic UI — confirm RTL layout of the options and review screens; confirm English card
     text stays left-aligned. Then, English UI + a source whose text is Arabic — confirm the card
     body renders right-aligned while chrome stays LTR.
-16. Start a generation, edit the draft, then press back / Discard — confirm the confirmation
+17. Start a generation, edit the draft, then press back / Discard — confirm the confirmation
     prompt; confirm an *unedited* draft exits without a prompt.
-17. **Rapid Save (audit CRITICAL-2):** tap **Save deck** several times as fast as possible —
+18. **Rapid Save (audit CRITICAL-2):** tap **Save deck** several times as fast as possible —
     confirm exactly one deck appears in your deck list (no duplicates).
-18. **Scope change (audit CRITICAL-1):** generate a draft while signed in, then sign out (or
+19. **Scope change (audit CRITICAL-1):** generate a draft while signed in, then sign out (or
     switch account) and return to the review screen — confirm Save is blocked with a "Workspace
     changed" message and the draft is not written into the new scope. Sign back in and confirm
     Save works.
-19. **Partial-save resilience (audit HIGH-1):** best-effort — if a card write can be made to fail
+20. **Partial-save resilience (audit HIGH-1):** best-effort — if a card write can be made to fail
     (e.g. device storage pressure), confirm no orphan deck is left in the deck list and the draft
     is still on screen to retry.
-20. **Wrong-source guard (audit HIGH-2):** with a draft open, deep-link or navigate to a different
+21. **Wrong-source guard (audit HIGH-2):** with a draft open, deep-link or navigate to a different
     source's generate/review route — confirm the "Draft is for a different source" recovery state,
     not the wrong draft.
+22. **Source coverage disclosure — small source (full coverage):** attach a short `.txt`/PDF that
+    fits comfortably within one generation. Confirm the options screen shows **no** partial-source
+    box — only the existing "Development preview" notice — and the card-count caption reads the
+    generic "maximum target" hint (`cardCountHintFull`), not the partial-source wording.
+23. **Source coverage disclosure — large source (partial coverage):** attach a very large source
+    (e.g. a long PDF/book — this is the exact scenario the founder QA finding came from). On the
+    options screen, BEFORE tapping Generate, confirm a prominent disclosure box appears
+    (`setupPartialTitle`/`setupPartialBody`), the card-count caption switches to the "You
+    requested up to N cards… Interval may create fewer" wording, and — if shown — the "Using X of
+    Y sections" line has a sane, non-zero `Y`. Generate, then on the review screen confirm the
+    coverage note (and, if the result has fewer cards than requested, the partial-source "Created
+    N cards using X of Y sections" explanation) appears — and that nothing anywhere claims or
+    implies the whole document was read.
+24. **Fewer cards, full source (case A):** find or construct a small source that still yields
+    fewer cards than requested (e.g. request "Large" from a source with little real content).
+    Confirm the review screen shows the full-source explanation
+    (`generateDeck.coverage.fewerCardsFullSource`) — never the partial-source wording, and never
+    language implying the model failed.
+25. **"Up to N" card-count presets:** on the options screen, confirm every preset hint reads "Up
+    to N cards" (not "About N cards"), and that a generated deck can legitimately contain fewer
+    cards than the selected preset's target in either the full- or partial-source case above.

@@ -11,6 +11,7 @@ import {
   useGenerateDeckSession,
 } from "../../../../src/domain/ai/generateDeckSession";
 import { saveDraftDeck, type SaveDraftErrorCode } from "../../../../src/domain/ai/generateDeckSave";
+import { deriveFewerCardsExplanation, hasTrustworthyChunkScope } from "../../../../src/domain/ai/generationCoverage";
 import { useTranslation } from "../../../../src/i18n";
 import { contentDirectionStyle } from "../../../../src/i18n/contentDirection";
 import { useLayoutDirection } from "../../../../src/i18n/direction";
@@ -190,6 +191,20 @@ export default function GenerateDeckReviewScreen() {
   const cardCount = session.cards.length;
   const canSave = !saving && scopeOk === true && titleDraft.trim().length > 0 && cardCount > 0;
 
+  // Source coverage truthfulness (requirement 7): never implies full-document coverage when
+  // session.coverage.fullSourceIncluded is false. trustworthyScope gates whether we cite exact
+  // chunk counts or fall back to a plain, non-numeric disclosure sentence (never invented).
+  const trustworthyScope = hasTrustworthyChunkScope(session.coverage);
+  const fewerCards = deriveFewerCardsExplanation({
+    fullSourceIncluded: session.coverage.fullSourceIncluded,
+    requestedCardCount: session.requestedCardCount,
+    resultingCardCount: session.generatedCardCount,
+  });
+  // The "fewer cards, partial source" explanation already cites the chunk scope itself, so the
+  // plain coverage note is only shown on its own when that combined explanation isn't — avoids
+  // stating the same "12 of 143" figure twice.
+  const showPlainCoverageNote = !session.coverage.fullSourceIncluded && fewerCards !== "partial-source";
+
   const onSave = async () => {
     // Synchronous reentrancy guard first — before any state read or await.
     if (savingRef.current || savedRef.current) return;
@@ -260,9 +275,30 @@ export default function GenerateDeckReviewScreen() {
           {plural("generateDeck.review.cardCount", cardCount, { count: cardCount })} ·{" "}
           {t("generateDeck.review.fromSource", { title: session.sourceTitle })}
         </Text>
-        {!session.fullSourceIncluded ? (
+        {showPlainCoverageNote ? (
           <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
-            {t("generateDeck.review.partialSourceNote")}
+            {trustworthyScope
+              ? t("generateDeck.coverage.scopeSummary", {
+                  included: session.coverage.includedChunkCount,
+                  total: session.coverage.totalChunkCount,
+                })
+              : t("generateDeck.coverage.partialSourceNote")}
+          </Text>
+        ) : null}
+        {fewerCards === "full-source" ? (
+          <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+            {t("generateDeck.coverage.fewerCardsFullSource")}
+          </Text>
+        ) : null}
+        {fewerCards === "partial-source" ? (
+          <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+            {trustworthyScope
+              ? t("generateDeck.coverage.fewerCardsPartialSourceWithScope", {
+                  count: session.generatedCardCount,
+                  included: session.coverage.includedChunkCount,
+                  total: session.coverage.totalChunkCount,
+                })
+              : t("generateDeck.coverage.fewerCardsPartialSource", { count: session.generatedCardCount })}
           </Text>
         ) : null}
       </Card>

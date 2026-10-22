@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test:sync": "node --test backend/lambdas/sync-push/*.test.mjs backend/lambdas/sync-pull/*.test.mjs",
-    "test:ai": "npm --prefix backend/lambdas/ai-generate-study-deck ci --silent --no-audit --no-fund && node --import ./scripts/ai-test-loader.mjs --test src/domain/ai/*.test.ts src/cloud/ai/*.test.ts backend/lambdas/ai-generate-study-deck/*.test.mjs",
+    "test:ai": "npm --prefix backend/lambdas/ai-generate-study-deck ci --silent --no-audit --no-fund && node --import ./scripts/ai-test-loader.mjs --test src/domain/ai/*.test.ts src/cloud/ai/*.test.ts src/domain/normalization/*.test.ts backend/lambdas/ai-generate-study-deck/*.test.mjs",
     "test:docx": "node --test src/domain/docxTableLayout.test.ts"
   },
   "dependencies": {
@@ -35,6 +35,7 @@
     "expo-image": "~3.0.11",
     "expo-linking": "~8.0.10",
     "expo-localization": "~17.0.9",
+    "expo-pdf-text-extract": "^1.1.0",
     "expo-router": "~6.0.19",
     "expo-secure-store": "~15.0.8",
     "expo-sharing": "~14.0.8",

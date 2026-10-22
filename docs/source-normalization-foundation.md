@@ -75,16 +75,25 @@ back:
 | ------------------------ | ---------------------------------------------- |
 | Plain text                | `charRange` (offsets into the adapter's normalized text) + `lineRange` (1-based, inclusive) |
 | Structured blocks (future DOCX) | `blockIndex` + `heading` (see docxAdapter.ts) |
-| PDF                       | none — extraction itself is `pending-extraction`, so no chunk exists to attach a page number to |
+| PDF with extractable text | `page` (real, 1-based, from actual per-page extraction) + `charRange` — a true, document-wide offset (see "PDF text extraction" below); `lineRange` is deliberately never populated for PDF |
+| PDF with no extractable text, or DOCX | none — extraction itself is `empty`/`pending-extraction`, so no chunk exists to attach anything to |
 | Image / audio              | none — no text chunks exist for these content kinds in this batch |
 
 A page number, timestamp range, or any other provenance field is **never** invented when the
-extraction path that would produce it doesn't exist — `ChunkProvenance.page` and `.timeRangeMs`
-exist on the type today specifically so a future PDF-with-real-extraction adapter and a future
-audio-transcript adapter have a place to put real values, without changing this contract's shape
-when they arrive. This is what lets a future UI honestly say "Generated from page 14" or
-"Generated from lines 220–260" — the provenance backing that claim is real today, not backfilled
-later from a guess.
+extraction path that would produce it doesn't exist. `ChunkProvenance.page` is now populated with
+real values by the PDF adapter (see "PDF text extraction" below) — the first provenance field in
+this contract to graduate from "reserved for a future adapter" to actually populated by a real
+one. `.timeRangeMs` still exists on the type purely so a future audio-transcript adapter has a
+place to put real values, without changing this contract's shape when it arrives. This is what
+lets a future UI honestly say "Generated from page 14" or "Generated from lines 220–260" — for
+PDF chunks, the provenance backing that claim is real today, not backfilled later from a guess.
+
+`charRange`'s contract (above) is "offsets into the adapter's own normalized text" — for any
+format sharing `contentKind: "text"` with plain text (PDF included), that means ONE whole-document
+coordinate space, not a per-section one; a per-page-relative reading was shipped briefly during
+PDF integration and corrected before founder QA — see `docs/ai-pdf-generation.md`'s "Document text
+coordinate system" section for the full correction record and why `lineRange` is omitted for PDF
+instead of also being made document-wide.
 
 ## Normalization version
 
@@ -104,8 +113,13 @@ once. Each adapter is:
 - **`text`** (`textAdapter.ts`) — the gold-standard, fully-implemented adapter. Reuses the
   existing local-first/cloud-fallback resolution (`resolveSourceOriginal`) and viewer-input
   staging (`prepareViewerInput`) unchanged — no second download pipeline, no persisted signed URL.
-- **`pdf`** (`pdfAdapter.ts`) — `pending-extraction` (see "PDF extraction investigation" below).
-  Never resolves/downloads the file at all — the answer doesn't depend on it.
+- **`pdf`** (`pdfAdapter.ts` + `pdfTextExtraction.ts`) — real text extraction via a native module
+  (see "PDF text extraction" below, which supersedes the original "PDF extraction investigation"
+  record kept further down for history). Resolves/stages the file exactly like `text` does, then
+  extracts per-page text and chunks it. `ready` for a PDF with real extractable text; `empty` for
+  one with none (most commonly scanned/image-only — no OCR); `pending-extraction` only if the
+  native extraction module isn't loaded in this runtime; `failed` for password-protected/corrupt
+  files; `too-large` over the extraction page-count or extracted-text-size ceiling.
 - **`docx`** (`docxAdapter.ts` boundary + dispatcher) — `pending-extraction`; see "DOCX adapter
   boundary" below.
 - **`image`** (`imageAdapter.ts`) — `unsupported` (no OCR this batch); metadata only.
@@ -113,9 +127,21 @@ once. Each adapter is:
 - **`pptx`/`xlsx`** — `unsupported`; no adapter exists at all yet (explicitly out of scope, same
   as the DOCX Reader mission's own scoping).
 
-## PDF extraction investigation
+## PDF text extraction
 
-Investigated before writing any adapter code:
+**Superseded the investigation below.** `pdfTextExtraction.ts` wraps `expo-pdf-text-extract` (a
+small, purpose-built native module — Apple PDFKit on iOS, Apache PDFBox on Android) to get real,
+per-page extracted text, isolated from the rest of the normalization layer so `pdfAdapter.ts`'s
+own chunking/provenance logic (and `pdfExtractionOutcome.ts`'s error-mapping logic) stay pure and
+unit-testable without a native module or React Native runtime. See `docs/ai-pdf-generation.md`
+for the full architecture, data flow, provenance strategy, limitations, and founder QA checklist.
+No OCR anywhere in this path — a scanned/image-only PDF (or a page with no text layer) correctly
+extracts to empty text and reports `empty`, never fabricated content.
+
+## PDF extraction investigation (historical — the original `pending-extraction` decision record)
+
+Investigated before writing any adapter code, back when this adapter was a `pending-extraction`
+stub:
 
 - `react-native-pdf@7.0.1` (the only PDF library in this project — see `src/domain/sourceReader.ts`)
   exposes **no text-extraction API** anywhere in its public surface (`index.d.ts` and README
@@ -126,11 +152,12 @@ Investigated before writing any adapter code:
   depends on Web Worker/Canvas/DOM APIs that don't exist natively in React Native/Hermes —
   making it work would need unverified polyfilling.
 
-**Conclusion: client-side PDF text extraction is not realistically available with the currently
-integrated stack.** `pdfAdapter.ts` is an honest `pending-extraction` stub with real page-count
-metadata (`source.pageCount`, when already known) but zero fabricated chunks or page numbers. The
-adapter interface is ready for a future implementation — either a vetted JS PDF-text library, or
-a server-side extraction step — without changing how `normalizeSource` dispatches to it.
+**Conclusion at the time: client-side PDF text extraction was not realistically available with the
+stack integrated then.** `pdfAdapter.ts` was an honest `pending-extraction` stub with real
+page-count metadata (`source.pageCount`, when already known) but zero fabricated chunks or page
+numbers. That adapter interface turned out to be exactly ready for the real implementation that
+followed — `expo-pdf-text-extract`, a vetted native module, slotted in without changing how
+`normalizeSource` dispatches to `pdf` at all (see "PDF text extraction" above).
 
 ## DOCX adapter boundary
 
@@ -285,18 +312,22 @@ scripts, follows external references, or opens a path outside the already-resolv
 local file the existing Reader/Preview architecture already staged. There is no new dependency in
 this batch (see below), so there is no new supply-chain surface to review either.
 
-## Future AI pipeline integration
+## AI pipeline integration — now real, for TXT and PDF
 
-The shape this batch produces is exactly what a future deck-generation pipeline needs:
+The shape this batch produces turned out to be exactly what the real deck-generation pipeline
+needed, unchanged, when it arrived in a later batch:
 
 ```
-NormalizedSourceContent
-  → select relevant chunks (future: a ranking/selection step, not implemented here)
-  → generate cards (future: an AI provider call, not implemented here)
-  → attach source provenance (chunk.provenance is already real and available today)
-  → future UI: "Generated from page 14" / "Generated from lines 220–260"
+NormalizedSourceContent (TXT: text-v1 adapter; PDF: pdf-text-v1 adapter — see "PDF text extraction" above)
+  → select bounded context (src/domain/ai/contextPreparation.ts — sequential selection, no
+    ranking/embeddings; see docs/ai-generation-foundation.md)
+  → generate cards (real: AWS Bedrock / Amazon Nova 2 Lite, Development only — see
+    docs/ai-generation-foundation.md and docs/ai-pdf-generation.md)
+  → attach source provenance (chunk.provenance — real for TXT and PDF; TXT via charRange/lineRange,
+    PDF additionally via a real page number)
+  → review-screen provenance display, when the UI surfaces it
 ```
 
-No AI provider (OpenAI, Anthropic, Bedrock, Gemini, or otherwise) is named, selected, or called
-anywhere in this batch or this document. Provider architecture is explicitly deferred to a future,
-separate batch.
+This document itself still names no AI provider as ITS OWN implementation choice — that remains
+correctly the responsibility of `docs/ai-generation-foundation.md`'s own contract and the Bedrock
+integration's own reports, not this normalization-layer document.
