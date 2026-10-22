@@ -1023,7 +1023,7 @@ const de = {
       tooLargeTitle: "Quelle ist zu groß",
       tooLargeBody: "Diese Quelle ist derzeit zu groß, um einen Stapel zu erstellen.",
       pendingTitle: "Noch nicht bereit für die Erstellung",
-      pendingBody: "Dieser Quelltyp kann noch nicht für die KI-Erstellung gelesen werden. Textquellen (.txt) und PDFs mit lesbarem Text werden heute unterstützt.",
+      pendingBody: "Diese Quelle ist noch nicht bereit für die KI-Erstellung. Versuche es erneut, wenn die Verarbeitung abgeschlossen ist.",
       unsupportedTitle: "Nicht unterstützt",
       unsupportedBody: "Aus dieser Art von Quelle können keine Lernkartenstapel erstellt werden.",
       failedTitle: "Diese Quelle konnte nicht gelesen werden",

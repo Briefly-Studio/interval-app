@@ -1022,7 +1022,7 @@ const nl = {
       tooLargeTitle: "Bron is te groot",
       tooLargeBody: "Deze bron is momenteel te groot om een set van te genereren.",
       pendingTitle: "Nog niet klaar voor genereren",
-      pendingBody: "Dit brontype kan nog niet worden gelezen voor AI-generatie. Tekstbronnen (.txt) en pdf's met leesbare tekst worden nu ondersteund.",
+      pendingBody: "Deze bron is nog niet klaar voor AI-generatie. Probeer het opnieuw zodra de verwerking is voltooid.",
       unsupportedTitle: "Niet ondersteund",
       unsupportedBody: "Er kunnen geen studiesets worden gegenereerd vanuit dit type bron.",
       failedTitle: "Kan deze bron niet lezen",

@@ -991,7 +991,7 @@ const ko = {
       tooLargeTitle: "소스가 너무 큼",
       tooLargeBody: "이 소스는 현재 덱을 생성하기에 너무 큽니다.",
       pendingTitle: "아직 생성할 수 없음",
-      pendingBody: "이 소스 유형은 아직 AI 생성을 위해 읽을 수 없습니다. 현재는 텍스트(.txt) 소스와 읽을 수 있는 텍스트가 있는 PDF를 지원합니다.",
+      pendingBody: "이 소스는 아직 AI 생성 준비가 되지 않았습니다. 처리가 완료되면 다시 시도해 주세요.",
       unsupportedTitle: "지원되지 않음",
       unsupportedBody: "이 유형의 소스로는 학습 덱을 생성할 수 없습니다.",
       failedTitle: "이 소스를 읽을 수 없음",

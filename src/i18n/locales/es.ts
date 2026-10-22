@@ -1017,7 +1017,7 @@ const es = {
       tooLargeTitle: "La fuente es demasiado grande",
       tooLargeBody: "Esta fuente es demasiado grande para generar un mazo por ahora.",
       pendingTitle: "Aún no está lista para generar",
-      pendingBody: "Este tipo de fuente todavía no se puede leer para la generación con IA. Hoy se admiten las fuentes de texto (.txt) y los PDF con texto legible.",
+      pendingBody: "Esta fuente todavía no está lista para la generación con IA. Inténtalo de nuevo cuando termine de procesarse.",
       unsupportedTitle: "No compatible",
       unsupportedBody: "No se pueden generar mazos de estudio a partir de este tipo de fuente.",
       failedTitle: "No se pudo leer esta fuente",

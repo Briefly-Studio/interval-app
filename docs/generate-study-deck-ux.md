@@ -63,12 +63,12 @@ layer already does the `sourceType` → status work; this shell only decides wha
 
 | Normalization status | Source types (today) | Shell behavior |
 | --- | --- | --- |
-| `ready` | **TXT** (`text-v1` adapter), **PDF with extractable text** (`pdf-text-v1` adapter) | Generation allowed |
-| `empty` | TXT with no extractable text; **PDF with no extractable text (most commonly a scanned/image-only PDF — no OCR)** | "No usable text" — honest, no generation |
-| `too-large` | TXT over the 10 MB normalization ceiling; **PDF whose extracted text exceeds that same ceiling, or whose page count exceeds the extraction page ceiling** | "Source is too large" |
-| `pending-extraction` | **DOCX** (always); **PDF only if the native text-extraction module isn't loaded in this runtime** (e.g. Expo Go, or a build that hasn't picked up the native dependency yet) | "Not ready for generation yet" — honest not-ready state |
-| `unsupported` | image, audio, pptx, xlsx | "Not supported" |
-| `failed` | any text/PDF source that couldn't be resolved/read, or a password-protected/corrupted PDF | Friendly failure state with Retry |
+| `ready` | **TXT** (`text-v1`), **PDF with extractable text** (`pdf-text-v1`), **DOCX with real content** (`structured-blocks-v1`), **XLSX with real cell content** (`spreadsheet-structured-v1`) | Generation allowed |
+| `empty` | TXT/PDF/DOCX/XLSX with no extractable text (e.g. a scanned/image-only PDF, an image-only DOCX, or a workbook with no non-blank cells) | "No usable text" — honest, no generation |
+| `too-large` | TXT/PDF over their byte/page/extracted-text ceilings; DOCX over its block-count ceiling; XLSX over its row-count ceiling | "Source is too large" |
+| `pending-extraction` | **PDF only**, and only if the native text-extraction module isn't loaded in this runtime (e.g. Expo Go, or a build that hasn't picked up the native dependency yet) | "Not ready for generation yet" — honest not-ready state |
+| `unsupported` | image, audio, pptx — see docs/ai-multiformat-generation.md for why image/audio remain unsupported despite being investigated in depth | "Not supported" |
+| `failed` | any source that couldn't be resolved/read, a password-protected/corrupted PDF, or an encrypted/unrecognized DOCX/XLSX | Friendly failure state with Retry |
 
 Internal `ExtractionStatus` / `GenerationErrorCode` values are never shown to the user — every
 state has a localized title/body pair.
@@ -314,9 +314,12 @@ localized message. No raw error, stack trace, or internal code is ever shown.
 
 - Mock provider only — card content is placeholder text, not real generated study material.
 - No deck→source link persisted (see above).
-- PDF with extractable text is generation-eligible; DOCX still shows an honest not-ready state;
-  image / audio / pptx / xlsx are unsupported. Scanned/image-only PDFs correctly show "no usable
-  text" (no OCR).
+- TXT, PDF with extractable text, DOCX, and XLSX are all generation-eligible (see
+  docs/ai-multiformat-generation.md for the full per-format matrix); image / audio / pptx remain
+  unsupported — image and audio were investigated in depth for on-device OCR/transcription but
+  blocked for this batch (same doc's "Image / OCR" and "Audio / transcription" sections explain
+  why), and pptx was out of scope entirely. Scanned/image-only PDFs and image-only DOCX pages
+  correctly show "no usable text" (no OCR).
 - No page-range or chunk selection UI — the whole (budgeted) source is used; a partial-context
   generation is now disclosed BEFORE generation on the options screen, and again with chunk-scope
   detail on the review screen (see "Source coverage disclosure"). Whole-document generation for a

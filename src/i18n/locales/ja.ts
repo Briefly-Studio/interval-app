@@ -996,7 +996,7 @@ const ja = {
       tooLargeTitle: "ソースが大きすぎます",
       tooLargeBody: "このソースは現在、デッキを生成するには大きすぎます。",
       pendingTitle: "まだ生成に対応していません",
-      pendingBody: "この種類のソースはまだAI生成用に読み取れません。現在はテキスト（.txt）ソースと、読み取り可能なテキストを含むPDFに対応しています。",
+      pendingBody: "このソースはまだAI生成の準備ができていません。処理が完了してから再度お試しください。",
       unsupportedTitle: "非対応",
       unsupportedBody: "この種類のソースからは学習デッキを生成できません。",
       failedTitle: "このソースを読み取れませんでした",
