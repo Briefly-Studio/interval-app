@@ -139,13 +139,20 @@ For anything not covered directly in this file, these are the authoritative docu
     verified on iOS Simulator and physical iPhone** — this is now the active development native
     runtime; see that document for the full record and EAS Build's separate, still-inactive status.
 19. `docs/source-normalization-foundation.md` — the provider-neutral `NormalizedSourceContent`
-    layer (`src/domain/normalization/`). **Implemented and integrated into `v3.2-dev`.**
+    layer (`src/domain/normalization/`). **Implemented and integrated into `v3.2-dev`; TXT, PDF,
+    DOCX, and XLSX adapters are now real (see `docs/ai-multiformat-generation.md`, `feat/
+    ai-multiformat-generation`) — image/audio remain structural stubs (investigated for OCR/
+    transcription, both blocked; see that same document).**
 20. `docs/ai-generation-foundation.md` — the provider-neutral, provenance-aware AI service
-    contract and boundary (`src/domain/ai/`). **Implemented and integrated into `v3.2-dev`;
-    mock provider only** — no real provider SDK, prompt, network AI call, or deployed AI backend.
+    contract and boundary (`src/domain/ai/`). **Implemented and integrated into `v3.2-dev`; a
+    real backend provider (Bedrock/Nova 2 Lite) is enabled in Development as of
+    `feat/enable-development-real-ai`** — Staging remains mock and Production Generate remains
+    gated off.
 21. `docs/generate-study-deck-ux.md` — the Library Source → Generate Study Deck workflow.
-    **Implemented, founder-QA verified, integrated into `v3.2-dev`; `[MOCK]` output only**, gated
-    to Development/Staging (hidden in Production).
+    **Implemented, founder-QA verified, integrated into `v3.2-dev`**, gated to Development/Staging
+    (hidden in Production). TXT and PDF generation use the real Development backend provider;
+    DOCX and XLSX are newly generation-eligible on `feat/ai-multiformat-generation` (not yet
+    founder-QA verified) — see `docs/ai-multiformat-generation.md`.
 22. `docs/discover-preview-foundation.md` — the bounded fixture-based Discover preview.
     **Implemented, founder-QA verified, integrated into `v3.2-dev`; local-only, no backend, and
     currently NOT environment-gated** — see "Discover" below.
@@ -161,10 +168,18 @@ For anything not covered directly in this file, these are the authoritative docu
     and integrated into `v3.2-dev` and `v3.3-dev`; no EAS account linkage, no App Store submission,
     no bundle identifier change, no beta build produced yet.**
 26. `docs/ai-pdf-generation.md` — extends Generate Study Deck to PDF sources with extractable
-    text, via a new native text-extraction module (`expo-pdf-text-extract`) feeding the existing,
-    unchanged `NormalizedSourceContent`/AI generation pipeline. **Implemented on
-    `feat/ai-pdf-generation`, not yet merged, not yet committed; no OCR; requires a native
-    Development Build rebuild not yet performed.**
+    text, via a native text-extraction module (`expo-pdf-text-extract`) feeding the existing,
+    unchanged `NormalizedSourceContent`/AI generation pipeline. **Implemented, merged into
+    `v3.3-dev`; no OCR; a native Development Build rebuild is required before it is testable
+    on-device and has not been confirmed from this environment.**
+27. `docs/ai-multiformat-generation.md` — extends Generate Study Deck to DOCX and XLSX sources
+    (reusing the existing DOCX Reader's own parser for DOCX; a new purpose-built SpreadsheetML
+    reader, reusing `fflate`, for XLSX — no new runtime dependency added for either). **Implemented
+    on `feat/ai-multiformat-generation`, not yet merged, not yet founder-QA verified.** Image/OCR
+    and Audio/transcription were investigated in depth and are explicitly **blocked** (concrete,
+    audited candidates documented, neither wired in — see that document's own "Image / OCR" and
+    "Audio / transcription" sections for exactly why). Video is investigated for feasibility only
+    and deliberately not implemented. No backend/AWS/CDK/EAS/Staging/Production change.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -616,11 +631,13 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   `com.anonymous.briefly-app`/`com.anonymous.brieflyapp` bundle identifiers are still placeholders
   not suitable for that submission (see the same doc's "App identifier audit" — no identifier was
   changed).
-- **Real provider-backed AI generation is not implemented.** The AI Generation Foundation and the
-  Generate Study Deck UX are integrated, but generation is `createMockProvider()` only. Wiring a
-  real model provider, selecting/deploying an AI backend, and defining prompt/rate/cost/abuse
-  handling is a separate, founder-gated body of work. The mobile client must never hold a
-  provider secret.
+- **Real provider-backed AI generation is enabled in Development only** (merged via
+  `feat/enable-development-real-ai`/`feat/bedrock-nova2-phase-a`/`-b` — Bedrock/Nova 2 Lite,
+  per this repository's own commit history; this file's AI-related entries elsewhere had not all
+  been updated to reflect that merge until this edit). Staging remains on `createMockProvider()`;
+  Production Generate remains gated off entirely. The mobile client must never hold a provider
+  secret — this repository has not re-verified that constraint end-to-end as part of the current
+  multiformat-generation batch; treat it as carried forward, not re-audited here.
 - **Discover Production exposure — founder-decided for v3.2: Discover stays visible in
   Production.** It has no `INTERVAL_ENV` gate by design — fixture/local-only, no backend, no
   provider call, no cost, bounded, localized chrome, English fixture lesson content accepted for

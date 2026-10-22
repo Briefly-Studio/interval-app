@@ -993,7 +993,7 @@ const zhHans = {
       tooLargeTitle: "来源过大",
       tooLargeBody: "此来源目前过大，无法生成卡组。",
       pendingTitle: "尚不可用于生成",
-      pendingBody: "此类来源尚无法读取以进行 AI 生成。目前支持文本（.txt）来源以及包含可读文本的 PDF。",
+      pendingBody: "此来源尚未准备好进行 AI 生成。处理完成后请重试。",
       unsupportedTitle: "不支持",
       unsupportedBody: "无法根据此类来源生成学习卡组。",
       failedTitle: "无法读取此来源",

@@ -1041,7 +1041,7 @@ const en = {
       tooLargeTitle: "Source is too large",
       tooLargeBody: "This source is too large to generate a deck from right now.",
       pendingTitle: "Not ready for generation yet",
-      pendingBody: "This source type can't be read for AI generation yet. Text (.txt) sources and PDFs with readable text are supported today.",
+      pendingBody: "This source isn't ready for AI generation yet. Try again once it's finished processing.",
       unsupportedTitle: "Not supported",
       unsupportedBody: "Study decks can't be generated from this type of source.",
       failedTitle: "Couldn't read this source",

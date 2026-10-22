@@ -1029,7 +1029,7 @@ const fr = {
       tooLargeTitle: "La source est trop volumineuse",
       tooLargeBody: "Cette source est trop volumineuse pour générer un paquet pour le moment.",
       pendingTitle: "Pas encore prête pour la génération",
-      pendingBody: "Ce type de source ne peut pas encore être lu pour la génération par IA. Les sources texte (.txt) et les PDF contenant du texte lisible sont pris en charge aujourd'hui.",
+      pendingBody: "Cette source n'est pas encore prête pour la génération par IA. Réessayez une fois son traitement terminé.",
       unsupportedTitle: "Non pris en charge",
       unsupportedBody: "Impossible de générer des paquets de révision à partir de ce type de source.",
       failedTitle: "Impossible de lire cette source",

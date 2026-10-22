@@ -1,20 +1,23 @@
 # Source Normalization Foundation
 
-**Status: implemented and integrated into `v3.2-dev`** (first integrated into `v3.1-dev`, then
-carried forward). This document describes a domain/foundation layer (`src/domain/normalization/`)
-— it produces a common `NormalizedSourceContent` shape from format-specific adapters. No AI
-provider, model API, prompt, or generation feature lives in this layer. The image and audio
-adapters are structural stubs — real OCR and transcription are not implemented. See CLAUDE.md's
-Documentation Hierarchy and its "v3.2 integrated features" section.
+**Status: implemented and integrated, carried forward through `v3.3-dev`'s
+`feat/ai-multiformat-generation`.** This document describes a domain/foundation layer
+(`src/domain/normalization/`) — it produces a common `NormalizedSourceContent` shape from
+format-specific adapters. No AI provider, model API, prompt, or generation feature lives in this
+layer. TXT, PDF, DOCX, and XLSX now all produce real `ready` content; image and audio remain
+structural stubs — real OCR and transcription are investigated in depth, but not implemented, in
+`docs/ai-multiformat-generation.md` (that document's own "Blockers" sections explain why). See
+CLAUDE.md's Documentation Hierarchy.
 
 ## Purpose
 
 Interval's source consumption today is format-specific: PDF is rendered by a PDF viewer, plain
-text is read as text, a separate (unmerged) branch parses DOCX into structured blocks, images are
-displayed visually, and audio playback lives on its own separate (parked) branch. The planned
-first AI feature — `Library Source → Generate → Study Deck` — and everything after it (quiz
-generation, summaries, "ask this source", multi-source generation) would otherwise need to
-reimplement `if (pdf) ... else if (docx) ... else if (txt) ...` branching in every future feature.
+text is read as text, DOCX is parsed into structured blocks (by the same parser the DOCX Reader
+uses), XLSX is parsed into sheet/row text, images are displayed visually, and audio playback lives
+on its own screen. The first AI feature — `Library Source → Generate → Study Deck` — and
+everything after it (quiz generation, summaries, "ask this source", multi-source generation)
+would otherwise need to reimplement `if (pdf) ... else if (docx) ... else if (txt) ...` branching
+in every future feature.
 
 This foundation exists so that never has to happen. `normalizeSource(source)` is the single
 entry point: give it a `LibrarySourceRecord`, get back a `NormalizationResult` carrying a
@@ -120,12 +123,19 @@ once. Each adapter is:
   one with none (most commonly scanned/image-only — no OCR); `pending-extraction` only if the
   native extraction module isn't loaded in this runtime; `failed` for password-protected/corrupt
   files; `too-large` over the extraction page-count or extracted-text-size ceiling.
-- **`docx`** (`docxAdapter.ts` boundary + dispatcher) — `pending-extraction`; see "DOCX adapter
-  boundary" below.
-- **`image`** (`imageAdapter.ts`) — `unsupported` (no OCR this batch); metadata only.
+- **`docx`** (`docxAdapter.ts`) — real extraction, reusing the existing DOCX Reader's own parser
+  (`docxContent.ts`/`sourceReaderDocx.ts`) — see "DOCX adapter integration" below. `ready` for a
+  document with real text; `empty` for one with none (e.g. image-only); `failed` for an
+  encrypted/unreadable file; `too-large` over the parser's own block-count ceiling.
+- **`xlsx`** (`spreadsheetAdapter.ts`) — real extraction via a purpose-built SpreadsheetML reader
+  — see "XLSX normalization" below. Same status set as DOCX.
+- **`image`** (`imageAdapter.ts`) — `unsupported` (no OCR this batch); metadata only. A concrete,
+  audited on-device OCR candidate exists but was not wired in — see
+  `docs/ai-multiformat-generation.md`'s "Image / OCR" section for the full investigation and why.
 - **`audio`** (`audioAdapter.ts`) — `unsupported` (no transcription this batch); metadata only.
-- **`pptx`/`xlsx`** — `unsupported`; no adapter exists at all yet (explicitly out of scope, same
-  as the DOCX Reader mission's own scoping).
+  See `docs/ai-multiformat-generation.md`'s "Audio / transcription" section for why this remains
+  blocked rather than wired to an on-device speech-recognition package.
+- **`pptx`** — `unsupported`; no adapter exists (out of scope for this batch — not requested).
 
 ## PDF text extraction
 
@@ -159,21 +169,64 @@ numbers. That adapter interface turned out to be exactly ready for the real impl
 followed — `expo-pdf-text-extract`, a vetted native module, slotted in without changing how
 `normalizeSource` dispatches to `pdf` at all (see "PDF text extraction" above).
 
-## DOCX adapter boundary
+## DOCX adapter integration
 
-DOCX Reader — a real WordprocessingML block parser — is implemented on the separate, unmerged
-`feat/document-reader-docx` branch. This mission's governance explicitly forbids touching,
-cherry-picking, or duplicating that branch's code. `docxAdapter.ts` therefore defines only the
-**generic shape** a structured-block source needs (`GenericStructuralBlock[]` — `heading` /
-`paragraph` / `listItem` / `tableRow` / `image`, each with plain text and an optional enclosing
-heading) plus the real, reusable segmentation logic (`normalizeStructuredBlocks`) that turns
-already-extracted blocks into provenance-carrying chunks (one chunk per non-empty block,
-`blockIndex` + `heading` provenance). Once the DOCX branch integrates, mapping its own richer
-`DocxBlock[]` (which additionally tracks bold/italic runs — a Reader/typography concern, not a
-normalization concern) down to `GenericStructuralBlock[]` is a few lines; nothing here duplicates
-or risks drifting from that branch's actual XML parsing. Until then, `normalizeSource` returns
-`pending-extraction` for `sourceType: "docx"` directly, without calling `normalizeStructuredBlocks`
-at all (there is no block data to feed it in this branch).
+**Corrected record:** earlier revisions of this document said the DOCX Reader's real
+WordprocessingML parser lived on a separate, unmerged branch that normalization must not touch.
+That branch merged into this codebase's history well before this batch (`docs/docx-reader.md`:
+"implemented and integrated into `v3.2-dev`"; confirmed directly via
+`git merge-base --is-ancestor feat/document-reader-docx HEAD` → yes) — the "do not touch" premise
+no longer held, and this batch wires the real integration that was previously only anticipated.
+
+`docxAdapter.ts` still defines the **generic shape** a structured-block source needs
+(`GenericStructuralBlock[]` — `heading` / `paragraph` / `listItem` / `tableRow` / `image`, each
+with plain text and an optional enclosing heading) plus `normalizeStructuredBlocks` — the real,
+reusable segmentation logic that turns already-extracted blocks into provenance-carrying chunks
+(one chunk per non-empty block, `blockIndex` + `heading` provenance, `contentKind:
+"structured-text"`, no `charRange` — the structured-text contract's existing, deliberate omission
+is unchanged). New in this batch: `mapDocxBlocksToGenericBlocks` + `normalizeDocxSource`, which
+reuse the existing DOCX Reader's own `readDocxArchive` (`sourceReaderDocx.ts`) and `DocxBlock[]`
+(`docxContent.ts`) completely as-is — no new DOCX parsing code exists anywhere in this batch.
+Runs are flattened to plain text (formatting fidelity stays a Reader concern); a table row becomes
+one chunk with its cells joined by `" | "`; an image block carries no text (no OCR, same rule as
+`imageAdapter.ts`). `normalizeSource.ts`'s `docx` branch now resolves/stages the file exactly like
+`text`/`pdf` do, reads it as raw bytes (`File.bytes()`), and maps the outcome onto
+`ExtractionStatus`: `ready`/`empty` pass through `normalizeDocxSource`'s own content;
+`too-large` for the parser's existing block-count ceiling; `failed` for a read/resolution error
+**or** an encrypted/unrecognized archive (deliberately not `unsupported` — see the adapter's own
+code comment: `unsupported` in Generate Study Deck means "this format can never work," which
+would misrepresent an otherwise-ordinary DOCX that merely couldn't be opened this time).
+
+## XLSX normalization
+
+**New in this batch.** `spreadsheetAdapter.ts` is a purpose-built, read-only SpreadsheetML reader
+— the same architecture choice already made for DOCX, not a new one. The two mature pure-JS
+alternatives were explicitly rejected after a real audit (see
+`docs/ai-multiformat-generation.md`'s "Dependencies" section for the full record): the
+npm-published `xlsx` (SheetJS) package is permanently stuck at its last-ever-published version
+(0.18.5, 2022) and carries an unpatched GitHub Security Advisory
+(GHSA-4r6h-8v6p-xvw6/CVE-2023-30533, prototype pollution — SheetJS's own advisory states no fixed
+version is available via npm); `exceljs` is Node-oriented (`tmp`, `archiver`, `unzipper`,
+`readable-stream` — filesystem/Node-stream APIs with no real fit in a React Native runtime).
+Instead, `spreadsheetAdapter.ts` reuses `fflate` (already a dependency, already audited for this
+exact purpose — see DOCX) with the same zip-bomb/untrusted-input defense: an allow-list of exactly
+four entry kinds (`xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, `xl/sharedStrings.xml`,
+`xl/worksheets/sheetN.xml`), each with its own pre-inflation size ceiling — no chart, drawing,
+embedded object, or macro part is ever accepted.
+
+Each sheet's rows render as one flat, honest text block — `Sheet: <name>` / `Columns: <header
+row>` / `Row N: <cells joined with " | ">` — then the WHOLE workbook's text runs through the
+existing `segmentText()` chunker (the same one TXT/PDF already use), so line/char provenance is
+real (it cites real lines/characters of this generated text) without adding a single new
+provenance field or a parallel chunking strategy — exactly the path the mission's own provenance
+guidance recommends when "existing provenance types do not support spreadsheet coordinates."
+`contentKind: "text"` (not a new kind) follows from reusing the flat-text chunker as-is. A cell
+absent from the XML (Excel omits blank cells entirely) becomes an honest empty slot at its real
+column position, never silently dropped and never fabricated. A formula cell's cached,
+already-computed result is used (the same value Excel itself displays) — the formula source text
+itself is never read or evaluated. **Known limitation:** sheet/row identity lives only in the
+chunk's own text (e.g. "Row 12: ..."), not in a structured `ChunkProvenance` field — deliberate,
+per the mission's explicit instruction not to redesign the provenance system for this.
 
 ## Image normalization
 
@@ -184,7 +237,9 @@ extracted image content — it's an identity field populated on every content ki
 substitute for text this adapter has no way to read from pixels. `NormalizedSourceMetadata`
 reserves a `description` field for a future user-authored alt-text field, should one ever be
 added to `LibrarySourceRecord` — no such field exists on the model today, so nothing populates it
-yet.
+yet. This was investigated in depth for real on-device OCR (`feat/ai-multiformat-generation`) — a
+concrete, audited candidate exists but was not wired in; see `docs/ai-multiformat-generation.md`'s
+"Image / OCR" section.
 
 ## Audio normalization
 
@@ -193,7 +248,9 @@ No transcription. `normalizeAudioSource` returns `contentKind: "audio"`, zero ch
 `LibrarySourceRecord.audioDuration` — never derived by decoding or probing audio bytes, which
 this batch does not do. `ChunkProvenance.timeRangeMs` already exists on the shared type as the
 boundary a future timestamped-transcript adapter would populate; nothing in this batch writes to
-it.
+it. Also investigated in depth (`feat/ai-multiformat-generation`) and found to need real
+architecture work beyond a single dependency add; see `docs/ai-multiformat-generation.md`'s
+"Audio / transcription" section for the specific technical blockers found.
 
 ## Text adapter: requirements and behavior
 
@@ -312,21 +369,28 @@ scripts, follows external references, or opens a path outside the already-resolv
 local file the existing Reader/Preview architecture already staged. There is no new dependency in
 this batch (see below), so there is no new supply-chain surface to review either.
 
-## AI pipeline integration — now real, for TXT and PDF
+## AI pipeline integration — now real, for TXT, PDF, DOCX, and XLSX
 
 The shape this batch produces turned out to be exactly what the real deck-generation pipeline
-needed, unchanged, when it arrived in a later batch:
+needed, unchanged, through every format added since:
 
 ```
-NormalizedSourceContent (TXT: text-v1 adapter; PDF: pdf-text-v1 adapter — see "PDF text extraction" above)
+NormalizedSourceContent (TXT: text-v1; PDF: pdf-text-v1 — see "PDF text extraction" above;
+  DOCX: structured-blocks-v1 — see "DOCX adapter integration" above; XLSX:
+  spreadsheet-structured-v1 — see "XLSX normalization" above)
   → select bounded context (src/domain/ai/contextPreparation.ts — sequential selection, no
     ranking/embeddings; see docs/ai-generation-foundation.md)
   → generate cards (real: AWS Bedrock / Amazon Nova 2 Lite, Development only — see
     docs/ai-generation-foundation.md and docs/ai-pdf-generation.md)
-  → attach source provenance (chunk.provenance — real for TXT and PDF; TXT via charRange/lineRange,
-    PDF additionally via a real page number)
+  → attach source provenance (chunk.provenance — real for every ready format: TXT/XLSX via
+    charRange+lineRange, PDF additionally via a real page number, DOCX via blockIndex+heading)
   → review-screen provenance display, when the UI surfaces it
 ```
+
+Nothing in `contextPreparation.ts`, `aiService.ts`, `responseValidation.ts`, `generateDeckFlow.ts`,
+or `generationCoverage.ts` branches on `sourceType` — confirmed directly (not assumed) for this
+batch: every one of those files was read in full and contains zero `sourceType`/format-specific
+logic. DOCX and XLSX becoming AI-generation-eligible required zero changes to any of them.
 
 This document itself still names no AI provider as ITS OWN implementation choice — that remains
 correctly the responsibility of `docs/ai-generation-foundation.md`'s own contract and the Bedrock

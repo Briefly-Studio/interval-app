@@ -1026,7 +1026,7 @@ const ptBR = {
       tooLargeTitle: "A fonte é grande demais",
       tooLargeBody: "Esta fonte é grande demais para gerar um baralho no momento.",
       pendingTitle: "Ainda não está pronta para gerar",
-      pendingBody: "Este tipo de fonte ainda não pode ser lido para geração por IA. Fontes de texto (.txt) e PDFs com texto legível são suportados hoje.",
+      pendingBody: "Esta fonte ainda não está pronta para a geração por IA. Tente novamente quando o processamento terminar.",
       unsupportedTitle: "Não suportada",
       unsupportedBody: "Não é possível gerar baralhos de estudo a partir deste tipo de fonte.",
       failedTitle: "Não foi possível ler esta fonte",

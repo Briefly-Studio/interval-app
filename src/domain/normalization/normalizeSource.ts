@@ -4,9 +4,11 @@ import { resolveSourceOriginal } from "../../cloud/librarySourceStorage/openSour
 import type { LibrarySourceRecord } from "../../models/librarySource";
 import { prepareViewerInput } from "../sourceViewer";
 import { normalizeAudioSource } from "./audioAdapter";
+import { normalizeDocxSource } from "./docxAdapter";
 import { normalizeImageSource } from "./imageAdapter";
 import { normalizePdfTextSource } from "./pdfAdapter";
 import { extractPdfPageTexts } from "./pdfTextExtraction";
+import { normalizeSpreadsheetSource } from "./spreadsheetAdapter";
 import { inspectTextForNormalization, MAX_NORMALIZATION_TEXT_BYTES, normalizeTextSource } from "./textAdapter";
 import { NORMALIZATION_VERSION, type ExtractionStatus, type NormalizationResult, type NormalizedSourceContent } from "./types";
 
@@ -67,14 +69,14 @@ function result(status: ExtractionStatus, content: NormalizedSourceContent): Nor
  * layer, cache, DynamoDB, or S3; calling this twice for the same source does the same work twice,
  * deterministically producing the same result both times (see chunking.ts).
  *
- * DOCX intentionally never attempts local-first/cloud-fallback file resolution at all — its
- * result (`pending-extraction`) is fixed regardless of whether the file is actually available on
- * this device or in the cloud, so resolving/downloading it first would be wasted I/O (and, for a
- * cloud-only source, an unnecessary network fetch) for an answer that's already known. Image and
- * audio metadata come entirely from already-known LibrarySourceRecord fields, for the same
- * reason. `text` and `pdf` are the two adapters that actually resolve/read the underlying file —
- * `pdf` via native text extraction (pdfTextExtraction.ts), never OCR; see pdfAdapter.ts's own
- * header comment for the full PDF data flow.
+ * Image and audio metadata come entirely from already-known `LibrarySourceRecord` fields — no
+ * file resolution, since neither adapter extracts anything from the file's own bytes (no OCR, no
+ * transcription; see imageAdapter.ts/audioAdapter.ts). `text`, `pdf`, and `docx` are the three
+ * adapters that actually resolve/read the underlying file via the exact same local-first/
+ * cloud-fallback resolution and viewer-input staging every Reader/Preview screen already uses —
+ * `pdf` via native text extraction (pdfTextExtraction.ts, never OCR), `docx` via the existing
+ * WordprocessingML block parser (docxAdapter.ts/sourceReaderDocx.ts, reused as-is from the DOCX
+ * Reader). See each adapter's own header comment for its full data flow.
  */
 export async function normalizeSource(source: LibrarySourceRecord): Promise<NormalizationResult> {
   logNormalization("start", { sourceType: source.sourceType });
@@ -205,17 +207,136 @@ export async function normalizeSource(source: LibrarySourceRecord): Promise<Norm
   }
 
   if (source.sourceType === "docx") {
-    // See docxAdapter.ts's header comment — the real WordprocessingML parser lives on the
-    // unmerged feat/document-reader-docx branch, which this mission must not touch or duplicate.
-    logNormalization("done", { sourceType: source.sourceType, status: "pending-extraction", adapter: "docx-pending-v1" });
-    return result(
-      "pending-extraction",
-      stubContent(source, "pending-extraction", "docx-pending-v1", "structured-document-adapter-not-yet-integrated", source.fileSize)
-    );
+    const resolved = await resolveSourceOriginal(source);
+    if (resolved.status === "error") {
+      logNormalization("resolution failed", { sourceType: source.sourceType, reason: resolved.reason });
+      return result("failed", stubContent(source, "failed", "docx-structured-v1", `source-resolution-${resolved.reason}`, source.fileSize));
+    }
+
+    const input = await prepareViewerInput(resolved.uri, source);
+    if (!input.usedStagedCopy) {
+      logNormalization("staging failed", { sourceType: source.sourceType });
+      return result("failed", stubContent(source, "failed", "docx-structured-v1", "could-not-stage-local-copy", source.fileSize));
+    }
+
+    let archiveBytes: Uint8Array;
+    try {
+      archiveBytes = await new File(input.uri).bytes();
+    } catch (error) {
+      logNormalization("docx read failed", { error: safeErrorDetail(error) });
+      return result("failed", stubContent(source, "failed", "docx-structured-v1", "docx-file-read-failed", source.fileSize));
+    }
+
+    const outcome = normalizeDocxSource({
+      sourceId: source.id,
+      sourceType: source.sourceType,
+      title: source.displayTitle,
+      originalName: source.originalName,
+      language: source.sourceLanguage,
+      byteSize: source.fileSize,
+      archiveBytes,
+    });
+
+    if (outcome.status === "too-large") {
+      logNormalization("done", { sourceType: source.sourceType, status: "too-large" });
+      return result("too-large", stubContent(source, "too-large", "docx-structured-v1", "exceeds-docx-size-or-block-ceiling", source.fileSize));
+    }
+    if (outcome.status === "unsupported") {
+      // A valid ZIP that isn't a real WordprocessingML package — most commonly an encrypted/
+      // password-protected DOCX (see docxAdapter.ts). Mapped to "failed" (not "unsupported") for
+      // Generate Study Deck specifically: "unsupported" in this UI means "this FORMAT can never
+      // work," which would misrepresent an otherwise-ordinary DOCX that merely couldn't be opened
+      // this time — the same honest distinction PDF already makes for a password-protected file.
+      logNormalization("done", { sourceType: source.sourceType, status: "failed" });
+      return result("failed", stubContent(source, "failed", "docx-structured-v1", "encrypted-or-unrecognized-docx", source.fileSize));
+    }
+    if (outcome.status === "failed") {
+      logNormalization("done", { sourceType: source.sourceType, status: "failed" });
+      return result("failed", stubContent(source, "failed", "docx-structured-v1", "docx-normalization-failed", source.fileSize));
+    }
+
+    logNormalization("done", {
+      sourceType: source.sourceType,
+      status: outcome.status,
+      adapter: outcome.content.extraction.adapter,
+      chunkCount: outcome.content.chunks.length,
+      byteSize: outcome.content.metadata.byteSize,
+    });
+
+    return result(outcome.status, outcome.content);
+  }
+
+  if (source.sourceType === "xlsx") {
+    const resolved = await resolveSourceOriginal(source);
+    if (resolved.status === "error") {
+      logNormalization("resolution failed", { sourceType: source.sourceType, reason: resolved.reason });
+      return result(
+        "failed",
+        stubContent(source, "failed", "spreadsheet-structured-v1", `source-resolution-${resolved.reason}`, source.fileSize)
+      );
+    }
+
+    const input = await prepareViewerInput(resolved.uri, source);
+    if (!input.usedStagedCopy) {
+      logNormalization("staging failed", { sourceType: source.sourceType });
+      return result("failed", stubContent(source, "failed", "spreadsheet-structured-v1", "could-not-stage-local-copy", source.fileSize));
+    }
+
+    let archiveBytes: Uint8Array;
+    try {
+      archiveBytes = await new File(input.uri).bytes();
+    } catch (error) {
+      logNormalization("spreadsheet read failed", { error: safeErrorDetail(error) });
+      return result("failed", stubContent(source, "failed", "spreadsheet-structured-v1", "spreadsheet-file-read-failed", source.fileSize));
+    }
+
+    const outcome = normalizeSpreadsheetSource({
+      sourceId: source.id,
+      sourceType: source.sourceType,
+      title: source.displayTitle,
+      originalName: source.originalName,
+      language: source.sourceLanguage,
+      byteSize: source.fileSize,
+      archiveBytes,
+    });
+
+    if (outcome.status === "too-large") {
+      logNormalization("done", { sourceType: source.sourceType, status: "too-large" });
+      return result(
+        "too-large",
+        stubContent(source, "too-large", "spreadsheet-structured-v1", "exceeds-spreadsheet-size-or-row-ceiling", source.fileSize)
+      );
+    }
+    if (outcome.status === "unsupported") {
+      // A valid ZIP that isn't a real SpreadsheetML package — most commonly an encrypted/
+      // password-protected workbook. Mapped to "failed" for the same reason DOCX's own encrypted
+      // case is: "unsupported" in Generate Study Deck means "this FORMAT can never work," which
+      // would misrepresent an otherwise-ordinary workbook that merely couldn't be opened this
+      // time.
+      logNormalization("done", { sourceType: source.sourceType, status: "failed" });
+      return result(
+        "failed",
+        stubContent(source, "failed", "spreadsheet-structured-v1", "encrypted-or-unrecognized-spreadsheet", source.fileSize)
+      );
+    }
+    if (outcome.status === "failed") {
+      logNormalization("done", { sourceType: source.sourceType, status: "failed" });
+      return result("failed", stubContent(source, "failed", "spreadsheet-structured-v1", "spreadsheet-normalization-failed", source.fileSize));
+    }
+
+    logNormalization("done", {
+      sourceType: source.sourceType,
+      status: outcome.status,
+      adapter: outcome.content.extraction.adapter,
+      chunkCount: outcome.content.chunks.length,
+      byteSize: outcome.content.metadata.byteSize,
+    });
+
+    return result(outcome.status, outcome.content);
   }
 
   if (source.sourceType !== "text") {
-    // pptx/xlsx (and any future SourceType this dispatcher hasn't been taught about yet).
+    // pptx (and any future SourceType this dispatcher hasn't been taught about yet).
     logNormalization("done", { sourceType: source.sourceType, status: "unsupported" });
     return result(
       "unsupported",
