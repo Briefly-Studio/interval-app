@@ -881,8 +881,22 @@ const ko = {
     emptyTitle: "아직 카드가 없습니다",
     emptyDescription: "학습을 시작하려면 카드에 앞면과 뒷면이 필요합니다.",
     addFirstCardButton: "첫 카드 추가",
-    startReview: "복습 시작",
+    studyDueCardsButton: "복습할 카드 학습",
+    studyAllCardsButton: "모든 카드 학습",
     startQuiz: "퀴즈 시작",
+    caughtUpTitle: "모두 끝냈습니다",
+    caughtUpBody: "지금은 복습할 카드가 없습니다.",
+    schedulingSummary: {
+      dueNow: {
+        other: "복습 {{count}}장",
+      },
+      new: {
+        other: "새 카드 {{count}}장",
+      },
+      notDueYet: {
+        other: "대기 중 {{count}}장",
+      },
+    },
     statsToggle: "통계",
     statsToday: "오늘: {{sessions}}회 학습 • {{minutes}}분",
     statsWeek: "최근 7일: {{sessions}}회 학습",
@@ -1132,6 +1146,27 @@ const ko = {
     finishEarlyTitle: "복습을 일찍 종료할까요?",
     finishEarlyBody: {
       other: "카드 {{count}}장에 대한 복습 세션이 기록됩니다.",
+    },
+    dueSessionUnavailableTitle: "더 이상 사용할 수 없음",
+    dueSessionUnavailableBody: "학습하기 전에 이 카드들이 삭제되었습니다.",
+    backToDeckButton: "덱으로 돌아가기",
+    rating: {
+      prompt: "얼마나 잘 기억했나요?",
+      explanation: "답변에 따라 이 카드가 다시 나타나는 시점이 결정됩니다.",
+      again: "다시",
+      hard: "어려움",
+      good: "좋음",
+      easy: "쉬움",
+      accessibleSuffix: "{{interval}} 후 다시 복습",
+      inMinutes: {
+        other: "{{count}}분",
+      },
+      inMinutesFull: {
+        other: "{{count}}분",
+      },
+      inDays: {
+        other: "{{count}}일",
+      },
     },
   },
   reviewResults: {

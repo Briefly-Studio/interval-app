@@ -883,8 +883,22 @@ const zhHans = {
     emptyTitle: "暂无卡片",
     emptyDescription: "卡片需要正面和背面内容才能开始学习。",
     addFirstCardButton: "添加第一张卡片",
-    startReview: "开始复习",
+    studyDueCardsButton: "复习到期卡片",
+    studyAllCardsButton: "复习所有卡片",
     startQuiz: "开始测验",
+    caughtUpTitle: "已全部完成",
+    caughtUpBody: "目前没有到期的卡片。",
+    schedulingSummary: {
+      dueNow: {
+        other: "{{count}} 张到期",
+      },
+      new: {
+        other: "{{count}} 张新卡",
+      },
+      notDueYet: {
+        other: "{{count}} 张未到期",
+      },
+    },
     statsToggle: "统计",
     statsToday: "今天：{{sessions}} 次学习 • {{minutes}} 分钟",
     statsWeek: "近 7 天：{{sessions}} 次学习",
@@ -1134,6 +1148,27 @@ const zhHans = {
     finishEarlyTitle: "要提前结束复习吗？",
     finishEarlyBody: {
       other: "这将为 {{count}} 张卡片记录一次复习。",
+    },
+    dueSessionUnavailableTitle: "不再可用",
+    dueSessionUnavailableBody: "这些卡片在你学习之前已被移除。",
+    backToDeckButton: "返回卡组",
+    rating: {
+      prompt: "你记得这个的程度如何？",
+      explanation: "你的回答将决定这张卡片下次出现的时间。",
+      again: "重来",
+      hard: "困难",
+      good: "良好",
+      easy: "简单",
+      accessibleSuffix: "{{interval}}后再次复习",
+      inMinutes: {
+        other: "{{count}} 分钟",
+      },
+      inMinutesFull: {
+        other: "{{count}} 分钟",
+      },
+      inDays: {
+        other: "{{count}} 天",
+      },
     },
   },
   reviewResults: {
