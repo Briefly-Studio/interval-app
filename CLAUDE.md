@@ -182,22 +182,25 @@ For anything not covered directly in this file, these are the authoritative docu
     No backend/AWS/CDK/EAS/Staging/Production change.
 28. `docs/spaced-repetition-foundation.md` — the first real spaced-repetition scheduling system:
     an immutable `ReviewEvent` history store plus a derived, scheduler-neutral
-    `CardSchedulingState` store (both local-only, per-deck-keyed, `src/storage/cardScheduling.ts`/
-    `reviewEvents.ts`), wired to a real FSRS implementation (`ts-fsrs@5.4.2`, exact-pinned) behind
-    a narrow `Scheduler` interface (`src/domain/scheduling/`). **Implemented on
-    `feat/fsrs-scheduling-foundation`, not yet merged.** The core rating loop (Again/Hard/Good/
-    Easy, shown only once the answer is revealed, replacing the generic Next/Finish button at that
-    point) passed an initial founder visual QA pass; a second pass then added plain-language
-    rating copy, a deck-detail Due/New/Not-due summary, a real **Study Due Cards** action built
-    from the previously-unwired `dueSelection.ts` queue helpers, and **Study All Cards** preserved
-    as the unchanged, unscheduled path (renamed from "Start review") — none of this second pass has
-    its own founder-QA pass yet. `CardRecord.difficulty` (content difficulty), `smartShuffle`
-    (still `goReview`'s own ordering), quiz mode, and `SessionRecord`'s aggregate-only shape are
-    all otherwise untouched. **Cross-device sync is explicitly NOT implemented** — both stores
-    remain local-only, including the new deck-detail summary/queue, which is itself a purely
-    local computation; see that document's "Sync considerations" section for the full
-    two-device-conflict analysis and why this was deliberately deferred rather than forced. No
-    backend/AWS/CDK/EAS/Staging/Production change.
+    `CardSchedulingState` store (per-deck-keyed, `src/storage/cardScheduling.ts`/`reviewEvents.ts`),
+    wired to a real FSRS implementation (`ts-fsrs@5.4.2`, exact-pinned) behind a narrow `Scheduler`
+    interface (`src/domain/scheduling/`). **Implemented and merged into `v3.3-dev`.** The core
+    rating loop (Again/Hard/Good/Easy, shown only once the answer is revealed, replacing the
+    generic Next/Finish button at that point), plain-language rating copy, a deck-detail Due/New/
+    Not-due summary, a real **Study Due Cards** action built from `dueSelection.ts`'s queue
+    helpers, and **Study All Cards** preserved as the unchanged, unscheduled path (renamed from
+    "Start review") are all implemented. `CardRecord.difficulty` (content difficulty),
+    `smartShuffle` (still `goReview`'s own ordering), quiz mode, and `SessionRecord`'s
+    aggregate-only shape remain otherwise untouched. **Cross-device sync is now implemented for
+    `ReviewEvent`, gated to Development/Staging** (`isReviewEventSyncEnabled()`,
+    `src/cloud/sync/reviewEventSyncCapability.ts`) — every device's review history merges via an
+    identity-based (not rev/timestamp-based) idempotent add, and `CardSchedulingState` is
+    deterministically recomputed from the merged history (`recomputeCardSchedulingState.ts`) after
+    every pull that touches a card, never trusted as cross-device truth on its own.
+    `CardSchedulingState` itself remains local-only and is not synced — see that document's "Sync
+    considerations" section for the full design, the deterministic-ordering/clock-skew contract,
+    and why `CardSchedulingState` stays a local-only derived cache. No backend/AWS/CDK change was
+    needed (the sync Lambdas are already fully entity-agnostic); no EAS/Staging/Production change.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -668,15 +671,17 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   every environment (unlike Library metadata, which syncs in Development/Staging). Same device is
   consistent; a second device signed into the same account does not see the same Discover
   progress or deck organization anywhere.
-- **Spaced-repetition scheduling state and review history do not sync across devices either** —
-  same posture as Discover/Deck Collections, local-only everywhere. Unlike those two, this one has
-  a documented two-device conflict risk if sync is ever added naively (see
-  `docs/spaced-repetition-foundation.md`'s "Sync considerations" section): a card reviewed
-  independently on two offline devices before sync could have one device's scheduling outcome
-  silently overwritten by the other's under the existing generic last-write-wins rule, even though
-  the underlying review history itself would remain intact either way. Not a regression — this
-  entire feature is new and non-synced in this batch — but a real design question any future
-  sync-enablement pass must resolve, not a mechanical wiring task.
+- **Spaced-repetition review history (`ReviewEvent`) now syncs across devices, gated to
+  Development/Staging** — a card reviewed independently on two offline devices before sync
+  preserves BOTH review events (identity-based idempotent merge, never a rev/timestamp
+  last-write-wins), and `CardSchedulingState` is deterministically recomputed from the merged
+  history afterward — see `docs/spaced-repetition-foundation.md`'s "Sync considerations" section
+  for the full design. `CardSchedulingState` itself remains local-only by design (a derived
+  cache, never synced). Remaining known gaps, not solved by this: clock-skew in event ordering
+  (`reviewedAt` is client wall-clock time, not a logical clock — documented, not built around);
+  recomputation always replays a card's full history from scratch rather than incrementally
+  (acceptable at current scale); and Production remains local-only for this entity, same as
+  Library metadata, pending a separate founder-approved rollout decision.
 - **The due/new-card queue helpers (`src/domain/scheduling/dueSelection.ts`) are now wired** —
   corrected: an earlier revision of this file said they were built and tested but unused. Deck
   detail's Due/New/Not-due summary and its "Study Due Cards" action both call them directly now;

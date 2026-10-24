@@ -1,14 +1,21 @@
 import type { CardRecord } from "../../models/card";
 import type { DeckRecord } from "../../models/deck";
 import type { LibrarySourceRecord } from "../../models/librarySource";
+import type { ReviewEventRecord } from "../../models/reviewEvent";
 import type { SessionRecord } from "../../models/session";
 import type { SourceCollectionRecord } from "../../models/sourceCollection";
+import { isReviewRating } from "../../domain/scheduling/types";
 import type { Change, EntityType } from "./types";
 
-const ENTITY_TYPES: readonly EntityType[] = ["deck", "card", "session", "librarySource", "sourceCollection"];
+const ENTITY_TYPES: readonly EntityType[] = ["deck", "card", "session", "librarySource", "sourceCollection", "reviewEvent"];
 const OPS: readonly Change["op"][] = ["upsert", "delete"];
 const DIFFICULTIES: readonly string[] = ["easy", "medium", "hard"];
 const MODES: readonly string[] = ["review", "quiz"];
+// Duplicated from src/domain/scheduling/types.ts's CardLearningState rather than imported as a
+// value, matching this file's existing DIFFICULTIES/MODES/SOURCE_TYPES precedent (see that
+// section's own comment) — isReviewRating is imported directly instead since it is already the
+// single source of truth guard used everywhere else in the scheduling domain, not a local enum.
+const SCHEDULING_STATES: readonly string[] = ["new", "learning", "review", "relearning"];
 // Duplicated from src/models/librarySource.ts's private SOURCE_TYPES/STATUSES rather than
 // imported, matching this file's existing DIFFICULTIES/MODES precedent (validateChange
 // deliberately keeps its own local copy of every enum it checks, rather than importing from the
@@ -114,6 +121,36 @@ function isSourceCollectionRecordShape(record: unknown): record is SourceCollect
   );
 }
 
+// Checks every field upgradeReviewEventRecord (src/models/reviewEvent.ts) itself requires, so a
+// pulled record that would fail local upgrade can never be the thing that passes validation here.
+// A ReviewEvent is immutable once created (rev is always 1 — see that file's header comment), so
+// unlike every other validator above, there is deliberately no `deletedAt` to check: nothing in
+// this app ever tombstones a review event.
+function isReviewEventRecordShape(record: unknown): record is ReviewEventRecord {
+  if (!record || typeof record !== "object") return false;
+  const r = record as Record<string, unknown>;
+  return (
+    isNonEmptyString(r.id) &&
+    isNonEmptyString(r.cardId) &&
+    isNonEmptyString(r.deckId) &&
+    isNonEmptyString(r.reviewedAt) &&
+    typeof r.rating === "string" &&
+    isReviewRating(r.rating) &&
+    typeof r.previousState === "string" &&
+    SCHEDULING_STATES.includes(r.previousState) &&
+    typeof r.resultingState === "string" &&
+    SCHEDULING_STATES.includes(r.resultingState) &&
+    isNonEmptyString(r.previousDueAt) &&
+    isNonEmptyString(r.nextDueAt) &&
+    isFiniteNumber(r.elapsedDays) &&
+    isFiniteNumber(r.scheduledDays) &&
+    isNonEmptyString(r.schedulerAlgorithm) &&
+    isNonEmptyString(r.schedulerVersion) &&
+    isFiniteNumber(r.rev) &&
+    isNonEmptyString(r.updatedAt)
+  );
+}
+
 /**
  * Validates one raw pulled change before it is ever applied to local storage.
  *
@@ -166,7 +203,9 @@ export function validateChange(raw: unknown): ValidationResult {
           ? isSessionRecordShape(record)
           : entityType === "librarySource"
             ? isLibrarySourceRecordShape(record)
-            : isSourceCollectionRecordShape(record);
+            : entityType === "sourceCollection"
+              ? isSourceCollectionRecordShape(record)
+              : isReviewEventRecordShape(record);
 
   if (!recordIsValid) {
     return { ok: false, rejected: { entity, id, reason: `malformed-${entityType}-record` } };
