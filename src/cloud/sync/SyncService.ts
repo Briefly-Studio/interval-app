@@ -1,15 +1,19 @@
 import type { CardRecord } from "../../models/card";
 import type { DeckRecord } from "../../models/deck";
 import type { LibrarySourceRecord } from "../../models/librarySource";
+import type { ReviewEventRecord } from "../../models/reviewEvent";
 import type { SessionRecord } from "../../models/session";
 import type { SourceCollectionRecord } from "../../models/sourceCollection";
 import type { Change, EntityType } from "./types";
 
 import { AuthService } from "../../auth/AuthService";
+import { recomputeCardSchedulingState } from "../../domain/scheduling/recomputeCardSchedulingState";
+import { upsertCardScheduling } from "../../storage/cardScheduling";
 import { getCardsAll, setCards } from "../../storage/cards";
 import { getDecksAll, setDecks } from "../../storage/decks";
 import { getDeviceId } from "../../storage/device";
 import { getLibrarySources, setLibrarySources } from "../../storage/librarySources";
+import { getReviewEventsForDeck, setReviewEventsForDeck } from "../../storage/reviewEvents";
 import { getSessions, setSessions } from "../../storage/sessions";
 import { getSourceCollections, setSourceCollections } from "../../storage/sourceCollections";
 import { getSyncCursor, setSyncCursor } from "../../storage/sync";
@@ -18,6 +22,8 @@ import { sameScope } from "../../storage/workspaceScope";
 import { describeSyncFailure, getSyncDiagnosticCode, isSyncNetworkError, pullChanges, pushChanges } from "./http";
 import { isLibraryMetadataCloudSyncEnabled } from "./libraryMetadataSyncCapability";
 import { ackCount, isAcked, parseAckList, partitionPushChanges, pushBatchesSequentially } from "./pushHelpers.mjs";
+import { mergeIncomingReviewEvents } from "./reviewEventMerge";
+import { isReviewEventSyncEnabled } from "./reviewEventSyncCapability";
 import {
   getSyncState,
   markSyncNeedsAttention,
@@ -47,13 +53,20 @@ function isValidPullCursor(cursor: unknown): cursor is string | undefined {
   return cursor === undefined || cursor === null || typeof cursor === "string";
 }
 
-// The core conflict rule for every entity type: an incoming change is applied only if its
-// revision is strictly newer, or (equal revision) its updatedAt is not older. A strictly lower
-// incoming revision is never applied regardless of timestamp — this is what makes the model
-// revision-based rather than wall-clock-based, and is what protects against client clock skew.
-// See docs/sync-invariants.md for the full rationale. Deletes are not special-cased: a tombstone
-// is just another mutation that bumped rev, so it naturally wins or loses on the same terms as
-// any live edit.
+// The core conflict rule for every MUTABLE entity type (deck, card, session, librarySource,
+// sourceCollection): an incoming change is applied only if its revision is strictly newer, or
+// (equal revision) its updatedAt is not older. A strictly lower incoming revision is never
+// applied regardless of timestamp — this is what makes the model revision-based rather than
+// wall-clock-based, and is what protects against client clock skew. See docs/sync-invariants.md
+// for the full rationale. Deletes are not special-cased: a tombstone is just another mutation
+// that bumped rev, so it naturally wins or loses on the same terms as any live edit.
+//
+// Deliberately NOT used for "reviewEvent" (see applyChanges' reviewEvent block below) — an
+// immutable, content-addressed, append-only record has no "conflict" for a rev/timestamp rule to
+// resolve in the first place; two records sharing an id are definitionally the same fact. Also
+// never used to resolve CardSchedulingState across devices — that type is local-only and not
+// synced at all (see docs/spaced-repetition-foundation.md's "Sync considerations" section for
+// why last-write-wins is specifically unsafe for derived scheduling state).
 function incomingWins(existing: { rev?: number; updatedAt: string } | undefined, incomingRev: number, incomingTs: string): boolean {
   if (!existing) return true;
   const existingRev = toRev(existing.rev);
@@ -112,6 +125,12 @@ async function applyChanges(scope: WorkspaceScope, rawChanges: unknown[]): Promi
     : [];
   const sourceCollectionChanges = isLibraryMetadataCloudSyncEnabled()
     ? ordered.filter((c) => c.entity === "sourceCollection")
+    : [];
+  // Same Development/Staging rollout gate shape, its own dedicated capability (see
+  // reviewEventSyncCapability.ts) — ReviewEvent sync is independent of Library metadata sync and
+  // may roll out to Production on its own schedule.
+  const reviewEventChanges = isReviewEventSyncEnabled()
+    ? ordered.filter((c) => c.entity === "reviewEvent")
     : [];
 
   if (deckChanges.length) {
@@ -284,6 +303,39 @@ async function applyChanges(scope: WorkspaceScope, rawChanges: unknown[]): Promi
     await setSourceCollections(scope, Array.from(byId.values()));
   }
 
+  if (reviewEventChanges.length) {
+    const byDeckId = new Map<string, Change[]>();
+    for (const ch of reviewEventChanges) {
+      const incoming = ch.record as ReviewEventRecord;
+      if (!incoming.deckId) continue;
+      if (!byDeckId.has(incoming.deckId)) byDeckId.set(incoming.deckId, []);
+      byDeckId.get(incoming.deckId)!.push(ch);
+    }
+
+    for (const [deckId, deckChanges] of byDeckId.entries()) {
+      const existingEvents = await getReviewEventsForDeck(scope, deckId);
+      const incomingEvents = deckChanges.map((ch) => ch.record as ReviewEventRecord);
+      const { merged: mergedEvents, affectedCardIds } = mergeIncomingReviewEvents(existingEvents, incomingEvents);
+
+      // Every incoming event in this deck was already present locally (a duplicate/repeated
+      // pull) — nothing changed, so there is nothing to persist or recompute.
+      if (affectedCardIds.length === 0) continue;
+
+      await setReviewEventsForDeck(scope, deckId, mergedEvents);
+
+      // Post-sync reconciliation (Requirement 7): recompute and persist CardSchedulingState only
+      // for the cards that actually received a genuinely new event this pull — never every card
+      // in the deck or app. `mergedEvents` already includes this device's own not-yet-pushed
+      // local events (getReviewEventsForDeck returned them above) alongside the newly pulled
+      // ones, so a card that was rated on this device AND another device before either synced
+      // still replays its full, true merged history, not just the half that just arrived.
+      for (const cardId of affectedCardIds) {
+        const nextState = recomputeCardSchedulingState({ cardId, reviewEvents: mergedEvents });
+        await upsertCardScheduling(scope, deckId, nextState);
+      }
+    }
+  }
+
   return rejected;
 }
 
@@ -358,6 +410,22 @@ async function collectDirty(scope: WorkspaceScope): Promise<Change[]> {
     }
   }
 
+  // Gated so a Staging/Production-pointed build can never even collect review events for push,
+  // regardless of anything a dirty flag on disk says — mirrors the Library metadata gating
+  // immediately above, but via its own dedicated capability (see reviewEventSyncCapability.ts).
+  // Reuses the same `decks` list already fetched above (one per-deck-keyed store, like cards).
+  if (isReviewEventSyncEnabled()) {
+    for (const deck of decks) {
+      const events = await getReviewEventsForDeck(scope, deck.id);
+      for (const event of events) {
+        if (!event.dirty) continue;
+        // Always "upsert" — a ReviewEvent is append-only and never tombstoned (no `deletedAt`
+        // field exists on this record type at all), so there is no delete case to express here.
+        changes.push({ id: event.id, entity: "reviewEvent", op: "upsert", record: event, ts: event.updatedAt });
+      }
+    }
+  }
+
   return changes;
 }
 
@@ -423,14 +491,31 @@ async function markClean(
     return;
   }
 
-  // entity === "sourceCollection"
-  const collections = await getSourceCollections(scope);
-  const updated = collections.map((collection) => {
-    const ackedRev = acknowledged.get(collection.id);
-    if (ackedRev === undefined || toRev(collection.rev) !== ackedRev) return collection;
-    return { ...collection, dirty: false, lastSyncedAt: now };
-  });
-  await setSourceCollections(scope, updated);
+  if (entity === "sourceCollection") {
+    const collections = await getSourceCollections(scope);
+    const updated = collections.map((collection) => {
+      const ackedRev = acknowledged.get(collection.id);
+      if (ackedRev === undefined || toRev(collection.rev) !== ackedRev) return collection;
+      return { ...collection, dirty: false, lastSyncedAt: now };
+    });
+    await setSourceCollections(scope, updated);
+    return;
+  }
+
+  // entity === "reviewEvent" — per-deck, mirroring "card" above (same per-deck-keyed storage
+  // shape). No `lastSyncedAt` field exists on ReviewEventRecord (unlike every other entity here):
+  // the record is write-once (rev is always 1) and is never re-pushed once acknowledged, so there
+  // is no future push attempt whose timing would need that diagnostic.
+  const decks = await getDecksAll(scope);
+  for (const deck of decks) {
+    const events = await getReviewEventsForDeck(scope, deck.id);
+    const updated = events.map((event) => {
+      const ackedRev = acknowledged.get(event.id);
+      if (ackedRev === undefined || toRev(event.rev) !== ackedRev) return event;
+      return { ...event, dirty: false };
+    });
+    await setReviewEventsForDeck(scope, deck.id, updated);
+  }
 }
 
 async function runSync(): Promise<void> {
@@ -519,6 +604,11 @@ async function runSync(): Promise<void> {
         // `if (acknowledged.size === 0) return;` guard makes this a no-op.
         await markClean(scope, "librarySource", acknowledgedFor("librarySource"));
         await markClean(scope, "sourceCollection", acknowledgedFor("sourceCollection"));
+        // Same no-capability-check reasoning as librarySource/sourceCollection above: when
+        // ReviewEvent sync is disabled, collectDirty never included this entity, so
+        // acknowledgedFor("reviewEvent") is empty and markClean's own early-return makes this a
+        // no-op.
+        await markClean(scope, "reviewEvent", acknowledgedFor("reviewEvent"));
       }
     };
 

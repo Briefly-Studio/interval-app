@@ -144,9 +144,12 @@ Two new, dedicated per-deck stores, mirroring `src/storage/cards.ts`'s own exact
 read-upgrades-and-writes-back self-healing on read):
 
 - `src/storage/cardScheduling.ts` — `interval.cardScheduling.v1.<deckId>`. One record per card
-  that has ever been reviewed (absent = never reviewed — see "Migration" below).
+  that has ever been reviewed (absent = never reviewed — see "Migration" below). **Not synced** —
+  see "Sync considerations" (§16) for why this stays a local-only, derived cache even now that
+  `ReviewEvent` syncs.
 - `src/storage/reviewEvents.ts` — `interval.reviewEvents.v1.<deckId>`. Append-only array of every
-  review ever submitted for that deck's cards.
+  review ever submitted for that deck's cards. **Now a first-class synced entity**, gated to
+  Development/Staging — see "Sync considerations" (§16) for the full sync design.
 
 **Deliberately NOT a field on `CardRecord`.** `CardRecord` is already on the live Production sync
 path — any field added there reaches Production the moment any signed-in user's next sync runs
@@ -363,59 +366,118 @@ check already described above).
 
 ## 16. Sync considerations
 
-**Deliberately not implemented in this batch.** Both new stores are local-only. This was a
-genuine architectural decision, not a shortcut — reasoned through explicitly rather than assumed:
+**Now implemented, gated to Development/Staging.** `ReviewEvent` is a first-class synced entity
+(`src/cloud/sync/types.ts`, `validateChange.ts`, `SyncService.ts`), gated by its own dedicated
+capability check, `isReviewEventSyncEnabled()` (`src/cloud/sync/reviewEventSyncCapability.ts`),
+mirroring `isLibraryMetadataCloudSyncEnabled()`'s exact shape and `["development", "staging"]`
+allow-list — **deliberately a separate gate**, since ReviewEvent sync may roll out to Production
+on its own schedule, independent of Library metadata. `CardSchedulingState` is **not** synced and
+is not planned to be — it remains a local-only, derived cache. The design below replaces the
+"deliberately not implemented" / "analyzed, not solved" framing this section previously carried;
+a prior readable of this document should treat anything below as current, not historical.
 
-- The sync **backend** is already fully entity-agnostic (confirmed directly: neither
-  `sync-push`/`sync-pull` Lambda hardcodes `"deck"`/`"card"`/`"session"` anywhere — DynamoDB is
-  keyed generically by `{entity, id}`). Adding either new entity would need **zero backend/AWS
-  change**, following the exact precedent `librarySource`/`sourceCollection` already set.
-- The sync **client** (`src/cloud/sync/types.ts`/`SyncService.ts`/`validateChange.ts`) is NOT
-  entity-agnostic — each entity needs one hand-written block in each of those three files. This
-  is real, non-trivial, repeated wiring work, not a protocol blocker, but it was not attempted
-  here because of the analysis below, not because it was too hard to write.
-- **`ReviewEvent` would actually be the SAFE half to sync**, if a future batch chooses to: since
-  every event is immutable and carries its own unique, deterministic id, two devices independently
-  reviewing the same card offline would simply produce two different, non-conflicting
-  `ReviewEvent` records — standard `rev`/`updatedAt` last-write-wins has nothing to resolve at the
-  event level, because nothing ever overwrites an existing event.
-- **`CardSchedulingState` is the half that genuinely cannot claim safe cross-device sync yet.** It
-  is one mutable record per card. See "Two-device conflict risk" immediately below.
+**Core principle: `ReviewEvent` is the durable, synced source of truth. `CardSchedulingState` is
+derived, recomputable, and never cross-device truth on its own.**
 
-### Two-device conflict risk (analyzed, not solved)
+```
+Device A events ─┐
+                  ├─> merged immutable event history (synced ReviewEvent records)
+Device B events ─┘
+                          ↓
+                 deterministic ordering (reviewedAt, tiebreak by id)
+                          ↓
+                   replay through the Scheduler
+                          ↓
+               CardSchedulingState rebuilt (recomputeCardSchedulingState.ts)
+```
 
-Scenario: Device A, offline, reviews a card at 10:00 and rates it "Good." Device B, also offline,
-independently reviews the *same* card at 10:05 and rates it "Again." Both sync later.
+### Why `ReviewEvent` syncs safely with the existing generic sync model
 
-- If `CardSchedulingState` were synced using the existing generic `rev`/`updatedAt` last-write-wins
-  rule (`docs/sync-invariants.md`'s `incomingWins`), whichever device's write reaches the server
-  with the higher `rev` (or, on a tie, the later `updatedAt`) would win outright — the **other**
-  device's scheduling computation (not the review event itself, which would still exist
-  independently) would be silently discarded. The user who rated "Again" might end up with a
-  schedule that still reflects "Good," or vice versa, with no indication anything was overwritten.
-  This is not a new category of risk — `docs/sync-invariants.md` already documents this exact
-  "no conflict UI for concurrent multi-device edits" limitation for ordinary card content edits —
-  but applying it to *scheduling* specifically has a different cost: it can make a card appear
-  due later than it should (if the "Again" lost) or needlessly soon (if the "Good" lost), not just
-  show stale text.
-- **Why this batch does not pretend that's solved:** doing so honestly would require either (a) a
-  genuinely different conflict rule just for this one entity (inconsistent with every other synced
-  record in the app), or (b) the recomputation model sketched below — real, non-trivial work this
-  batch's own scope explicitly excludes ("do not overbuild if current sync architecture isn't
-  ready").
-- **A real future resolution is already possible, because review history is durable regardless of
-  what happens to `CardSchedulingState`:** since every `ReviewEvent` a user ever submitted remains
-  intact (synced independently and safely, per above), a future feature could recompute a card's
-  `CardSchedulingState` from scratch by replaying its full `ReviewEvent` history, in event-time
-  order, through the scheduler again — deterministically reconstructing the "true" current state
-  regardless of which device's direct write happened to win the race. **This batch does not
-  implement that recomputation engine** — it only ensures the data needed to build it later
-  (immutable, complete, rating-and-timestamp-carrying events) genuinely exists. Real complications
-  a future implementation would still need to handle, not resolved here: clock skew between
-  devices (event-time ordering assumes reasonably trustworthy client clocks), duplicate-event
-  detection at scale (handled today only via `computeReviewEventId`'s id collision, not a broader
-  reconciliation pass), and the performance cost of replaying a long history rather than trusting
-  the stored current state.
+Every event is immutable, carries a unique, deterministic, content-addressed id
+(`computeReviewEventId` — an FNV-1a hash of `cardId|reviewedAt|rating`), and is never mutated
+after creation (`rev` is always `1`). Two records sharing an id are therefore definitionally the
+same fact, so `SyncService.ts`'s `applyChanges` resolves the `reviewEvent` entity with a pure
+**existence check** (`src/cloud/sync/reviewEventMerge.ts`'s `mergeIncomingReviewEvents`) instead of
+the generic `incomingWins` rev/updatedAt conflict rule every mutable entity (deck/card/session/
+librarySource/sourceCollection) uses: an incoming id already present locally is simply skipped (no
+comparison needed); an id not yet present is added. This is also why `markClean`'s existing
+generic acked-rev-match logic needed **zero modification** to correctly handle this entity — a
+rev that is always `1` degenerates correctly through the same code path every other entity uses.
+The backend needed **zero changes**: `sync-push`'s own conditional write
+(`attribute_not_exists(PK) OR attribute_not_exists(#record) OR :incomingRev >= #record.#rev`) is
+satisfied trivially, since each event's Records-table row is created exactly once and never
+collides with the condition's "newer rev already stored" case.
+
+### Deterministic event ordering (`recomputeCardSchedulingState.ts`'s `orderReviewEventsForReplay`)
+
+Primary key is `reviewedAt` (ISO 8601 UTC). Ties — two events with the *exact* same `reviewedAt`,
+which can genuinely happen when two devices independently construct a review in the same
+millisecond — break on the event's own `id` (the same stable FNV-1a hash used for identity),
+never on array/arrival order, so replay order is 100% reproducible across every device and every
+recompute.
+
+**Clock-skew limitation, stated plainly, not solved:** `reviewedAt` is client wall-clock time, not
+a logical/vector clock or a server-assigned sequence number. If two devices' clocks are skewed,
+the chronological order this model derives may not match the real-world order the reviews
+actually happened in. What this design *does* guarantee is determinism (the same merged event set
+always replays to the same final state, on every device, every time) — not real-world
+chronological accuracy under clock skew. Building distributed-clock infrastructure (Lamport
+clocks, hybrid logical clocks, a server-assigned monotonic sequence) to close this gap is
+explicitly out of scope for this batch.
+
+### Recomputation engine (`src/domain/scheduling/recomputeCardSchedulingState.ts`)
+
+`recomputeCardSchedulingState({cardId, reviewEvents, scheduler?}) → CardSchedulingState` is pure:
+no UI dependency, no `Date.now()`, no network/storage access. It de-duplicates its input by event
+id (defense-in-depth — the normal caller has already deduplicated via the merge step above, but
+this function does not trust that), sorts deterministically, and replays each historical rating
+through the `Scheduler` interface starting from the scheduler's own honest "nothing has happened
+yet" default — discarding every intermediate state except the final one. A card with zero events
+resolves to that same default, anchored at the Unix epoch rather than `Date.now()` (purity); this
+is safe because `dueSelection.ts`'s `isNew`/`isDue`/`isOverdue`/`isFuture` all branch on
+`state === "new"` before ever consulting `dueAt`.
+
+### Post-sync reconciliation (`SyncService.ts`'s `applyChanges`, `reviewEvent` branch)
+
+After a pull merges new review events for a deck, only the **card ids that actually received a
+genuinely new event** (`mergeIncomingReviewEvents`'s `affectedCardIds`) have their
+`CardSchedulingState` recomputed and persisted (`upsertCardScheduling`) — never every card in the
+deck or app, and never a no-op when every incoming event in a page was already present (a
+duplicate/repeated pull). The merged event list used for recompute already includes this device's
+own not-yet-pushed local events alongside the newly pulled ones, so a card rated on this device
+*and* another device before either had synced still replays its full, true merged history. Due/
+New/Not-due counts and the Study Due Cards queue update naturally from the rebuilt, persisted
+`CardSchedulingState` — no UI code changed for this; `dueSelection.ts` already reads whatever is
+currently persisted.
+
+### Local review flow is unaffected (offline-first preserved)
+
+`app/deck/[id]/review.tsx`'s `onRate` already does, and continues to do, exactly what offline-
+first requires: build the `ReviewEvent` and next `CardSchedulingState` purely
+(`applyCardReview`), persist both locally (`upsertCardScheduling` + `addReviewEvent`, both marking
+`dirty: true`), and advance immediately — no network call, no sync dependency, on the critical
+path. Sync (push/pull) happens later, asynchronously, exactly like every other entity.
+
+### Idempotency and duplicates
+
+A `ReviewEvent`'s identity is its `id` alone, never payload equality. The same event pushed twice,
+pulled twice, already present locally, or replayed after an app restart is a true no-op at every
+layer: `addReviewEvent` (local write) skips an id already present; `mergeIncomingReviewEvents`
+(pull-side merge) skips an id already present; `markClean` (push-ack) only clears `dirty` when the
+acked rev still matches the stored rev (always `1`, so this degenerates to "mark clean once").
+Heavily tested in `src/cloud/sync/reviewEventMerge.test.ts` and
+`src/domain/scheduling/recomputeCardSchedulingState.test.ts` (duplicate-event, repeated-pull, and
+repeated-recompute cases).
+
+### Card deletion/restore (audited, unchanged)
+
+Soft-deleting or restoring a card/deck never touches `cardScheduling.ts` or `reviewEvents.ts` at
+all (confirmed directly — no call site exists in `src/storage/cards.ts`/`decks.ts`); see "Storage"
+above. This holds exactly the same now that `ReviewEvent` syncs: a soft-deleted card's review
+history keeps syncing/recomputing normally (it is addressed by `cardId`, independent of the card
+record's own `deletedAt`), and restoring the card naturally finds its full scheduling history
+already intact, recomputed or not. Nothing in this batch invents a permanent-deletion policy for
+review history — the only hard removal path remains the dev-only full wipe (`devReset.ts`).
 
 ## 17. Algorithm/version strategy
 
@@ -434,6 +496,22 @@ Every `CardSchedulingState` and `ReviewEvent` carries `schedulerAlgorithm` ("fsr
 - `ts-fsrs` itself is pinned to an **exact** version (`"5.4.2"`, no caret range) specifically so an
   unrelated `npm install`/dependency bump elsewhere in the app can never silently change this
   app's scheduling math underneath it.
+
+**Mixed-version replay (recomputation engine, §16):** `recomputeCardSchedulingState` always
+replays every historical event through the CURRENT `activeScheduler`, regardless of which
+`schedulerAlgorithm`/`schedulerVersion` each individual event itself recorded at creation time.
+This is a deliberate, reasoned choice, not an oversight: FSRS's own review step takes a card's
+prior numeric state (stability, difficulty, state, last-review) and a `(rating, now)` pair as
+input — it does not need to know which past engine *version* produced that prior state to
+correctly schedule the *next* review from it, so replaying old events through today's
+`fsrsScheduler` is semantically valid under a version bump within the same algorithm family. The
+stored `schedulerAlgorithm`/`schedulerVersion` on each event remains valuable as a historical audit
+trail even though replay does not branch on it. **This reasoning does NOT automatically extend to
+a future `schedulerAlgorithm` change** (switching off FSRS to a different algorithm family
+entirely, not just a version bump) — replaying pre-swap events under a structurally different
+algorithm would need its own explicit migration strategy, not silent reinterpretation; nothing in
+this batch builds that migration UI or logic, consistent with the mission's "do not build
+migration UI" boundary.
 
 ## 18. Analytics future (not built, but supported)
 
@@ -487,11 +565,26 @@ one file only).
 
 ## 20. Known limitations
 
-- **Cross-device sync is not implemented** — see "Sync considerations" above for the full,
-  reasoned analysis, not a placeholder. Nothing in this update changes that: `CardSchedulingState`
-  and `ReviewEvent` are still local-only stores, and "Study Due Cards" is itself a purely local
-  computation over local data — do not overstate cross-device safety on the strength of this
-  update; it added a local-only consumer of local-only data, nothing more.
+- **`ReviewEvent` cross-device sync is implemented but gated to Development/Staging** — see
+  "Sync considerations" above for the full design. Production and guest builds remain local-only
+  for both `ReviewEvent` and `CardSchedulingState`, same posture as Library metadata sync; widening
+  the `ALLOWED_ENVIRONMENTS` allow-list in `reviewEventSyncCapability.ts` to Production requires
+  explicit founder approval, same as every other environment-boundary change in this app.
+- **Clock-skew ordering is a stated, not solved, limitation** — see "Deterministic event ordering"
+  above. Two devices with meaningfully skewed clocks can produce a replay order that doesn't match
+  the true real-world order those reviews happened in; this batch guarantees determinism
+  (same merged input → same output, everywhere), not clock-skew-proof chronological accuracy.
+  Building a logical/vector clock or server-assigned sequence number is explicitly out of scope.
+- **Recomputation is not incremental** — `recomputeCardSchedulingState` always replays a card's
+  *entire* event history from scratch (not just the newly-arrived events applied on top of the
+  last known state). This is simple and correct, at the cost of O(history length) work per
+  affected card on every pull that touches it — acceptable at this app's current scale (a single
+  user's own review history, not a multi-tenant workload), not yet a concern worth optimizing.
+- **No daily/weekly review-history pruning or archival** still applies, and now has an added
+  dimension: a long-lived, heavily-reviewed deck's review-event history is also what gets pushed/
+  pulled/replayed on sync, so unbounded growth affects sync payload size and recompute cost, not
+  just local storage, once sync is enabled for an environment. Still accepted as out of scope for
+  this foundation batch.
 - **The due-queue helpers are now wired — corrected from the previous revision of this
   document**, which said `dueSelection.ts` was built and tested but not consumed anywhere. That is
   no longer true: deck-detail's scheduling summary and "Study Due Cards" button both now call it
@@ -512,8 +605,6 @@ one file only).
   explicitly out of scope per the mission, and nothing here was built toward them speculatively.
 - **Quiz mode is entirely unaffected** — it remains ungraded and aggregate-only; a future "grade
   quiz answers into the scheduler too" decision is separate, explicit future work.
-- **No recomputation engine** — replaying `ReviewEvent` history to rebuild `CardSchedulingState`
-  (the sync-conflict mitigation sketched above) is designed-for but not implemented.
 - **No daily/weekly review-history pruning or archival** — a very long-lived, heavily-reviewed
   deck's per-deck review-event store will grow unboundedly over years; accepted as out of scope for
   this foundation batch, same posture as every other "do not build a complex X yet" boundary here.
@@ -540,3 +631,26 @@ out of "Due now"/the due queue for its full (multi-day) interval; counts and the
 an app restart; "Study All Cards" still working and never writing scheduling state unless a
 rating is actually tapped; and the rating explanation/accessibility copy reading sensibly in
 Arabic (RTL) and through a screen reader.
+
+**Multi-device scheduling sync (Development or Staging build only — see "Sync considerations"
+above for why Production is excluded):**
+
+1. Device A, offline (airplane mode), rates a card "Good."
+2. Device B, offline, signed into the *same* account, rates the *same* card "Again."
+3. Reconnect both devices and let sync run (or trigger it manually).
+4. After sync, confirm — on either device — that **both** `ReviewEvent`s survive (no event was
+   silently dropped or overwritten by the other).
+5. Confirm both devices converge on the exact same final due date/scheduling state for that card
+   (deterministic recomputation, not whichever device happened to sync last).
+6. Restart both devices (force-quit and reopen).
+7. Confirm the same scheduling result still holds after restart on both devices.
+8. Trigger a manual resync again on either device with no new reviews. Confirm nothing changes
+   (duplicate sync is a true no-op).
+9. Soft-delete the reviewed card, then restore it. Confirm its full review history and scheduling
+   state are exactly as they were before deletion.
+10. Open "Study Due Cards" on either device and confirm it reflects the recomputed schedule.
+11. Confirm "Study All Cards" still works normally and is unaffected.
+12. (Optional, documents the stated limitation rather than testing a fix) deliberately set one
+    device's clock a few minutes off before step 1–2, and confirm sync still converges to one
+    deterministic result on both devices — it may not match true wall-clock chronological order,
+    and that is the accepted, documented limitation, not a bug to chase.
