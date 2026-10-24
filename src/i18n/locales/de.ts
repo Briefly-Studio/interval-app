@@ -912,8 +912,25 @@ const de = {
     emptyTitle: "Noch keine Karten",
     emptyDescription: "Karten benötigen eine Vorder- und Rückseite, um mit dem Lernen zu beginnen.",
     addFirstCardButton: "Füge deine erste Karte hinzu",
-    startReview: "Wiederholung starten",
+    studyDueCardsButton: "Fällige Karten üben",
+    studyAllCardsButton: "Alle Karten üben",
     startQuiz: "Quiz starten",
+    caughtUpTitle: "Du bist auf dem neuesten Stand",
+    caughtUpBody: "Momentan sind keine Karten fällig.",
+    schedulingSummary: {
+      dueNow: {
+        one: "{{count}} fällig",
+        other: "{{count}} fällig",
+      },
+      new: {
+        one: "{{count}} neu",
+        other: "{{count}} neu",
+      },
+      notDueYet: {
+        one: "{{count}} noch nicht fällig",
+        other: "{{count}} noch nicht fällig",
+      },
+    },
     statsToggle: "Statistiken",
     statsToday: "Heute: {{sessions}} Lernrunden • {{minutes}} Min",
     statsWeek: "Letzte 7 Tage: {{sessions}} Lernrunden",
@@ -1167,6 +1184,30 @@ const de = {
     finishEarlyBody: {
       one: "Dadurch wird eine Wiederholungssitzung mit {{count}} Karte protokolliert.",
       other: "Dadurch wird eine Wiederholungssitzung mit {{count}} Karten protokolliert.",
+    },
+    dueSessionUnavailableTitle: "Nicht mehr verfügbar",
+    dueSessionUnavailableBody: "Diese Karten wurden entfernt, bevor du sie lernen konntest.",
+    backToDeckButton: "Zurück zum Stapel",
+    rating: {
+      prompt: "Wie gut wusstest du das noch?",
+      explanation: "Deine Antwort bestimmt, wann diese Karte wieder erscheint.",
+      again: "Nochmal",
+      hard: "Schwer",
+      good: "Gut",
+      easy: "Leicht",
+      accessibleSuffix: "erneut wiederholen in {{interval}}",
+      inMinutes: {
+        one: "{{count}} Min.",
+        other: "{{count}} Min.",
+      },
+      inMinutesFull: {
+        one: "{{count}} Minute",
+        other: "{{count}} Minuten",
+      },
+      inDays: {
+        one: "{{count}} Tag",
+        other: "{{count}} Tage",
+      },
     },
   },
   reviewResults: {

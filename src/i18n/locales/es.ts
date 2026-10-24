@@ -906,8 +906,25 @@ const es = {
     emptyTitle: "Aún no hay tarjetas",
     emptyDescription: "Las tarjetas necesitan un frente y un reverso para empezar a estudiar.",
     addFirstCardButton: "Agrega tu primera tarjeta",
-    startReview: "Iniciar repaso",
+    studyDueCardsButton: "Repasar tarjetas pendientes",
+    studyAllCardsButton: "Repasar todas las tarjetas",
     startQuiz: "Iniciar prueba",
+    caughtUpTitle: "Estás al día",
+    caughtUpBody: "No hay tarjetas pendientes por ahora.",
+    schedulingSummary: {
+      dueNow: {
+        one: "{{count}} pendiente",
+        other: "{{count}} pendientes",
+      },
+      new: {
+        one: "{{count}} nueva",
+        other: "{{count}} nuevas",
+      },
+      notDueYet: {
+        one: "{{count}} aún no vence",
+        other: "{{count}} aún no vencen",
+      },
+    },
     statsToggle: "Estadísticas",
     statsToday: "Hoy: {{sessions}} sesiones • {{minutes}} min",
     statsWeek: "Últimos 7 días: {{sessions}} sesiones",
@@ -1161,6 +1178,30 @@ const es = {
     finishEarlyBody: {
       one: "Esto registrará una sesión de repaso de {{count}} tarjeta.",
       other: "Esto registrará una sesión de repaso de {{count}} tarjetas.",
+    },
+    dueSessionUnavailableTitle: "Ya no disponible",
+    dueSessionUnavailableBody: "Estas tarjetas se eliminaron antes de que pudieras estudiarlas.",
+    backToDeckButton: "Volver al mazo",
+    rating: {
+      prompt: "¿Qué tan bien te acordabas?",
+      explanation: "Tu respuesta determina cuándo volverá a aparecer esta tarjeta.",
+      again: "Otra vez",
+      hard: "Difícil",
+      good: "Bien",
+      easy: "Fácil",
+      accessibleSuffix: "repasar de nuevo en {{interval}}",
+      inMinutes: {
+        one: "{{count}} min",
+        other: "{{count}} min",
+      },
+      inMinutesFull: {
+        one: "{{count}} minuto",
+        other: "{{count}} minutos",
+      },
+      inDays: {
+        one: "{{count}} día",
+        other: "{{count}} días",
+      },
     },
   },
   reviewResults: {

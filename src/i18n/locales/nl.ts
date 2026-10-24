@@ -911,8 +911,25 @@ const nl = {
     emptyTitle: "Nog geen kaarten",
     emptyDescription: "Kaarten hebben een voor- en achterkant nodig om te kunnen studeren.",
     addFirstCardButton: "Voeg je eerste kaart toe",
-    startReview: "Herhaling starten",
+    studyDueCardsButton: "Verlopen kaarten herhalen",
+    studyAllCardsButton: "Alle kaarten herhalen",
     startQuiz: "Quiz starten",
+    caughtUpTitle: "Je bent helemaal bij",
+    caughtUpBody: "Er zijn nu geen kaarten te herhalen.",
+    schedulingSummary: {
+      dueNow: {
+        one: "{{count}} te herhalen",
+        other: "{{count}} te herhalen",
+      },
+      new: {
+        one: "{{count}} nieuw",
+        other: "{{count}} nieuw",
+      },
+      notDueYet: {
+        one: "{{count}} nog niet verlopen",
+        other: "{{count}} nog niet verlopen",
+      },
+    },
     statsToggle: "Statistieken",
     statsToday: "Vandaag: {{sessions}} sessies • {{minutes}} min",
     statsWeek: "Laatste 7 dagen: {{sessions}} sessies",
@@ -1166,6 +1183,30 @@ const nl = {
     finishEarlyBody: {
       one: "Hiermee wordt een herhalingssessie van {{count}} kaart geregistreerd.",
       other: "Hiermee wordt een herhalingssessie van {{count}} kaarten geregistreerd.",
+    },
+    dueSessionUnavailableTitle: "Niet meer beschikbaar",
+    dueSessionUnavailableBody: "Deze kaarten zijn verwijderd voordat je ze kon leren.",
+    backToDeckButton: "Terug naar set",
+    rating: {
+      prompt: "Hoe goed wist je dit nog?",
+      explanation: "Je antwoord bepaalt wanneer deze kaart weer verschijnt.",
+      again: "Opnieuw",
+      hard: "Moeilijk",
+      good: "Goed",
+      easy: "Makkelijk",
+      accessibleSuffix: "opnieuw herhalen over {{interval}}",
+      inMinutes: {
+        one: "{{count}} min",
+        other: "{{count}} min",
+      },
+      inMinutesFull: {
+        one: "{{count}} minuut",
+        other: "{{count}} minuten",
+      },
+      inDays: {
+        one: "{{count}} dag",
+        other: "{{count}} dagen",
+      },
     },
   },
   reviewResults: {
