@@ -464,10 +464,15 @@ const zhHans = {
         title: "测试版软件",
         body: "Interval 是测试版软件，可能存在缺陷。我们建议你为重要内容保留自己导出的副本——应用内可随时按卡组导出。",
       },
-      futureFeatures: {
-        title: "AI、资料库与 Canvas 功能",
+      aiGeneration: {
+        title: "AI 生成学习卡组",
         body:
-          "AI 驱动的功能、文档/音频资料库以及任何 Canvas 集成目前在 Interval 中尚未启用。如果它们在未来的更新中加入，本声明将随之更新，说明它们会使用哪些数据以及如何使用。",
+          "Interval 的“生成学习卡组”功能可以使用云端 AI 服务，将来源转换为学习卡片。使用真实 AI 时，只会将你从该来源中选定的文本发送给 Interval 的云端 AI 服务——绝不会发送你的原始文件。你在保存之前，始终会先查看 AI 生成的卡片；首次使用真实 AI 生成时，Interval 会先征得你的确认。",
+      },
+      futureFeatures: {
+        title: "资料库与 Canvas 功能",
+        body:
+          "文档/音频资料库以及任何 Canvas 集成目前在 Interval 中尚未完全启用。如果情况有变，本声明将随之更新，说明会使用哪些数据以及如何使用。",
       },
       contact: {
         title: "问题或疑虑",
@@ -1037,6 +1042,11 @@ const zhHans = {
     checkingSource: "正在检查此来源…",
     fromSource: "正在根据“{{title}}”生成。",
     devPreviewNotice: "开发预览：卡片由本地模拟程序生成，并非正式的 AI 模型。",
+    consent: {
+      title: "使用 AI 生成",
+      body: "为了创建卡片，Interval 会将你从此来源中选定的文本发送给其云端 AI 服务。你的原始文件不会发送给 AI 模型。AI 生成的卡片可能存在错误，因此你需要先查看后再保存。",
+      continueButton: "继续",
+    },
     generateButton: "生成卡组",
     generatingTitle: "正在生成你的卡组",
     generatingBody: "正在读取来源并撰写卡片。这些操作都在你的设备上完成。",

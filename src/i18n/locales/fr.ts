@@ -487,10 +487,15 @@ const fr = {
         body:
           "Interval est un logiciel bêta et peut contenir des défauts. Nous vous recommandons de conserver vos propres copies exportées de tout ce qui compte pour vous — l'exportation par paquet est disponible directement dans l'application.",
       },
-      futureFeatures: {
-        title: "Fonctionnalités IA, Bibliothèque et Canvas",
+      aiGeneration: {
+        title: "Génération de paquets d'étude par IA",
         body:
-          "Les fonctionnalités basées sur l'IA, une Bibliothèque de documents/audio et toute connexion à Canvas ne sont pas encore actives dans Interval. Si elles sont ajoutées dans une future mise à jour, cet avis sera mis à jour pour expliquer quelles données elles utilisent et comment.",
+          "La fonctionnalité Générer un paquet d'étude d'Interval peut utiliser un service d'IA dans le cloud pour transformer une source en cartes d'étude. Lorsque l'IA réelle est utilisée, seul le texte que vous avez sélectionné dans cette source est envoyé au service d'IA dans le cloud d'Interval, jamais votre fichier original. Vous passerez toujours en revue les cartes générées par l'IA avant de les enregistrer, et Interval vous demandera confirmation la première fois que vous utiliserez la génération IA réelle.",
+      },
+      futureFeatures: {
+        title: "Fonctionnalités Bibliothèque et Canvas",
+        body:
+          "Une Bibliothèque de documents/audio et toute connexion à Canvas ne sont pas encore pleinement actives dans Interval. Si cela change, cet avis sera mis à jour pour expliquer quelles données elles utilisent et comment.",
       },
       contact: {
         title: "Questions ou préoccupations",
@@ -1087,6 +1092,12 @@ const fr = {
     checkingSource: "Vérification de cette source…",
     fromSource: "Génération à partir de « {{title}} ».",
     devPreviewNotice: "Aperçu de développement : les cartes sont créées par une simulation locale, pas par un modèle d'IA de production.",
+    consent: {
+      title: "Générer avec l'IA",
+      body:
+        "Pour créer les cartes, Interval envoie le texte sélectionné de cette source à son service d'IA dans le cloud. Votre fichier original n'est pas envoyé au modèle d'IA. Les cartes générées par l'IA peuvent contenir des erreurs, vous les passerez donc en revue avant de les enregistrer.",
+      continueButton: "Continuer",
+    },
     generateButton: "Générer le paquet",
     generatingTitle: "Génération de votre paquet",
     generatingBody: "Lecture de la source et rédaction des cartes. Tout reste sur votre appareil.",

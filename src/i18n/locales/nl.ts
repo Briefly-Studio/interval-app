@@ -481,10 +481,15 @@ const nl = {
         body:
           "Interval is bètasoftware en kan fouten bevatten. We raden aan om zelf geëxporteerde kopieën te bewaren van alles wat belangrijk voor je is — export per stapel is beschikbaar in de app zelf.",
       },
-      futureFeatures: {
-        title: "AI-, Bibliotheek- en Canvas-functies",
+      aiGeneration: {
+        title: "AI-gestuurde generatie van studiesets",
         body:
-          "AI-functies, een documenten-/audiobibliotheek en elke verbinding met Canvas zijn nog niet actief in Interval. Als deze in een toekomstige update worden toegevoegd, wordt deze verklaring bijgewerkt om uit te leggen welke gegevens ze gebruiken en hoe.",
+          "De functie Studieset genereren van Interval kan een cloud-AI-dienst gebruiken om een bron om te zetten in studiekaarten. Wanneer echte AI wordt gebruikt, wordt alleen de tekst die je uit die bron hebt geselecteerd naar de cloud-AI-dienst van Interval gestuurd — nooit je originele bestand. Je controleert AI-gegenereerde kaarten altijd voordat je ze opslaat, en Interval vraagt om je bevestiging de eerste keer dat je echte AI-generatie gebruikt.",
+      },
+      futureFeatures: {
+        title: "Bibliotheek- en Canvas-functies",
+        body:
+          "Een documenten-/audiobibliotheek en elke verbinding met Canvas zijn nog niet volledig actief in Interval. Als dat verandert, wordt deze verklaring bijgewerkt om uit te leggen welke gegevens ze gebruiken en hoe.",
       },
       contact: {
         title: "Vragen of zorgen",
@@ -1080,6 +1085,12 @@ const nl = {
     checkingSource: "Deze bron controleren…",
     fromSource: "Genereren op basis van “{{title}}”.",
     devPreviewNotice: "Ontwikkelvoorbeeld: kaarten worden gemaakt door een lokale mock, niet door een productie-AI-model.",
+    consent: {
+      title: "Genereren met AI",
+      body:
+        "Om de kaarten te maken, stuurt Interval de geselecteerde tekst van deze bron naar zijn cloud-AI-dienst. Je originele bestand wordt niet naar het AI-model gestuurd. Door AI gegenereerde kaarten kunnen fouten bevatten, dus je controleert ze voordat je ze opslaat.",
+      continueButton: "Doorgaan",
+    },
     generateButton: "Set genereren",
     generatingTitle: "Je set wordt gegenereerd",
     generatingBody: "De bron wordt gelezen en kaarten worden opgesteld. Dit blijft op je apparaat.",

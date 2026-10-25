@@ -463,9 +463,14 @@ const ko = {
         title: "베타 소프트웨어",
         body: "Interval은 베타 소프트웨어이며 결함이 있을 수 있습니다. 중요한 내용은 직접 내보낸 사본을 보관해 두는 것을 권장합니다 — 덱별 내보내기는 앱 내에서 이용할 수 있습니다.",
       },
+      aiGeneration: {
+        title: "AI 기반 학습 덱 생성",
+        body:
+          "Interval의 '학습 덱 생성' 기능은 클라우드 AI 서비스를 사용하여 소스를 학습 카드로 변환할 수 있습니다. 실제 AI를 사용할 때는 해당 소스에서 선택한 텍스트만 Interval의 클라우드 AI 서비스로 전송되며, 원본 파일은 전송되지 않습니다. 저장하기 전에는 항상 AI가 생성한 카드를 검토하게 되며, 실제 AI 생성을 처음 사용할 때 Interval이 확인을 요청합니다.",
+      },
       futureFeatures: {
-        title: "AI, 라이브러리, Canvas 기능",
-        body: "AI 기반 기능, 문서/오디오 라이브러리, Canvas 연동은 아직 Interval에서 활성화되지 않았습니다. 향후 업데이트로 추가되면, 어떤 데이터를 어떻게 사용하는지 설명하도록 이 방침을 업데이트하겠습니다.",
+        title: "라이브러리 및 Canvas 기능",
+        body: "문서/오디오 라이브러리와 Canvas 연동은 아직 Interval에서 완전히 활성화되지 않았습니다. 이 상황이 바뀌면, 어떤 데이터를 어떻게 사용하는지 설명하도록 이 방침을 업데이트하겠습니다.",
       },
       contact: {
         title: "문의 사항",
@@ -1036,6 +1041,11 @@ const ko = {
     checkingSource: "이 소스를 확인하는 중…",
     fromSource: "'{{title}}'에서 생성 중입니다.",
     devPreviewNotice: "개발 미리 보기: 카드는 프로덕션 AI 모델이 아닌 로컬 목(mock)으로 생성됩니다.",
+    consent: {
+      title: "AI로 생성",
+      body: "카드를 만들기 위해 Interval은 이 소스에서 선택한 텍스트를 클라우드 AI 서비스로 전송합니다. 원본 파일은 AI 모델로 전송되지 않습니다. AI가 생성한 카드에는 오류가 있을 수 있으므로, 저장하기 전에 검토하게 됩니다.",
+      continueButton: "계속",
+    },
     generateButton: "덱 생성",
     generatingTitle: "덱을 생성하는 중",
     generatingBody: "소스를 읽고 카드를 작성하고 있습니다. 이 작업은 기기에서 처리됩니다.",

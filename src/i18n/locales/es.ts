@@ -483,10 +483,15 @@ const es = {
         body:
           "Interval es software beta y puede contener defectos. Te recomendamos conservar tus propias copias exportadas de todo lo que sea importante para ti — la exportación por mazo está disponible dentro de la app.",
       },
-      futureFeatures: {
-        title: "Funciones de IA, Biblioteca y Canvas",
+      aiGeneration: {
+        title: "Generación de mazos de estudio con IA",
         body:
-          "Las funciones impulsadas por IA, una Biblioteca de documentos/audio y cualquier conexión con Canvas aún no están activas en Interval. Si se agregan en una futura actualización, este aviso se actualizará para explicar qué datos usan y cómo.",
+          "La función Generar mazo de estudio de Interval puede usar un servicio de IA en la nube para convertir una fuente en tarjetas de estudio. Cuando se usa IA real, solo se envía al servicio de IA en la nube de Interval el texto que has seleccionado de esa fuente, nunca tu archivo original. Siempre revisarás las tarjetas generadas por IA antes de guardarlas, y Interval te pedirá confirmación la primera vez que uses la generación real con IA.",
+      },
+      futureFeatures: {
+        title: "Funciones de Biblioteca y Canvas",
+        body:
+          "Una Biblioteca de documentos/audio y cualquier conexión con Canvas aún no están activas por completo en Interval. Si eso cambia, este aviso se actualizará para explicar qué datos usan y cómo.",
       },
       contact: {
         title: "Preguntas o inquietudes",
@@ -1082,6 +1087,12 @@ const es = {
     checkingSource: "Comprobando esta fuente…",
     fromSource: "Generando a partir de «{{title}}».",
     devPreviewNotice: "Vista previa de desarrollo: las tarjetas las crea un simulador local, no un modelo de IA de producción.",
+    consent: {
+      title: "Generar con IA",
+      body:
+        "Para crear las tarjetas, Interval envía el texto seleccionado de esta fuente a su servicio de IA en la nube. Tu archivo original no se envía al modelo de IA. Las tarjetas generadas por IA pueden contener errores, así que las revisarás antes de guardarlas.",
+      continueButton: "Continuar",
+    },
     generateButton: "Generar mazo",
     generatingTitle: "Generando tu mazo",
     generatingBody: "Leyendo la fuente y redactando tarjetas. Esto se queda en tu dispositivo.",

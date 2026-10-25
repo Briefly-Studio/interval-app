@@ -482,10 +482,15 @@ const de = {
         body:
           "Interval ist Beta-Software und kann Fehler enthalten. Wir empfehlen, eigene exportierte Kopien von allem Wichtigen für dich aufzubewahren — der Export pro Stapel ist direkt in der App verfügbar.",
       },
-      futureFeatures: {
-        title: "KI-, Bibliotheks- und Canvas-Funktionen",
+      aiGeneration: {
+        title: "KI-gestützte Erstellung von Lernkartenstapeln",
         body:
-          "KI-gestützte Funktionen, eine Dokument-/Audio-Bibliothek und jegliche Canvas-Verbindung sind in Interval noch nicht aktiv. Sollten sie in einem zukünftigen Update hinzugefügt werden, wird dieser Hinweis aktualisiert, um zu erklären, welche Daten sie verwenden und wie.",
+          "Die Funktion „Lernkartenstapel erstellen“ von Interval kann einen Cloud-KI-Dienst nutzen, um aus einer Quelle Lernkarten zu erstellen. Wenn echte KI verwendet wird, wird nur der von dir aus dieser Quelle ausgewählte Text an den Cloud-KI-Dienst von Interval gesendet — niemals deine Originaldatei. Du überprüfst KI-generierte Karten immer, bevor du sie speicherst, und Interval bittet dich beim ersten Einsatz echter KI-Generierung um deine Bestätigung.",
+      },
+      futureFeatures: {
+        title: "Bibliotheks- und Canvas-Funktionen",
+        body:
+          "Eine Dokument-/Audio-Bibliothek und jegliche Canvas-Verbindung sind in Interval noch nicht vollständig aktiv. Sollte sich das ändern, wird dieser Hinweis aktualisiert, um zu erklären, welche Daten sie verwenden und wie.",
       },
       contact: {
         title: "Fragen oder Bedenken",
@@ -1081,6 +1086,12 @@ const de = {
     checkingSource: "Diese Quelle wird geprüft…",
     fromSource: "Wird aus „{{title}}“ erstellt.",
     devPreviewNotice: "Entwicklungsvorschau: Die Karten stammen von einem lokalen Mock, nicht von einem produktiven KI-Modell.",
+    consent: {
+      title: "Mit KI generieren",
+      body:
+        "Um die Karten zu erstellen, sendet Interval den ausgewählten Text dieser Quelle an seinen Cloud-KI-Dienst. Deine Originaldatei wird nicht an das KI-Modell gesendet. KI-generierte Karten können Fehler enthalten, daher überprüfst du sie vor dem Speichern.",
+      continueButton: "Weiter",
+    },
     generateButton: "Stapel erstellen",
     generatingTitle: "Dein Stapel wird erstellt",
     generatingBody: "Die Quelle wird gelesen und Karten werden entworfen. Das bleibt auf deinem Gerät.",
