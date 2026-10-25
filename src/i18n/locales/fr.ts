@@ -1137,6 +1137,8 @@ const fr = {
       tooLarge: "Cette source est trop volumineuse pour générer un paquet.",
       unsupported: "Impossible de générer des paquets de révision à partir de cette source.",
       rateLimited: "Vous avez beaucoup généré récemment. Réessayez plus tard.",
+      dailyLimitReached: "Vous avez atteint la limite de génération IA pour aujourd'hui. Réessayez demain.",
+      generationInProgress: "Un autre paquet est déjà en cours de génération. Terminez cette demande avant d'en commencer une autre.",
       timeout: "La génération a pris trop de temps. Veuillez réessayer.",
       providerUnavailable: "La génération n'est pas disponible pour le moment. Veuillez réessayer.",
       badOutput: "Les cartes générées n'ont pas passé la validation. Veuillez réessayer.",

@@ -1133,6 +1133,8 @@ const it = {
       tooLarge: "Questa fonte è troppo grande per generare un mazzo.",
       unsupported: "Non è possibile generare mazzi di studio da questa fonte.",
       rateLimited: "Hai generato molto di recente. Riprova più tardi.",
+      dailyLimitReached: "Hai raggiunto il limite di generazione AI di oggi. Riprova domani.",
+      generationInProgress: "È già in corso la generazione di un altro mazzo. Completa quella richiesta prima di avviarne un'altra.",
       timeout: "La generazione ha richiesto troppo tempo. Riprova.",
       providerUnavailable: "La generazione non è disponibile in questo momento. Riprova.",
       badOutput: "Le carte generate non hanno superato la validazione. Riprova.",

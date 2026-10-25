@@ -449,6 +449,54 @@ export class IntervalSyncStack extends cdk.Stack {
         })
       );
 
+      // ---------------------------------------------------------------------
+      // AI rate-limit table — backend-authoritative per-user daily quota + concurrency lease for
+      // Generate Study Deck (backend/lambdas/ai-generate-study-deck/rateLimiter.mjs). Development-
+      // only, same conditional as the Lambda itself: real provider-backed generation (and
+      // therefore its rate limiting) does not exist outside Development yet. See
+      // docs/ai-generation-foundation.md's "Rate limits and cost controls" section for the policy
+      // this enforces and docs/cdk-infrastructure.md's "Rate limiting" section for why this was
+      // previously deferred.
+      //
+      // Schema mirrors recordsTable/changesTable above (PK/SK string composite, PAY_PER_REQUEST,
+      // AWS_MANAGED encryption, pointInTimeRecovery off) with ONE addition: a native
+      // `timeToLiveAttribute`. This is the first table in this project to use DynamoDB's native
+      // TTL — appropriate here because both record kinds this table holds (a daily quota bucket,
+      // a concurrency lease) are intentionally ephemeral by design, unlike Records/Changes. TTL
+      // here is cleanup only, never the correctness mechanism: the daily quota resets because its
+      // sort key is UTC-date-scoped (a new day is a new, distinct item), and a stale concurrency
+      // lease is reclaimed by rateLimiter.mjs's own `expiresAt` check in the SAME request that
+      // wants the slot — neither depends on DynamoDB's background TTL sweep actually having run
+      // yet (AWS does not bound how promptly it runs).
+      // ---------------------------------------------------------------------
+      const aiRateLimitsTable = new dynamodb.Table(this, "AiRateLimitsTable", {
+        tableName: names.aiRateLimits,
+        partitionKey: { name: "PK", type: dynamodb.AttributeType.STRING },
+        sortKey: { name: "SK", type: dynamodb.AttributeType.STRING },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        encryption: dynamodb.TableEncryption.AWS_MANAGED,
+        pointInTimeRecovery: false,
+        timeToLiveAttribute: "ttl",
+        removalPolicy,
+      });
+
+      // Least privilege: a custom statement (not the broader grantReadWriteData helper) naming
+      // only the three operations rateLimiter.mjs actually performs — UpdateItem for the quota
+      // counter, PutItem/DeleteItem for the lease. No Scan, no Query, no GetItem/BatchGetItem:
+      // every read this Lambda needs is folded into its own conditional writes (see
+      // rateLimiter.mjs's acquireConcurrencyLease/checkAndConsumeDailyQuota), so even read access
+      // is never granted. Scoped to only this one table's ARN. No source content, prompt,
+      // generated card text, auth token, or filename is ever stored here — see rateLimiter.mjs's
+      // own header comment for the exact two record shapes this table holds (a user id, a UTC
+      // date or the fixed string "LEASE", a count/token/expiry — nothing else).
+      aiGenerateStudyDeckRole.addToPolicy(
+        new iam.PolicyStatement({
+          sid: "AiRateLimitsTableReadWrite",
+          actions: ["dynamodb:UpdateItem", "dynamodb:PutItem", "dynamodb:DeleteItem"],
+          resources: [aiRateLimitsTable.tableArn],
+        })
+      );
+
       // Timing contract, restated from Phase A (src/domain/ai/limits.ts's
       // GENERATION_LIMITS.requestTimeoutMs=25_000 and backend/lambdas/ai-generate-study-deck/
       // bedrockClient.mjs's BEDROCK_CALL_TIMEOUT_MS=20_000) so this Lambda's own CDK timeout
@@ -486,6 +534,10 @@ export class IntervalSyncStack extends cdk.Stack {
           // Changing the configured model later (e.g. a future Claude Haiku routing decision) is
           // a one-line change to this value, never a code change.
           BEDROCK_MODEL_ID: NOVA_2_LITE_INFERENCE_PROFILE_ID,
+          // Read by checkRateLimit() (index.mjs) — absence of this variable is itself the
+          // documented fail-closed trigger (rate limiting denies every request rather than
+          // guessing a table name), never a silent allow.
+          AI_RATE_LIMIT_TABLE: aiRateLimitsTable.tableName,
         },
       });
 

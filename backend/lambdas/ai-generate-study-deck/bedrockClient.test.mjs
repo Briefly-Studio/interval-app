@@ -5,6 +5,7 @@ import {
   buildGenerationPrompt,
   classifyBedrockError,
   extractModelText,
+  extractUsage,
   parseModelJson,
   runGeneration,
 } from "./bedrockClient.mjs";
@@ -144,6 +145,38 @@ test("runGeneration: a well-formed Converse response round-trips to a parsed raw
   const result = await runGeneration(fakeClient, FakeCommand, "test-model-id", baseRequest(), baseContext());
   assert.equal(result.status, "ok");
   assert.deepEqual(result.raw, { title: "Biology Basics", cards: [{ front: "Q", back: "A", sourceChunkIds: ["a"] }] });
+});
+
+test("runGeneration: real provider-reported token usage is threaded through on success", async () => {
+  const fakeClient = {
+    send: async () => ({
+      ...converseResponseWithText('{"title":"Biology Basics","cards":[]}'),
+      usage: { inputTokens: 120, outputTokens: 45, totalTokens: 165 },
+    }),
+  };
+  const result = await runGeneration(fakeClient, FakeCommand, "test-model-id", baseRequest(), baseContext());
+  assert.equal(result.status, "ok");
+  assert.deepEqual(result.usage, { inputTokens: 120, outputTokens: 45, totalTokens: 165 });
+});
+
+test("runGeneration: usage is undefined (never invented) when the Converse response carries none", async () => {
+  const fakeClient = { send: async () => converseResponseWithText('{"title":"Biology Basics","cards":[]}') };
+  const result = await runGeneration(fakeClient, FakeCommand, "test-model-id", baseRequest(), baseContext());
+  assert.equal(result.status, "ok");
+  assert.equal(result.usage, undefined);
+});
+
+test("extractUsage: a well-formed usage object is passed through exactly, never re-derived", () => {
+  const usage = extractUsage({ usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 } });
+  assert.deepEqual(usage, { inputTokens: 10, outputTokens: 20, totalTokens: 30 });
+});
+
+test("extractUsage: returns undefined (never a fabricated zeroed object) when usage is missing or malformed", () => {
+  assert.equal(extractUsage({}), undefined);
+  assert.equal(extractUsage({ usage: {} }), undefined);
+  assert.equal(extractUsage({ usage: { inputTokens: "10", outputTokens: 20, totalTokens: 30 } }), undefined);
+  assert.equal(extractUsage(null), undefined);
+  assert.equal(extractUsage(undefined), undefined);
 });
 
 test("runGeneration: malformed (non-JSON) model text maps to malformed-model-output", async () => {

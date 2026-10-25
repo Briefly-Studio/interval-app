@@ -31,6 +31,10 @@ export interface IntervalResourceNames {
   // this file remains pure naming, never a feature gate.
   aiGenerateStudyDeck: string;
   aiGenerateStudyDeckRole: string;
+  // Per-user daily quota + concurrency lease storage for the AI Lambda above — same naming-only
+  // convention: computed for every environment, only ever instantiated where the stack's own
+  // conditional (today: development only) decides to create it.
+  aiRateLimits: string;
 }
 
 const ENVIRONMENT_PREFIX: Record<IntervalEnvironmentName, string> = {
@@ -54,5 +58,6 @@ export function resourceNamesFor(environmentName: IntervalEnvironmentName): Inte
     librarySourceStorageRole: `${prefix}-library-source-storage-role`,
     aiGenerateStudyDeck: `${prefix}-ai-generate-study-deck`,
     aiGenerateStudyDeckRole: `${prefix}-ai-generate-study-deck-role`,
+    aiRateLimits: `${prefix}-ai-rate-limits`,
   };
 }

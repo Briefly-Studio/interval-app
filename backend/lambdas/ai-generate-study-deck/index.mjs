@@ -1,27 +1,32 @@
-// Backend Lambda for Generate Study Deck. NOT YET DEPLOYED — not wired into any CDK stack, API
-// Gateway route, or IAM policy in this repository (Phase A of the Bedrock integration; see
-// docs/ai-generation-foundation.md's "Backend architecture" section and the Bedrock integration
-// audit/implementation reports). Deploying this — creating the Lambda/role/route in CDK, granting
-// IAM, or configuring real environment variables against a live stack — is Phase B, its own
-// separate, founder-approved AWS change, same as any other AWS mutation in this repository (see
-// CLAUDE.md's "Environment Safety").
+// Backend Lambda for Generate Study Deck. Implemented in CDK (Development-only — see
+// infra/lib/interval-sync-stack.ts), but no `cdk deploy` has been run from this repository for
+// this change or any prior one; see CLAUDE.md's "Environment Safety" for the standing rule that
+// any AWS deployment requires its own separate, explicit founder approval every time.
 //
-// The Bedrock Runtime call itself IS implemented in this batch (see bedrockClient.mjs), using
-// Amazon Nova 2 Lite as the first configured model — but the model/inference-profile identifier
-// is read only from this Lambda's own BEDROCK_MODEL_ID environment variable (see callModelProvider
-// below), never hardcoded as a product constant. No credential of any kind is read from an Expo/
-// client env var, embedded in mobile code, or logged — only read from this Lambda's own
-// server-side environment configuration (via IAM, once Phase B grants it — Bedrock requires no
-// API key when the Lambda's execution role has invoke permission).
+// The Bedrock Runtime call itself is implemented (see bedrockClient.mjs), using Amazon Nova 2
+// Lite as the first configured model — but the model/inference-profile identifier is read only
+// from this Lambda's own BEDROCK_MODEL_ID environment variable (see callModelProvider below),
+// never hardcoded as a product constant. No credential of any kind is read from an Expo/client
+// env var, embedded in mobile code, or logged — only read from this Lambda's own server-side
+// environment configuration (Bedrock requires no API key when the Lambda's execution role has
+// invoke permission; DynamoDB access below is likewise IAM-only, no credential of any kind).
 //
 // Mirrors src/domain/ai/responseValidation.ts's validation RULES (not its code — "no shared
 // module exists between Lambdas in this repository", same convention as
 // backend/lambdas/library-source-storage/index.mjs) so a real deployment rejects exactly the same
 // malformed/unsafe model output the mobile-side mock pipeline already exercises in tests.
+//
+// RATE LIMITING AND USAGE METERING are implemented in this batch (see rateLimiter.mjs) — a
+// durable, atomic, per-user DynamoDB-backed daily quota and concurrency lease, replacing the
+// previous always-allow placeholder. See docs/ai-generation-foundation.md's "Rate limits and
+// cost controls" section for the full policy this enforces.
 
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 import { runGeneration } from "./bedrockClient.mjs";
+import { acquireConcurrencyLease, checkAndConsumeDailyQuota, releaseConcurrencyLease } from "./rateLimiter.mjs";
 
 const GENERATION_CONTRACT_VERSION = 1;
 
@@ -42,6 +47,29 @@ const LIMITS = {
   requestTimeoutMs: 25_000,
 };
 
+// Centralized rate-limit/cost-guardrail configuration — the three values a future tuning pass
+// would touch, kept together and named plainly rather than scattered as magic numbers through
+// checkRateLimit below. DAILY_REQUEST_LIMIT/MAX_CONCURRENT_REQUESTS mirror LIMITS above (which
+// mirrors src/domain/ai/limits.ts) — restated here as their own object because these three are
+// specifically the operational knobs this policy is built around, not every request-shape
+// ceiling LIMITS also enforces.
+const RATE_LIMIT_CONFIG = {
+  DAILY_REQUEST_LIMIT: LIMITS.maxRequestsPerUserPerDay,
+  // Always 1 in this batch. rateLimiter.mjs's single fixed-SK ("LEASE") lease design is built
+  // specifically for a one-slot-per-user model and does not generalize to a higher concurrency
+  // ceiling without a different key scheme (e.g. a bounded set of lease slots) — raising this
+  // alone would not be sufficient if that ever changes.
+  MAX_CONCURRENT_REQUESTS: LIMITS.maxConcurrentRequestsPerUser,
+  // Comfortably longer than this Lambda's own CDK-configured timeout (28s, Phase B) so a
+  // crashed/timed-out invocation's lease has already expired by the time any plausible retry or
+  // follow-up request could arrive — see rateLimiter.mjs's acquireConcurrencyLease.
+  LEASE_TTL_SECONDS: 60,
+  // Cleanup only, not the correctness mechanism (the UTC-date partition key in quotaKey() is) —
+  // generous enough that a delayed DynamoDB TTL sweep can never delete a row still legitimately
+  // in use.
+  QUOTA_ROW_TTL_SECONDS: 172_800,
+};
+
 const MAX_TITLE_LENGTH = 80;
 const MAX_FRONT_LENGTH = 300;
 const MAX_BACK_LENGTH = 500;
@@ -54,6 +82,12 @@ const MAX_BACK_LENGTH = 500;
 // initial attempt) — the ONLY retry mechanism anywhere in this Lambda; bedrockClient.mjs's
 // runGeneration performs no retry of its own, so retries are never stacked across two layers.
 const bedrockClient = new BedrockRuntimeClient({ maxAttempts: 2 });
+
+// Same reuse-across-warm-invocations reasoning as bedrockClient above. @aws-sdk/client-dynamodb
+// is reliably bundled in the Lambda Node.js runtime (unlike @aws-sdk/client-bedrock-runtime —
+// see package.json's own header comment), so no extra dependency/packaging step is needed for
+// this client, exactly like sync-push/sync-pull's own DynamoDB usage.
+const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 function resp(statusCode, obj) {
   return {
@@ -178,12 +212,82 @@ function validateModelResponse(raw, contextChunkIds) {
   return { status: "valid", title, cards: acceptedCards, cardIssues };
 }
 
-// Placeholder only — a real implementation needs a durable, atomic, per-user counter (e.g.
-// DynamoDB conditional update), which is explicitly out of scope here ("NO AWS DEPLOYMENT" /
-// "NO CDK RESOURCE CHANGES" for this batch). Always allows, so this Lambda cannot be mistaken for
-// a working rate limiter if it were ever accidentally deployed as-is.
-async function checkRateLimit(_sub) {
-  return { allowed: true };
+// Resolves the DynamoDB client/table/Command constructors this call should use — real module-
+// scope values by default, overridable via `deps` (index.test.mjs only; never a runtime
+// configuration surface, exactly like callModelProvider's own `deps` seam below).
+function resolveRateLimitDeps(deps) {
+  return {
+    client: deps.dynamoClient ?? dynamoClient,
+    tableName: deps.rateLimitTableName ?? process.env.AI_RATE_LIMIT_TABLE,
+    PutCommandCtor: deps.PutCommandCtor ?? PutCommand,
+    UpdateCommandCtor: deps.UpdateCommandCtor ?? UpdateCommand,
+    DeleteCommandCtor: deps.DeleteCommandCtor ?? DeleteCommand,
+  };
+}
+
+/**
+ * Backend-authoritative rate limiting — see rateLimiter.mjs for the real atomic DynamoDB logic.
+ * Mobile-reported counters are never trusted; this is the sole source of truth.
+ *
+ * Order matters: the concurrency lease is acquired FIRST, and only a request that actually wins
+ * the concurrency slot then consumes a daily-quota unit. A request rejected purely because
+ * another one is already in flight for this user never consumes quota for that attempt — it was
+ * never allowed to even begin. If the quota check itself then denies the request, the
+ * just-acquired lease is released immediately rather than held for its full TTL for a request
+ * that will never proceed to the provider call.
+ *
+ * FAILS CLOSED: if the rate-limit table isn't configured, or either DynamoDB call throws
+ * anything other than a condition-check failure (i.e. "limiter state could not be safely
+ * determined"), this returns `{allowed: false}` — it never falls back to allowing the request
+ * through. On success, returns a bound `release()` the caller must invoke exactly once, after
+ * the generation attempt finishes (success OR failure) — see handleGenerateStudyDeck below.
+ */
+async function checkRateLimit(sub, deps = {}) {
+  const { client, tableName, PutCommandCtor, UpdateCommandCtor, DeleteCommandCtor } = resolveRateLimitDeps(deps);
+  const now = deps.now ?? new Date();
+
+  if (!tableName) {
+    console.log("[ai-generate-study-deck] rate limiter unavailable: AI_RATE_LIMIT_TABLE not configured");
+    return { allowed: false, reason: "limiter-unavailable" };
+  }
+
+  const release = (leaseToken) => releaseConcurrencyLease({ client, DeleteCommandCtor, tableName, sub, leaseToken });
+
+  let lease;
+  try {
+    lease = await acquireConcurrencyLease({ client, PutCommandCtor, tableName, sub, now, leaseTtlSeconds: RATE_LIMIT_CONFIG.LEASE_TTL_SECONDS });
+  } catch (error) {
+    console.log("[ai-generate-study-deck] concurrency check failed:", error?.name || "UnknownError");
+    return { allowed: false, reason: "limiter-unavailable" };
+  }
+  console.log("[ai-generate-study-deck] concurrency:", lease.acquired ? "allowed" : "denied");
+  if (!lease.acquired) {
+    return { allowed: false, reason: lease.reason };
+  }
+
+  let quota;
+  try {
+    quota = await checkAndConsumeDailyQuota({
+      client,
+      UpdateCommandCtor,
+      tableName,
+      sub,
+      now,
+      limit: RATE_LIMIT_CONFIG.DAILY_REQUEST_LIMIT,
+      ttlSeconds: RATE_LIMIT_CONFIG.QUOTA_ROW_TTL_SECONDS,
+    });
+  } catch (error) {
+    console.log("[ai-generate-study-deck] quota check failed:", error?.name || "UnknownError");
+    await release(lease.leaseToken);
+    return { allowed: false, reason: "limiter-unavailable" };
+  }
+  console.log("[ai-generate-study-deck] quota:", quota.allowed ? "allowed" : "denied");
+  if (!quota.allowed) {
+    await release(lease.leaseToken);
+    return { allowed: false, reason: quota.reason };
+  }
+
+  return { allowed: true, release: () => release(lease.leaseToken) };
 }
 
 /**
@@ -225,7 +329,7 @@ async function callModelProvider(request, context, deps = {}) {
     };
   }
 
-  return { status: "ok", raw: result.raw };
+  return { status: "ok", raw: result.raw, usage: result.usage };
 }
 
 /**
@@ -250,13 +354,49 @@ export async function handleGenerateStudyDeck(event, deps = {}) {
     if (parsed.error) return resp(400, { error: parsed.error });
     const { request, context } = parsed;
 
-    const rateLimit = await checkRateLimit(sub);
-    if (!rateLimit.allowed) return resp(429, { error: "rate-limited", reason: rateLimit.reason });
+    // Rate limiting runs AFTER request validation (so a malformed/auth-invalid request never
+    // consumes quota or a concurrency slot) and BEFORE the provider call (so quota is charged for
+    // every attempt that actually reaches Bedrock — success, provider failure, or a response that
+    // later fails validation — never multiple times for one attempt, and never zero times for a
+    // real one; see docs/ai-generation-foundation.md's "Rate limits and cost controls" for the
+    // full justification of this exact charging point).
+    const rateLimit = await checkRateLimit(sub, deps);
+    if (!rateLimit.allowed) {
+      if (rateLimit.reason === "daily-quota-exceeded") return resp(429, { error: "daily-limit-reached" });
+      if (rateLimit.reason === "concurrent-limit") return resp(429, { error: "generation-in-progress" });
+      // "limiter-unavailable" — fail closed. Reuses the existing provider-unavailable code: from
+      // the client's perspective this means exactly the same thing ("the generation service
+      // could not be used for this request right now"), and it is not one of the two rate-limit
+      // categories this batch introduces.
+      return resp(503, { error: "provider-unavailable", message: "The generation service is temporarily unavailable." });
+    }
 
-    const providerResult = await callModelProvider(request, context, deps);
+    const startedAt = Date.now();
+    let providerResult;
+    try {
+      providerResult = await callModelProvider(request, context, deps);
+    } finally {
+      // Always released — success AND failure — regardless of what callModelProvider returns or
+      // throws, so a held slot is never left occupied longer than the actual attempt took. An
+      // un-released lease still self-expires via its own TTL check (rateLimiter.mjs), so a
+      // release-side hiccup here is a bounded availability cost, never a correctness one.
+      await rateLimit.release();
+    }
+    const durationMs = Date.now() - startedAt;
+
     if (providerResult.status === "error") {
+      // Category-level observability only — never source text, prompt, card contents, or a raw
+      // provider exception (see CLAUDE.md's logging guardrails and this repository's existing
+      // convention in runGeneration's own diagnostic line).
+      console.log("[ai-generate-study-deck] provider outcome: failure", providerResult.code, "duration_ms:", durationMs);
       return resp(502, { error: providerResult.code, message: providerResult.message });
     }
+    console.log(
+      "[ai-generate-study-deck] provider outcome: success duration_ms:",
+      durationMs,
+      "token_usage:",
+      providerResult.usage ?? "unavailable"
+    );
 
     const contextChunkIds = new Set(context.chunks.map((chunk) => chunk.id));
     const validation = validateModelResponse(providerResult.raw, contextChunkIds);

@@ -1,8 +1,10 @@
 {
   "name": "ai-generate-study-deck-lambda",
   "private": true,
-  "description": "Scoped dependency manifest for this one Lambda only — see index.mjs's header comment. @aws-sdk/client-bedrock-runtime is not reliably bundled in the Lambda Node.js runtime (unlike @aws-sdk/client-dynamodb, used by sync-push/sync-pull, which is a long-standing runtime-bundled module), so it is installed here explicitly. Phase B's CDK packaging (lambda.Code.fromAsset) bundles whatever is on disk in this directory, including node_modules, with no extra bundling step required — the same pattern infra/ already uses for its own scoped package.json + node_modules. No other Lambda in backend/lambdas/ is affected; node_modules here is gitignored, same as everywhere else in this repository.",
+  "description": "Scoped dependency manifest for this one Lambda only — see index.mjs's header comment. @aws-sdk/client-bedrock-runtime is not reliably bundled in the Lambda Node.js runtime, so it is installed here explicitly. @aws-sdk/client-dynamodb and @aws-sdk/lib-dynamodb ARE reliably bundled in the Lambda Node.js runtime itself (the same long-standing runtime-bundled modules sync-push/sync-pull rely on without vendoring them) — they are listed here only so this Lambda's OWN local tests (index.test.mjs, rateLimiter.test.mjs) can resolve them under plain `node --test`, which has no access to the Lambda runtime's built-in copy; CDK deployment is unaffected either way, since a locally-bundled copy simply shadows the runtime's own. Phase B's CDK packaging (lambda.Code.fromAsset) bundles whatever is on disk in this directory, including node_modules, with no extra bundling step required — the same pattern infra/ already uses for its own scoped package.json + node_modules. No other Lambda in backend/lambdas/ is affected; node_modules here is gitignored, same as everywhere else in this repository.",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "3.1152.0"
+    "@aws-sdk/client-bedrock-runtime": "3.1152.0",
+    "@aws-sdk/client-dynamodb": "3.1152.0",
+    "@aws-sdk/lib-dynamodb": "3.1152.0"
   }
 }

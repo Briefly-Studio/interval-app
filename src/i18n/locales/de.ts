@@ -1131,6 +1131,8 @@ const de = {
       tooLarge: "Diese Quelle ist zu groß, um einen Stapel zu erstellen.",
       unsupported: "Aus dieser Quelle können keine Lernkartenstapel erstellt werden.",
       rateLimited: "Du hast in letzter Zeit viel erstellt. Versuche es später erneut.",
+      dailyLimitReached: "Du hast das heutige KI-Generierungslimit erreicht. Versuche es morgen erneut.",
+      generationInProgress: "Ein anderer Stapel wird bereits generiert. Schließe diese Anfrage ab, bevor du eine neue startest.",
       timeout: "Die Erstellung hat zu lange gedauert. Bitte versuche es erneut.",
       providerUnavailable: "Die Erstellung ist derzeit nicht verfügbar. Bitte versuche es erneut.",
       badOutput: "Die erstellten Karten haben die Prüfung nicht bestanden. Bitte versuche es erneut.",

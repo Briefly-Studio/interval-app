@@ -324,25 +324,120 @@ batch performed any AWS action.
 
 ## Rate limits and cost controls
 
+**Backend-authoritative rate limiting is now implemented** (`backend/lambdas/ai-generate-study-deck/rateLimiter.mjs`
++ `index.mjs`'s `checkRateLimit`), Development-only, replacing the previous always-allow NOOP.
+Mobile-reported counters are never trusted — this is the sole source of truth.
+
 ```ts
 const GENERATION_LIMITS = {
   maxCardsPerRequest: 40,
   maxContextCharsPerRequest: 60_000,
   maxRequestsPerUserPerDay: 20,
   maxConcurrentRequestsPerUser: 1,
-  requestTimeoutMs: 30_000,
+  requestTimeoutMs: 25_000,
 };
 ```
 
-(`src/domain/ai/limits.ts`, restated inline in the backend skeleton per the no-shared-module
-convention.) These are **beta-safe contract numbers**, not a billing product and not derived from
-any real provider's pricing — the mission explicitly asked for the *shape* of rate/cost control
-(bounded input, bounded output, bounded requests/user/day, a swappable inexpensive-model seam,
-telemetry that excludes source content) before a provider is even chosen, not fabricated precise
-cost figures. `GenerationRateLimiter` is an interface only; `NOOP_RATE_LIMITER` (always allows) and
-the backend skeleton's `checkRateLimit()` (also always allows) are explicitly **not** real limiters
-— a real implementation needs a durable, atomic, per-user counter (e.g. a DynamoDB conditional
-update), which is out of scope for this batch ("NO AWS DEPLOYMENT").
+(`src/domain/ai/limits.ts`, restated inline in the backend Lambda as `LIMITS`/`RATE_LIMIT_CONFIG`
+per the no-shared-module convention — `RATE_LIMIT_CONFIG.DAILY_REQUEST_LIMIT`/
+`MAX_CONCURRENT_REQUESTS`/`LEASE_TTL_SECONDS` are the three centralized knobs a future tuning pass
+would touch.) These remain **beta-safe contract numbers**, not derived from any real provider's
+pricing or a billing product — this batch implements the *enforcement*, not a pricing decision.
+
+### Storage
+
+One new DynamoDB table, `<env>-ai-rate-limits` (Development-only — same conditional as the AI
+Lambda itself; see `docs/cdk-infrastructure.md`'s "AI rate-limit table" section for the full CDK
+design), holding exactly two ephemeral record kinds, both keyed `PK = U#<Cognito sub>`:
+
+- **Daily quota bucket** — `SK = QUOTA#<UTC-date>`, `{count, ttl}`. The UTC-date-scoped sort key
+  IS the reset mechanism — a new day is a structurally distinct item, never a mutation of the
+  previous day's count. `ttl` (DynamoDB native TTL) is cleanup only, generous (2 days), never the
+  correctness mechanism.
+- **Concurrency lease** — `SK = LEASE` (one fixed key per user — at most one lease per user by
+  construction), `{leaseToken, expiresAt, ttl}`. `expiresAt` (checked explicitly in the acquiring
+  conditional write, independent of whether DynamoDB's own background TTL sweep has run yet) is
+  what makes a crashed/timed-out Lambda self-healing: the next request's own acquisition attempt
+  reclaims an expired lease, with no sweeper and no permanent lockout.
+
+No source content, prompt, generated card text, auth token, or filename is ever stored — only a
+user id, a UTC date or the fixed string `"LEASE"`, and a count/token/expiry.
+
+### Concurrency: atomic, race-free by construction
+
+A single conditional `PutItem` (`attribute_not_exists(PK) OR :now > expiresAt`) acquires the
+lease; DynamoDB serializes writes to the same item, so two simultaneous requests for the same user
+can never both see "absent." Release is a conditional `DeleteItem` keyed on the exact lease token
+the acquirer was given — never unconditional — so a request whose own lease already expired and
+was stolen by a later request can never evict that later request's legitimate lease on its own
+(delayed) release attempt.
+
+### Daily quota: atomic, race-free by construction
+
+A single conditional `UpdateItem`
+(`SET count = if_not_exists(count,0) + 1` with `ConditionExpression: attribute_not_exists(count) OR count < :limit`)
+— the identical conditional-write idiom `backend/lambdas/sync-push/index.mjs` already relies on
+for its own Records table. The 21st request in a day sees the already-incremented value from the
+20th and fails its own condition; there is no window where two concurrent requests both read a
+pre-limit count.
+
+### What consumes quota, and why
+
+The concurrency lease is acquired **first**; only a request that wins the slot then consumes a
+daily-quota unit — a request rejected purely for concurrency never spends part of the user's daily
+allowance on an attempt that was never allowed to begin. Once the lease is held, quota is consumed
+**before** the Bedrock call, not after a successful response: a provider failure, a timeout, or a
+response that later fails validation still cost a real (billable) Bedrock call, so it is charged
+exactly the same as a success. This is a single, deterministic charging point — never multiple
+times for one attempt, never zero times for a real one. A request rejected by request validation
+(malformed body, mismatched chunk ids) or authentication never reaches this point at all, so it
+never consumes quota or a concurrency slot.
+
+### Fail-closed, not fail-open
+
+If the rate-limit table isn't configured, or either DynamoDB call throws anything other than a
+condition-check failure (table outage, throttling, an unexpected error), `checkRateLimit` denies
+the request (mapped to the existing `provider-unavailable` code, HTTP 503) — it never falls back
+to allowing generation through. "Limiter state could not be determined" and "limiter explicitly
+denied" are different failure reasons internally, but both result in a denial.
+
+### Error categories
+
+Two new `GenerationErrorCode` values (`src/domain/ai/types.ts`), deliberately distinct from the
+pre-existing `rate-limited` (which stays reserved for the underlying Bedrock *provider* itself
+throttling — a transient, retry-soon condition):
+
+- **`daily-limit-reached`** — "You've reached today's AI generation limit. Try again tomorrow."
+- **`generation-in-progress`** — "Another deck is already being generated. Finish that request
+  before starting another."
+
+Both are wired through the existing taxonomy end-to-end: `backendProvider.ts`'s
+`KNOWN_ERROR_CODES`/`MESSAGE_FOR`, `generateDeckFlow.ts`'s `GENERATION_ERROR_COPY_KEYS`, and new
+`generateDeck.error.dailyLimitReached` / `generateDeck.error.generationInProgress` keys in all 13
+locale files.
+
+### Usage metering
+
+Real, provider-reported token usage (`bedrockClient.mjs`'s `extractUsage` — Bedrock's Converse API
+response's own top-level `usage: {inputTokens, outputTokens, totalTokens}`) is logged
+server-side only (category-level `console.log`, alongside provider outcome and duration) when
+Bedrock actually returns it — **never fabricated or estimated** when absent. Nothing here is
+returned to the mobile client or persisted beyond CloudWatch's own retention; this is operational
+metering to support a future cost/quota UX, not a product analytics pipeline.
+
+### Known limitation: no request-level idempotency
+
+There is no idempotency key in the request contract, and this batch does not add one ("do not
+invent a large idempotency subsystem unless needed"). API Gateway HTTP API does not itself retry a
+Lambda proxy integration that already returned a response (even an error one); the realistic
+duplicate-request source is the mobile client itself retrying after a local timeout/network error
+without having seen Interval's own response. If the original request's Lambda invocation actually
+completed server-side (quota consumed, lease released) before the client gave up and retried, the
+retry is treated as a brand-new request and consumes another quota unit — a known, accepted gap.
+The concurrency lease incidentally mitigates the single most likely real-world case (the original
+request is STILL in flight when the client retries): the retry hits the same user's still-held
+lease and is rejected with `generation-in-progress` rather than double-counting. This is a
+beneficial side effect, not a solved idempotency guarantee, and should not be relied upon as one.
 
 ## Mock adapter
 
@@ -379,8 +474,13 @@ skeleton's size-ceiling and selected-chunk-id consistency checks.
   real navigation.
 - No AI Tutor, "Ask This Source," summaries, quizzes, Discover-feed generation, embeddings, vector
   database, semantic search, RAG, transcription, OCR, image vision, or autonomous-agent behavior.
-- No deployed backend — `ai-generate-study-deck/index.mjs` is a reference skeleton only.
-- No real rate limiter — `NOOP_RATE_LIMITER` and the skeleton's placeholder always allow.
+- `ai-generate-study-deck/index.mjs` now implements the real backend path (Bedrock + rate
+  limiting) in code and in CDK (Development-only) — whether it has actually been deployed to a
+  live AWS account via `cdk deploy` is not confirmable from source alone; see "Next step to real
+  provider integration — status" below.
+- `NOOP_RATE_LIMITER` (`src/domain/ai/limits.ts`) still exists and is still used by the mobile-side
+  mock pipeline's own tests — it was never the real limiter and still isn't; the real one now
+  lives entirely server-side (`rateLimiter.mjs`), never on the mobile client.
 - No relevance ranking / smarter chunk selection — `rankChunks` is a reserved, unused seam.
 - No AWS action of any kind was taken to produce this batch.
 
@@ -433,15 +533,18 @@ record. Updated status:
    read only from `BEDROCK_MODEL_ID` at runtime, never hardcoded as a product constant, so a
    future model/provider change (e.g. routing some requests to Claude Haiku) does not require
    touching this seam again.
-3. **Partially done (Phase B).** The CDK change — new dedicated IAM role, new Lambda, new API
-   Gateway route — is **implemented in `infra/lib/interval-sync-stack.ts`, Development-only, NOT
-   yet deployed** (see `docs/cdk-infrastructure.md`'s "AI Generate Study Deck Lambda" section).
+3. **Done (Phase B), including rate limiting.** The CDK change — new dedicated IAM role, new
+   Lambda, new API Gateway route, and (this batch) a new DynamoDB rate-limit table — is
+   **implemented in `infra/lib/interval-sync-stack.ts`, Development-only**; whether `cdk deploy`
+   has actually been run against a live AWS account is not something this repository's source can
+   confirm by itself (see `docs/cdk-infrastructure.md`'s "AI Generate Study Deck Lambda" section).
    Bedrock requires no stored provider credential — IAM alone is sufficient, so no Lambda
-   environment-variable secret or Secrets Manager entry was needed. **A real `GenerationRateLimiter`
-   backed by DynamoDB is explicitly NOT implemented** — `checkRateLimit()` remains a NOOP; this is
-   a disclosed, deliberate gap, acceptable through an initial Development-only founder smoke test
-   but required before any Staging deployment (see `docs/cdk-infrastructure.md`'s "Rate
-   limiting" section).
+   environment-variable secret or Secrets Manager entry was needed. **A real, DynamoDB-backed,
+   atomic per-user daily quota and concurrency lease is now implemented**
+   (`backend/lambdas/ai-generate-study-deck/rateLimiter.mjs`) — `checkRateLimit()` is no longer a
+   NOOP. See this document's own "Rate limits and cost controls" section above for the full
+   design; this was the disclosed gap `docs/cdk-infrastructure.md`'s "Rate limiting" section
+   previously flagged as required before any Staging deployment, now closed for Development.
 4. Build the production "Generate" UI/review screen — still a separate concern from this
    foundation document; see `docs/generate-study-deck-ux.md` for its own status.
 5. Build "Save accepted deck" — also tracked separately; see `docs/generate-study-deck-ux.md`.

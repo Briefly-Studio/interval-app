@@ -189,5 +189,23 @@ export async function runGeneration(client, CommandCtor, modelId, request, conte
   // Deliberately NOT validated against the response schema here — passed onward untouched for
   // index.mjs's existing validateModelResponse to judge. "Do not cast malformed model output into
   // a trusted shape" (see this Lambda's own header comment and docs/ai-generation-foundation.md).
-  return { status: "ok", raw: parsed.value };
+  return { status: "ok", raw: parsed.value, usage: extractUsage(response) };
+}
+
+// Converse API responses carry a top-level `usage: { inputTokens, outputTokens, totalTokens }`
+// (all integers) — verified directly against AWS's own Bedrock Runtime API documentation, not
+// assumed. Returns undefined (never a fabricated/zeroed object) when the shape isn't exactly
+// this — this is real, provider-reported usage metering, never an invented estimate (see this
+// mission's own "Do NOT invent token counts" instruction and index.mjs's logging of this value).
+export function extractUsage(response) {
+  const usage = response?.usage;
+  if (
+    !usage ||
+    typeof usage.inputTokens !== "number" ||
+    typeof usage.outputTokens !== "number" ||
+    typeof usage.totalTokens !== "number"
+  ) {
+    return undefined;
+  }
+  return { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.totalTokens };
 }

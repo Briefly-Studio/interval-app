@@ -1086,6 +1086,8 @@ const ko = {
       tooLarge: "이 소스는 덱을 생성하기에 너무 큽니다.",
       unsupported: "이 소스로는 학습 덱을 생성할 수 없습니다.",
       rateLimited: "최근에 많이 생성했습니다. 나중에 다시 시도해 주세요.",
+      dailyLimitReached: "오늘의 AI 생성 한도에 도달했습니다. 내일 다시 시도해 주세요.",
+      generationInProgress: "다른 덱이 이미 생성되고 있습니다. 해당 요청을 완료한 후 새 요청을 시작해 주세요.",
       timeout: "생성에 너무 오래 걸렸습니다. 다시 시도해 주세요.",
       providerUnavailable: "지금은 생성을 사용할 수 없습니다. 다시 시도해 주세요.",
       badOutput: "생성된 카드가 검증을 통과하지 못했습니다. 다시 시도해 주세요.",
