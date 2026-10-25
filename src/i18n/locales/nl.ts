@@ -45,6 +45,7 @@ const nl = {
     sync: "Synchronisatie",
     recentlyDeleted: "Onlangs verwijderd",
     importDeck: "Stapel importeren",
+    importFlashcards: "Flashcards importeren",
     helpFeedback: "Hulp en feedback",
     betaNotice: "Bètamelding",
     privacyNotice: "Privacyverklaring",
@@ -901,6 +902,83 @@ const nl = {
       invalidDeckMetadata: "De metadata van de stapel ontbreekt of is ongeldig.",
       invalidCardsList: "De kaartenlijst ontbreekt of is ongeldig.",
       invalidCardData: "De kaartgegevens ontbreken of zijn ongeldig.",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "Flashcards importeren",
+    subtitle: "Importeer kaarten uit een CSV- of TSV-bestand, zoals een Quizlet-export.",
+    formatNote: "Twee kolommen: de eerste is de voorkant van de kaart, de tweede is de achterkant.",
+    noFileSelected: "Geen bestand geselecteerd",
+    readyToImport: "Gereed om te importeren",
+    chooseFileButton: "Bestand kiezen",
+    chooseDifferentFileButton: "Ander bestand kiezen",
+    submitButton: "Doorgaan",
+    failedTitle: "Importeren mislukt",
+    errors: {
+      emptyFile: "Dit bestand is leeg.",
+      noReadableRows: "Er zijn geen leesbare rijen gevonden in dit bestand.",
+      generic: "Het bestand kan niet worden gelezen of verwerkt.",
+      fileTooLarge: "Dit bestand is te groot om te importeren.",
+      noUsableCards: "Er zijn geen bruikbare kaarten gevonden in dit bestand.",
+      fileReadFailed: "Het bestand kan niet worden gelezen.",
+    },
+    preview: {
+      screenTitle: "Import controleren",
+      deckNameLabel: "Stapelnaam",
+      cardCount: {
+        one: "{{count}} kaart",
+        other: "{{count}} kaarten",
+      },
+      warningsHeading: "Waarschuwingen",
+      sampleHeading: "Voorbeeld",
+      moreCards: {
+        one: "en nog {{count}} kaart",
+        other: "en nog {{count}} kaarten",
+      },
+      confirmButton: {
+        one: "{{count}} kaart importeren",
+        other: "{{count}} kaarten importeren",
+      },
+      importedTitle: "Geïmporteerd",
+      importedBody: {
+        one: "{{count}} kaart succesvol geïmporteerd.",
+        other: "{{count}} kaarten succesvol geïmporteerd.",
+      },
+      noDraftTitle: "Geen import bezig",
+      noDraftBody: "Kies eerst een bestand om te importeren.",
+      scopeChangedTitle: "Werkruimte gewijzigd",
+      scopeChangedBody:
+        "De actieve werkruimte of account is gewijzigd. Ga terug naar die context om dit bestand te importeren, of begin opnieuw.",
+      saveInvalidTitle: "Niets om te importeren",
+      saveInvalidBody: "Deze import heeft een stapelnaam en minstens één geldige kaart nodig.",
+      saveRollbackTitle: "Importeren mislukt",
+      saveRollbackBody:
+        "Er is iets misgegaan en de stapel kon niet volledig worden aangemaakt. Controleer je stapels voordat je het opnieuw probeert.",
+      saveFailedTitle: "Importeren mislukt",
+      saveFailedBody: "Er is iets misgegaan. Probeer het opnieuw.",
+    },
+    warnings: {
+      headerRowSkipped: "De eerste rij leek op een kop en is overgeslagen.",
+      rowsSkippedEmpty: {
+        one: "{{count}} kaart is overgeslagen omdat er geen leesbare voor- of achterkant was.",
+        other: "{{count}} kaarten zijn overgeslagen omdat er geen leesbare voor- of achterkant was.",
+      },
+      rowsSkippedTooLong: {
+        one: "{{count}} kaart is overgeslagen omdat een veld te lang was.",
+        other: "{{count}} kaarten zijn overgeslagen omdat een veld te lang was.",
+      },
+      rowsSkippedMalformed: {
+        one: "{{count}} rij is overgeslagen omdat deze niet als kaart kon worden gelezen.",
+        other: "{{count}} rijen zijn overgeslagen omdat ze niet als kaart konden worden gelezen.",
+      },
+      duplicatesFound: {
+        one: "{{count}} dubbele kaart is gevonden — deze is behouden.",
+        other: "{{count}} dubbele kaarten zijn gevonden — deze zijn behouden.",
+      },
+      cardsTruncated: {
+        one: "{{count}} kaart is overgeslagen omdat deze import te groot is.",
+        other: "{{count}} kaarten zijn overgeslagen omdat deze import te groot is.",
+      },
     },
   },
   deckDetail: {

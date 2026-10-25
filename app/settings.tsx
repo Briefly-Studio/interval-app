@@ -269,6 +269,11 @@ export default function SettingsScreen() {
           <SettingsRow label={t("settings.importDeck")} onPress={() => router.push("/import")} />
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <SettingsRow
+            label={t("settings.importFlashcards")}
+            onPress={() => router.push({ pathname: "/import-flashcards" as any })}
+          />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <SettingsRow
             label={t("settings.language")}
             subtitle={languageSubtitle}
             onPress={() => router.push({ pathname: "/language" as any })}

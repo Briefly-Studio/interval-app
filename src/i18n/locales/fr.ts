@@ -51,6 +51,7 @@ const fr = {
     sync: "Synchronisation",
     recentlyDeleted: "Supprimés récemment",
     importDeck: "Importer un paquet",
+    importFlashcards: "Importer des cartes",
     helpFeedback: "Aide et commentaires",
     betaNotice: "Avis de bêta",
     privacyNotice: "Avis de confidentialité",
@@ -908,6 +909,83 @@ const fr = {
       invalidDeckMetadata: "Les métadonnées du paquet sont manquantes ou non valides.",
       invalidCardsList: "La liste des cartes est manquante ou non valide.",
       invalidCardData: "Les données de la carte sont manquantes ou non valides.",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "Importer des cartes",
+    subtitle: "Importez des cartes depuis un fichier CSV ou TSV, comme un export Quizlet.",
+    formatNote: "Deux colonnes : la première est le recto de la carte, la seconde le verso.",
+    noFileSelected: "Aucun fichier sélectionné",
+    readyToImport: "Prêt à importer",
+    chooseFileButton: "Choisir un fichier",
+    chooseDifferentFileButton: "Choisir un autre fichier",
+    submitButton: "Continuer",
+    failedTitle: "Échec de l'import",
+    errors: {
+      emptyFile: "Ce fichier est vide.",
+      noReadableRows: "Aucune ligne lisible n'a été trouvée dans ce fichier.",
+      generic: "Impossible de lire ou d'analyser le fichier.",
+      fileTooLarge: "Ce fichier est trop volumineux pour être importé.",
+      noUsableCards: "Aucune carte utilisable n'a été trouvée dans ce fichier.",
+      fileReadFailed: "Impossible de lire le fichier.",
+    },
+    preview: {
+      screenTitle: "Vérifier l'import",
+      deckNameLabel: "Nom du paquet",
+      cardCount: {
+        one: "{{count}} carte",
+        other: "{{count}} cartes",
+      },
+      warningsHeading: "Avertissements",
+      sampleHeading: "Aperçu",
+      moreCards: {
+        one: "et {{count}} carte supplémentaire",
+        other: "et {{count}} cartes supplémentaires",
+      },
+      confirmButton: {
+        one: "Importer {{count}} carte",
+        other: "Importer {{count}} cartes",
+      },
+      importedTitle: "Importé",
+      importedBody: {
+        one: "{{count}} carte importée avec succès.",
+        other: "{{count}} cartes importées avec succès.",
+      },
+      noDraftTitle: "Aucun import en cours",
+      noDraftBody: "Choisissez d'abord un fichier à importer.",
+      scopeChangedTitle: "Espace de travail modifié",
+      scopeChangedBody:
+        "L'espace de travail ou le compte actif a changé. Revenez à ce contexte pour importer ce fichier, ou recommencez.",
+      saveInvalidTitle: "Rien à importer",
+      saveInvalidBody: "Cet import nécessite un nom de paquet et au moins une carte valide.",
+      saveRollbackTitle: "Échec de l'import",
+      saveRollbackBody:
+        "Une erreur s'est produite et le paquet n'a pas pu être entièrement créé. Vérifiez vos paquets avant de réessayer.",
+      saveFailedTitle: "Échec de l'import",
+      saveFailedBody: "Une erreur s'est produite. Veuillez réessayer.",
+    },
+    warnings: {
+      headerRowSkipped: "La première ligne ressemblait à un en-tête et a été ignorée.",
+      rowsSkippedEmpty: {
+        one: "{{count}} carte a été ignorée car elle n'avait pas de recto ou de verso lisible.",
+        other: "{{count}} cartes ont été ignorées car elles n'avaient pas de recto ou de verso lisible.",
+      },
+      rowsSkippedTooLong: {
+        one: "{{count}} carte a été ignorée car un champ était trop long.",
+        other: "{{count}} cartes ont été ignorées car un champ était trop long.",
+      },
+      rowsSkippedMalformed: {
+        one: "{{count}} ligne a été ignorée car elle n'a pas pu être lue comme une carte.",
+        other: "{{count}} lignes ont été ignorées car elles n'ont pas pu être lues comme des cartes.",
+      },
+      duplicatesFound: {
+        one: "{{count}} carte en double a été trouvée — elle a été conservée.",
+        other: "{{count}} cartes en double ont été trouvées — elles ont été conservées.",
+      },
+      cardsTruncated: {
+        one: "{{count}} carte a été ignorée car cet import est trop volumineux.",
+        other: "{{count}} cartes ont été ignorées car cet import est trop volumineux.",
+      },
     },
   },
   deckDetail: {

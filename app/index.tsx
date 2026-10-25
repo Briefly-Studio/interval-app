@@ -290,6 +290,11 @@ export default function DecksHome() {
         />
         <SecondaryAction icon="download-outline" label={t("settings.importDeck")} onPress={() => router.push("/import")} />
         <SecondaryAction
+          icon="swap-horizontal-outline"
+          label={t("settings.importFlashcards")}
+          onPress={() => router.push({ pathname: "/import-flashcards" as any })}
+        />
+        <SecondaryAction
           icon="trash-outline"
           label={t("settings.recentlyDeleted")}
           onPress={() => router.push({ pathname: "/recently-deleted" as any })}

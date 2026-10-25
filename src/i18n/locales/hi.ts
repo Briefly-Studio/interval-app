@@ -53,6 +53,7 @@ const hi = {
     sync: "सिंक",
     recentlyDeleted: "हाल ही में डिलीट किए गए",
     importDeck: "डेक इम्पोर्ट करें",
+    importFlashcards: "फ़्लैशकार्ड इम्पोर्ट करें",
     helpFeedback: "सहायता और फ़ीडबैक",
     betaNotice: "बीटा सूचना",
     privacyNotice: "गोपनीयता सूचना",
@@ -877,6 +878,72 @@ const hi = {
       invalidDeckMetadata: "डेक मेटाडेटा गायब है या अमान्य है।",
       invalidCardsList: "कार्ड लिस्ट गायब है या अमान्य है।",
       invalidCardData: "कार्ड डेटा गायब है या अमान्य है।",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "फ़्लैशकार्ड इम्पोर्ट करें",
+    subtitle: "CSV या TSV फ़ाइल से कार्ड इम्पोर्ट करें, जैसे कि Quizlet एक्सपोर्ट।",
+    formatNote: "दो कॉलम: पहला कार्ड का अगला भाग है, दूसरा पिछला भाग है।",
+    noFileSelected: "कोई फ़ाइल चयनित नहीं",
+    readyToImport: "इम्पोर्ट के लिए तैयार",
+    chooseFileButton: "फ़ाइल चुनें",
+    chooseDifferentFileButton: "दूसरी फ़ाइल चुनें",
+    submitButton: "जारी रखें",
+    failedTitle: "इम्पोर्ट विफल",
+    errors: {
+      emptyFile: "यह फ़ाइल खाली है।",
+      noReadableRows: "इस फ़ाइल में कोई पढ़ने योग्य पंक्ति नहीं मिली।",
+      generic: "फ़ाइल को पढ़ा या समझा नहीं जा सका।",
+      fileTooLarge: "यह फ़ाइल इम्पोर्ट करने के लिए बहुत बड़ी है।",
+      noUsableCards: "इस फ़ाइल में कोई उपयोगी कार्ड नहीं मिला।",
+      fileReadFailed: "फ़ाइल पढ़ी नहीं जा सकी।",
+    },
+    preview: {
+      screenTitle: "इम्पोर्ट की समीक्षा करें",
+      deckNameLabel: "डेक का नाम",
+      cardCount: {
+        other: "{{count}} कार्ड",
+      },
+      warningsHeading: "चेतावनियाँ",
+      sampleHeading: "पूर्वावलोकन",
+      moreCards: {
+        other: "और {{count}} कार्ड",
+      },
+      confirmButton: {
+        other: "{{count}} कार्ड इम्पोर्ट करें",
+      },
+      importedTitle: "इम्पोर्ट हो गया",
+      importedBody: {
+        other: "{{count}} कार्ड सफलतापूर्वक इम्पोर्ट किए गए।",
+      },
+      noDraftTitle: "कोई इम्पोर्ट जारी नहीं है",
+      noDraftBody: "पहले इम्पोर्ट करने के लिए एक फ़ाइल चुनें।",
+      scopeChangedTitle: "वर्कस्पेस बदल गया",
+      scopeChangedBody: "सक्रिय वर्कस्पेस या अकाउंट बदल गया है। इस फ़ाइल को इम्पोर्ट करने के लिए उस संदर्भ पर वापस जाएँ, या फिर से शुरू करें।",
+      saveInvalidTitle: "इम्पोर्ट करने के लिए कुछ नहीं",
+      saveInvalidBody: "इस इम्पोर्ट के लिए एक डेक नाम और कम से कम एक मान्य कार्ड आवश्यक है।",
+      saveRollbackTitle: "इम्पोर्ट विफल",
+      saveRollbackBody: "कुछ गलत हो गया और डेक पूरी तरह से नहीं बन सका। फिर से कोशिश करने से पहले अपने डेक जाँच लें।",
+      saveFailedTitle: "इम्पोर्ट विफल",
+      saveFailedBody: "कुछ गलत हो गया। कृपया फिर से कोशिश करें।",
+    },
+    warnings: {
+      headerRowSkipped: "पहली पंक्ति एक शीर्षक जैसी लग रही थी और उसे छोड़ दिया गया।",
+      rowsSkippedEmpty: {
+        other: "{{count}} कार्ड छोड़े गए क्योंकि उनमें पढ़ने योग्य अगला या पिछला भाग नहीं था।",
+      },
+      rowsSkippedTooLong: {
+        other: "{{count}} कार्ड छोड़े गए क्योंकि एक फ़ील्ड बहुत लंबी थी।",
+      },
+      rowsSkippedMalformed: {
+        other: "{{count}} पंक्तियाँ छोड़ी गईं क्योंकि उन्हें कार्ड के रूप में नहीं पढ़ा जा सका।",
+      },
+      duplicatesFound: {
+        other: "{{count}} डुप्लिकेट कार्ड मिले — उन्हें रखा गया।",
+      },
+      cardsTruncated: {
+        other: "{{count}} कार्ड छोड़े गए क्योंकि यह इम्पोर्ट बहुत बड़ा है।",
+      },
     },
   },
   deckDetail: {

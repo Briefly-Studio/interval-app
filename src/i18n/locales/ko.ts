@@ -51,6 +51,7 @@ const ko = {
     sync: "동기화",
     recentlyDeleted: "최근 삭제됨",
     importDeck: "덱 가져오기",
+    importFlashcards: "플래시카드 가져오기",
     helpFeedback: "도움말 및 피드백",
     betaNotice: "베타 안내",
     privacyNotice: "개인정보 처리방침",
@@ -871,6 +872,73 @@ const ko = {
       invalidDeckMetadata: "덱 메타데이터가 없거나 유효하지 않습니다.",
       invalidCardsList: "카드 목록이 없거나 유효하지 않습니다.",
       invalidCardData: "카드 데이터가 없거나 유효하지 않습니다.",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "플래시카드 가져오기",
+    subtitle: "CSV 또는 TSV 파일(예: Quizlet 내보내기)에서 카드를 가져옵니다.",
+    formatNote: "두 개의 열로 구성됩니다. 첫 번째 열은 카드 앞면, 두 번째 열은 뒷면입니다.",
+    noFileSelected: "선택한 파일 없음",
+    readyToImport: "가져올 준비 완료",
+    chooseFileButton: "파일 선택",
+    chooseDifferentFileButton: "다른 파일 선택",
+    submitButton: "계속",
+    failedTitle: "가져오기 실패",
+    errors: {
+      emptyFile: "이 파일은 비어 있습니다.",
+      noReadableRows: "이 파일에서 읽을 수 있는 행을 찾을 수 없습니다.",
+      generic: "파일을 읽거나 분석할 수 없습니다.",
+      fileTooLarge: "이 파일은 가져오기에 너무 큽니다.",
+      noUsableCards: "이 파일에서 사용할 수 있는 카드를 찾을 수 없습니다.",
+      fileReadFailed: "파일을 읽을 수 없습니다.",
+    },
+    preview: {
+      screenTitle: "가져오기 검토",
+      deckNameLabel: "덱 이름",
+      cardCount: {
+        other: "카드 {{count}}장",
+      },
+      warningsHeading: "알림",
+      sampleHeading: "미리보기",
+      moreCards: {
+        other: "그 외 {{count}}장의 카드",
+      },
+      confirmButton: {
+        other: "카드 {{count}}장 가져오기",
+      },
+      importedTitle: "가져왔습니다",
+      importedBody: {
+        other: "카드 {{count}}장을 성공적으로 가져왔습니다.",
+      },
+      noDraftTitle: "진행 중인 가져오기가 없습니다",
+      noDraftBody: "먼저 가져올 파일을 선택하세요.",
+      scopeChangedTitle: "작업 공간이 변경되었습니다",
+      scopeChangedBody:
+        "활성 작업 공간 또는 계정이 변경되었습니다. 이 파일을 가져오려면 해당 컨텍스트로 다시 전환하거나 처음부터 다시 시작하세요.",
+      saveInvalidTitle: "가져올 항목이 없습니다",
+      saveInvalidBody: "이 가져오기에는 덱 이름과 최소 하나의 유효한 카드가 필요합니다.",
+      saveRollbackTitle: "가져오기 실패",
+      saveRollbackBody: "문제가 발생하여 덱을 완전히 만들지 못했습니다. 다시 시도하기 전에 덱을 확인하세요.",
+      saveFailedTitle: "가져오기 실패",
+      saveFailedBody: "문제가 발생했습니다. 다시 시도해 주세요.",
+    },
+    warnings: {
+      headerRowSkipped: "첫 번째 행이 머리글처럼 보여 건너뛰었습니다.",
+      rowsSkippedEmpty: {
+        other: "읽을 수 있는 앞면이나 뒷면이 없어 카드 {{count}}장을 건너뛰었습니다.",
+      },
+      rowsSkippedTooLong: {
+        other: "필드가 너무 길어 카드 {{count}}장을 건너뛰었습니다.",
+      },
+      rowsSkippedMalformed: {
+        other: "카드로 읽을 수 없어 {{count}}개 행을 건너뛰었습니다.",
+      },
+      duplicatesFound: {
+        other: "중복된 카드 {{count}}장이 발견되어 그대로 유지했습니다.",
+      },
+      cardsTruncated: {
+        other: "이 가져오기가 너무 커서 카드 {{count}}장을 건너뛰었습니다.",
+      },
     },
   },
   deckDetail: {

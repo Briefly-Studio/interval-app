@@ -46,6 +46,7 @@ const de = {
     sync: "Synchronisierung",
     recentlyDeleted: "Kürzlich gelöscht",
     importDeck: "Stapel importieren",
+    importFlashcards: "Lernkarten importieren",
     helpFeedback: "Hilfe & Feedback",
     betaNotice: "Beta-Hinweis",
     privacyNotice: "Datenschutzhinweis",
@@ -902,6 +903,83 @@ const de = {
       invalidDeckMetadata: "Die Stapel-Metadaten fehlen oder sind ungültig.",
       invalidCardsList: "Die Kartenliste fehlt oder ist ungültig.",
       invalidCardData: "Die Kartendaten fehlen oder sind ungültig.",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "Lernkarten importieren",
+    subtitle: "Importiere Karten aus einer CSV- oder TSV-Datei, z. B. einem Quizlet-Export.",
+    formatNote: "Zwei Spalten: die erste ist die Vorderseite der Karte, die zweite die Rückseite.",
+    noFileSelected: "Keine Datei ausgewählt",
+    readyToImport: "Bereit zum Importieren",
+    chooseFileButton: "Datei auswählen",
+    chooseDifferentFileButton: "Andere Datei auswählen",
+    submitButton: "Weiter",
+    failedTitle: "Import fehlgeschlagen",
+    errors: {
+      emptyFile: "Diese Datei ist leer.",
+      noReadableRows: "In dieser Datei wurden keine lesbaren Zeilen gefunden.",
+      generic: "Die Datei konnte nicht gelesen oder analysiert werden.",
+      fileTooLarge: "Diese Datei ist zu groß zum Importieren.",
+      noUsableCards: "In dieser Datei wurden keine verwendbaren Karten gefunden.",
+      fileReadFailed: "Die Datei konnte nicht gelesen werden.",
+    },
+    preview: {
+      screenTitle: "Import überprüfen",
+      deckNameLabel: "Stapelname",
+      cardCount: {
+        one: "{{count}} Karte",
+        other: "{{count}} Karten",
+      },
+      warningsHeading: "Hinweise",
+      sampleHeading: "Vorschau",
+      moreCards: {
+        one: "und {{count}} weitere Karte",
+        other: "und {{count}} weitere Karten",
+      },
+      confirmButton: {
+        one: "{{count}} Karte importieren",
+        other: "{{count}} Karten importieren",
+      },
+      importedTitle: "Importiert",
+      importedBody: {
+        one: "{{count}} Karte erfolgreich importiert.",
+        other: "{{count}} Karten erfolgreich importiert.",
+      },
+      noDraftTitle: "Kein Import in Bearbeitung",
+      noDraftBody: "Wähle zuerst eine Datei zum Importieren aus.",
+      scopeChangedTitle: "Arbeitsbereich geändert",
+      scopeChangedBody:
+        "Der aktive Arbeitsbereich oder Account hat sich geändert. Wechsle zurück, um diese Datei zu importieren, oder beginne neu.",
+      saveInvalidTitle: "Nichts zu importieren",
+      saveInvalidBody: "Dieser Import benötigt einen Stapelnamen und mindestens eine gültige Karte.",
+      saveRollbackTitle: "Import fehlgeschlagen",
+      saveRollbackBody:
+        "Etwas ist schiefgelaufen, und der Stapel konnte nicht vollständig erstellt werden. Überprüfe deine Stapel, bevor du es erneut versuchst.",
+      saveFailedTitle: "Import fehlgeschlagen",
+      saveFailedBody: "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    },
+    warnings: {
+      headerRowSkipped: "Die erste Zeile sah wie eine Überschrift aus und wurde übersprungen.",
+      rowsSkippedEmpty: {
+        one: "{{count}} Karte wurde übersprungen, weil keine lesbare Vorder- oder Rückseite vorhanden war.",
+        other: "{{count}} Karten wurden übersprungen, weil keine lesbare Vorder- oder Rückseite vorhanden war.",
+      },
+      rowsSkippedTooLong: {
+        one: "{{count}} Karte wurde übersprungen, weil ein Feld zu lang war.",
+        other: "{{count}} Karten wurden übersprungen, weil ein Feld zu lang war.",
+      },
+      rowsSkippedMalformed: {
+        one: "{{count}} Zeile wurde übersprungen, weil sie nicht als Karte gelesen werden konnte.",
+        other: "{{count}} Zeilen wurden übersprungen, weil sie nicht als Karten gelesen werden konnten.",
+      },
+      duplicatesFound: {
+        one: "{{count}} doppelte Karte wurde gefunden — sie wurde beibehalten.",
+        other: "{{count}} doppelte Karten wurden gefunden — sie wurden beibehalten.",
+      },
+      cardsTruncated: {
+        one: "{{count}} Karte wurde übersprungen, weil dieser Import zu groß ist.",
+        other: "{{count}} Karten wurden übersprungen, weil dieser Import zu groß ist.",
+      },
     },
   },
   deckDetail: {

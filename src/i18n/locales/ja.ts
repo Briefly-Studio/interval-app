@@ -51,6 +51,7 @@ const ja = {
     sync: "同期",
     recentlyDeleted: "最近削除した項目",
     importDeck: "デッキをインポート",
+    importFlashcards: "フラッシュカードをインポート",
     helpFeedback: "ヘルプとフィードバック",
     betaNotice: "ベータ版について",
     privacyNotice: "プライバシーに関する通知",
@@ -876,6 +877,73 @@ const ja = {
       invalidDeckMetadata: "デッキのメタデータが見つからないか、無効です。",
       invalidCardsList: "カードリストが見つからないか、無効です。",
       invalidCardData: "カードデータが見つからないか、無効です。",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "フラッシュカードをインポート",
+    subtitle: "CSVまたはTSVファイル（Quizletのエクスポートなど）からカードをインポートします。",
+    formatNote: "2列構成です。1列目がカードの表、2列目が裏になります。",
+    noFileSelected: "ファイルが選択されていません",
+    readyToImport: "インポートの準備ができました",
+    chooseFileButton: "ファイルを選択",
+    chooseDifferentFileButton: "別のファイルを選択",
+    submitButton: "続ける",
+    failedTitle: "インポートに失敗しました",
+    errors: {
+      emptyFile: "このファイルは空です。",
+      noReadableRows: "このファイルに読み取り可能な行が見つかりませんでした。",
+      generic: "ファイルを読み取るか解析できませんでした。",
+      fileTooLarge: "このファイルはインポートするには大きすぎます。",
+      noUsableCards: "このファイルに使用可能なカードが見つかりませんでした。",
+      fileReadFailed: "ファイルを読み取れませんでした。",
+    },
+    preview: {
+      screenTitle: "インポート内容を確認",
+      deckNameLabel: "デッキ名",
+      cardCount: {
+        other: "{{count}}枚のカード",
+      },
+      warningsHeading: "注意事項",
+      sampleHeading: "プレビュー",
+      moreCards: {
+        other: "他に{{count}}枚のカード",
+      },
+      confirmButton: {
+        other: "{{count}}枚のカードをインポート",
+      },
+      importedTitle: "インポートしました",
+      importedBody: {
+        other: "{{count}}枚のカードを正常にインポートしました。",
+      },
+      noDraftTitle: "進行中のインポートはありません",
+      noDraftBody: "まずインポートするファイルを選択してください。",
+      scopeChangedTitle: "ワークスペースが変更されました",
+      scopeChangedBody:
+        "アクティブなワークスペースまたはアカウントが変更されました。このファイルをインポートするには元のコンテキストに戻るか、やり直してください。",
+      saveInvalidTitle: "インポートする内容がありません",
+      saveInvalidBody: "このインポートにはデッキ名と有効なカードが少なくとも1枚必要です。",
+      saveRollbackTitle: "インポートに失敗しました",
+      saveRollbackBody: "問題が発生し、デッキを完全に作成できませんでした。再試行する前にデッキを確認してください。",
+      saveFailedTitle: "インポートに失敗しました",
+      saveFailedBody: "問題が発生しました。もう一度お試しください。",
+    },
+    warnings: {
+      headerRowSkipped: "1行目は見出しのように見えたためスキップされました。",
+      rowsSkippedEmpty: {
+        other: "読み取り可能な表または裏がなかったため、{{count}}枚のカードがスキップされました。",
+      },
+      rowsSkippedTooLong: {
+        other: "フィールドが長すぎたため、{{count}}枚のカードがスキップされました。",
+      },
+      rowsSkippedMalformed: {
+        other: "カードとして読み取れなかったため、{{count}}行がスキップされました。",
+      },
+      duplicatesFound: {
+        other: "重複するカードが{{count}}枚見つかりました — そのまま保持されました。",
+      },
+      cardsTruncated: {
+        other: "このインポートが大きすぎたため、{{count}}枚のカードがスキップされました。",
+      },
     },
   },
   deckDetail: {

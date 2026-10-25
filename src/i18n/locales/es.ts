@@ -1,7 +1,14 @@
+import type en from "./en";
+import type { WidenLeaves } from "../types";
+
 // Spanish translation — structural parity with ./en.ts is required (same keys, same
-// interpolation tokens, same PluralForms shape). Missing leaves fall back to English at runtime
-// (see resolveLeaf in ../translate.ts), so this file should stay in lockstep with en.ts rather
-// than drift ahead or behind it.
+// interpolation tokens, same PluralForms shape) and enforced at compile time below via
+// `satisfies WidenLeaves<typeof en>` — a missing or misshapen key is a type error, not a silent
+// runtime gap. This file was previously missing that compile-time check (it only had
+// `as const`, with no `satisfies` clause, unlike every other locale) — restored here so `tsc`
+// can actually verify Spanish stays in lockstep with en.ts going forward, same as every other
+// locale. Missing leaves still fall back to English at runtime (see resolveLeaf in
+// ../translate.ts) as a defense-in-depth safety net, not as a substitute for this check.
 const es = {
   common: {
     back: "Atrás",
@@ -38,6 +45,7 @@ const es = {
     sync: "Sincronización",
     recentlyDeleted: "Eliminado recientemente",
     importDeck: "Importar mazo",
+    importFlashcards: "Importar tarjetas",
     helpFeedback: "Ayuda y comentarios",
     betaNotice: "Aviso de beta",
     privacyNotice: "Aviso de privacidad",
@@ -898,6 +906,83 @@ const es = {
       invalidCardData: "Los datos de la tarjeta faltan o no son válidos.",
     },
   },
+  importFlashcards: {
+    screenTitle: "Importar tarjetas",
+    subtitle: "Importa tarjetas desde un archivo CSV o TSV, como una exportación de Quizlet.",
+    formatNote: "Dos columnas: la primera es el frente de la tarjeta, la segunda es el reverso.",
+    noFileSelected: "Ningún archivo seleccionado",
+    readyToImport: "Listo para importar",
+    chooseFileButton: "Elegir archivo",
+    chooseDifferentFileButton: "Elegir otro archivo",
+    submitButton: "Continuar",
+    failedTitle: "Error al importar",
+    errors: {
+      emptyFile: "Este archivo está vacío.",
+      noReadableRows: "No se encontraron filas legibles en este archivo.",
+      generic: "No se pudo leer o analizar el archivo.",
+      fileTooLarge: "Este archivo es demasiado grande para importar.",
+      noUsableCards: "No se encontraron tarjetas utilizables en este archivo.",
+      fileReadFailed: "No se pudo leer el archivo.",
+    },
+    preview: {
+      screenTitle: "Revisar importación",
+      deckNameLabel: "Nombre del mazo",
+      cardCount: {
+        one: "{{count}} tarjeta",
+        other: "{{count}} tarjetas",
+      },
+      warningsHeading: "Avisos",
+      sampleHeading: "Vista previa",
+      moreCards: {
+        one: "y {{count}} tarjeta más",
+        other: "y {{count}} tarjetas más",
+      },
+      confirmButton: {
+        one: "Importar {{count}} tarjeta",
+        other: "Importar {{count}} tarjetas",
+      },
+      importedTitle: "Importado",
+      importedBody: {
+        one: "{{count}} tarjeta importada correctamente.",
+        other: "{{count}} tarjetas importadas correctamente.",
+      },
+      noDraftTitle: "No hay ninguna importación en curso",
+      noDraftBody: "Elige primero un archivo para importar.",
+      scopeChangedTitle: "El espacio de trabajo cambió",
+      scopeChangedBody:
+        "El espacio de trabajo o la cuenta activa cambiaron. Vuelve a ese contexto para importar este archivo, o empieza de nuevo.",
+      saveInvalidTitle: "Nada que importar",
+      saveInvalidBody: "Esta importación necesita un nombre de mazo y al menos una tarjeta válida.",
+      saveRollbackTitle: "Error al importar",
+      saveRollbackBody:
+        "Algo salió mal y el mazo no se pudo crear por completo. Revisa tus mazos antes de volver a intentarlo.",
+      saveFailedTitle: "Error al importar",
+      saveFailedBody: "Algo salió mal. Inténtalo de nuevo.",
+    },
+    warnings: {
+      headerRowSkipped: "La primera fila parecía un encabezado y se omitió.",
+      rowsSkippedEmpty: {
+        one: "Se omitió {{count}} tarjeta porque no tenía un frente o reverso legible.",
+        other: "Se omitieron {{count}} tarjetas porque no tenían un frente o reverso legible.",
+      },
+      rowsSkippedTooLong: {
+        one: "Se omitió {{count}} tarjeta porque un campo era demasiado largo.",
+        other: "Se omitieron {{count}} tarjetas porque un campo era demasiado largo.",
+      },
+      rowsSkippedMalformed: {
+        one: "Se omitió {{count}} fila porque no se pudo leer como tarjeta.",
+        other: "Se omitieron {{count}} filas porque no se pudieron leer como tarjetas.",
+      },
+      duplicatesFound: {
+        one: "Se encontró {{count}} tarjeta duplicada; se conservó.",
+        other: "Se encontraron {{count}} tarjetas duplicadas; se conservaron.",
+      },
+      cardsTruncated: {
+        one: "Se omitió {{count}} tarjeta porque esta importación es demasiado grande.",
+        other: "Se omitieron {{count}} tarjetas porque esta importación es demasiado grande.",
+      },
+    },
+  },
   deckDetail: {
     loading: "Cargando…",
     deckNotFound: "Mazo no encontrado.",
@@ -1216,6 +1301,6 @@ const es = {
     forceResyncRefusedBody:
       "Algunos cambios locales no se han confirmado como sincronizados. No se reinició nada, así que tus datos están seguros — inténtalo de nuevo cuando vuelvas a tener conexión.",
   },
-} as const;
+} as const satisfies WidenLeaves<typeof en>;
 
 export default es;
