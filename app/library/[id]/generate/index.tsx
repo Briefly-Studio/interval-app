@@ -4,18 +4,22 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../../src/auth/AuthService";
+import { buildAiConsentRecord, needsAiConsent } from "../../../../src/domain/ai/aiConsent";
 import { AVAILABILITY_COPY_KEYS, type GenerationAvailabilityState } from "../../../../src/domain/ai/generationAvailability";
 import { isGenerateStudyDeckEnabled } from "../../../../src/domain/ai/generateStudyDeckCapability";
 import { checkGenerationAvailability, GENERATION_ERROR_COPY_KEYS, runGenerateDeckFlow } from "../../../../src/domain/ai/generateDeckFlow";
 import { deriveCardCountHintKind, hasTrustworthyChunkScope, type GenerationCoverage } from "../../../../src/domain/ai/generationCoverage";
 import { CARD_COUNT_CHOICES, CARD_STYLE_CHOICES, DIFFICULTY_CHOICES } from "../../../../src/domain/ai/generationOptionsUi";
 import { DEFAULT_GENERATION_OPTIONS, resolveRequestedCardCount } from "../../../../src/domain/ai/generationOptions";
+import { isRealProviderActive } from "../../../../src/domain/ai/providerSelection";
 import type { CardCountOption, CardStyleOption, DifficultyOption, GenerationErrorCode } from "../../../../src/domain/ai/types";
 import { useTranslation } from "../../../../src/i18n";
 import { useLayoutDirection } from "../../../../src/i18n/direction";
 import type { LibrarySourceRecord } from "../../../../src/models/librarySource";
+import { getAiConsent, setAiConsent } from "../../../../src/storage/aiConsent";
 import { getLibrarySources } from "../../../../src/storage/librarySources";
 import { useTheme } from "@/src/theme";
+import { showAiConsentDialog } from "../../../../src/ui/aiConsentDialog";
 import { Button } from "../../../../src/ui/Button";
 import { Card } from "../../../../src/ui/Card";
 import { EmptyState } from "../../../../src/ui/EmptyState";
@@ -105,7 +109,7 @@ export default function GenerateStudyDeckScreen() {
     }, [checkAvailability])
   );
 
-  const onGenerate = async () => {
+  const startGeneration = async () => {
     if (!source) return;
     setScreenState({ phase: "generating" });
     try {
@@ -125,6 +129,33 @@ export default function GenerateStudyDeckScreen() {
     } catch {
       setScreenState({ phase: "error", code: "provider-unavailable" });
     }
+  };
+
+  // First-use AI consent gate — only ever relevant when this attempt would actually reach the
+  // real backend provider (isRealProviderActive() mirrors providerSelection.ts's own mock/real
+  // decision exactly, so this tracks it automatically if Staging/Production are ever flipped to
+  // real AI later). Mock generation (Staging/Production today) never shows this. Cancel is
+  // passive — no callback at all — so nothing here runs; the user simply stays on this screen
+  // with no generation started, no quota consumed, no backend request made.
+  const onGenerate = async () => {
+    if (!source) return;
+
+    if (isRealProviderActive()) {
+      const scope = await AuthService.getActiveScope();
+      const consent = await getAiConsent(scope);
+      if (needsAiConsent(true, consent)) {
+        showAiConsentDialog({
+          t,
+          onContinue: async () => {
+            await setAiConsent(scope, buildAiConsentRecord(new Date()));
+            await startGeneration();
+          },
+        });
+        return;
+      }
+    }
+
+    await startGeneration();
   };
 
   const header = (

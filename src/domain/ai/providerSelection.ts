@@ -61,3 +61,21 @@ export function selectModelProvider(): ModelProvider {
     return createMockProvider();
   }
 }
+
+/**
+ * Whether a generation attempt right now would actually reach the real backend provider (true)
+ * or the mock (false) — the exact same two-branch decision selectModelProvider() makes above,
+ * restated as a boolean a caller can check BEFORE generating, without constructing a provider at
+ * all. This is the single source of truth the first-use AI consent gate
+ * (src/domain/ai/aiConsent.ts's needsAiConsent, called from the Generate screen) is built on, so
+ * that gate tracks this decision automatically if Staging/Production are ever flipped to real AI
+ * later — no redesign, no second place that has to be kept in sync with this one.
+ */
+export function isRealProviderActive(): boolean {
+  if (!USE_BACKEND_PROVIDER) return false;
+  try {
+    return getEnvironmentConfig().isDevelopment;
+  } catch {
+    return false;
+  }
+}

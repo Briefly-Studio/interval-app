@@ -484,10 +484,15 @@ const it = {
         body:
           "Interval è un software beta e potrebbe contenere difetti. Ti consigliamo di conservare le tue copie esportate di tutto ciò che è importante per te — l'esportazione per singolo mazzo è disponibile direttamente nell'app.",
       },
-      futureFeatures: {
-        title: "Funzionalità di IA, Libreria e Canvas",
+      aiGeneration: {
+        title: "Generazione di mazzi di studio con IA",
         body:
-          "Le funzionalità basate su IA, una Libreria di documenti/audio e qualsiasi connessione a Canvas non sono ancora attive in Interval. Se verranno aggiunte in un futuro aggiornamento, questa informativa verrà aggiornata per spiegare quali dati utilizzano e come.",
+          "La funzione Genera mazzo di studio di Interval può usare un servizio di IA nel cloud per trasformare una fonte in carte di studio. Quando viene usata l'IA reale, solo il testo che hai selezionato da quella fonte viene inviato al servizio di IA nel cloud di Interval, mai il tuo file originale. Rivedrai sempre le carte generate dall'IA prima di salvarle, e Interval chiederà la tua conferma la prima volta che usi la generazione IA reale.",
+      },
+      futureFeatures: {
+        title: "Funzionalità di Libreria e Canvas",
+        body:
+          "Una Libreria di documenti/audio e qualsiasi connessione a Canvas non sono ancora completamente attive in Interval. Se ciò cambierà, questa informativa verrà aggiornata per spiegare quali dati utilizzano e come.",
       },
       contact: {
         title: "Domande o dubbi",
@@ -1083,6 +1088,12 @@ const it = {
     checkingSource: "Verifica di questa fonte…",
     fromSource: "Generazione da «{{title}}».",
     devPreviewNotice: "Anteprima di sviluppo: le carte sono create da un mock locale, non da un modello di IA di produzione.",
+    consent: {
+      title: "Genera con IA",
+      body:
+        "Per creare le carte, Interval invia il testo selezionato da questa fonte al suo servizio di IA nel cloud. Il tuo file originale non viene inviato al modello di IA. Le carte generate dall'IA possono contenere errori, quindi le rivedrai prima di salvarle.",
+      continueButton: "Continua",
+    },
     generateButton: "Genera mazzo",
     generatingTitle: "Generazione del tuo mazzo",
     generatingBody: "Lettura della fonte e stesura delle carte. Tutto rimane sul tuo dispositivo.",

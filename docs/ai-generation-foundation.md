@@ -292,6 +292,62 @@ from ever crossing that boundary by this contract's own shape:
 `GenerateStudyDeckRequest` is safe to log in full for exactly this reason — it is deliberately
 built to contain no source text, so logging it for debugging can never leak source content.
 
+## First-use consent
+
+Before a user's FIRST real cloud-AI generation (never for mock generation — "do not interrupt
+mock generation unnecessarily"), `app/library/[id]/generate/index.tsx`'s `onGenerate` shows a
+plain-language disclosure and requires an explicit, active choice before any backend request is
+made.
+
+**Gate:** `src/domain/ai/providerSelection.ts`'s `isRealProviderActive()` — a pure boolean mirror
+of `selectModelProvider()`'s own mock/real decision (`USE_BACKEND_PROVIDER && isDevelopment`), so
+this gate tracks that decision automatically if Staging/Production are ever flipped to real AI
+later. No second place decides this. Today: Development → consent required; Staging (still mock)
+and Production (Generate gated) → never shown.
+
+**Copy (all 13 locales, `generateDeck.consent.*`):** "Generate with AI" / "To create cards,
+Interval sends the text selected from this source to its cloud AI service. Your original file is
+not sent to the AI model. AI-generated cards may contain mistakes, so you'll review them before
+saving." — deliberately provider-neutral ("Interval's cloud AI service," never "Bedrock" or
+"Nova" in user-facing copy — this document and `docs/cdk-infrastructure.md` are where the real
+provider name lives), and deliberately silent on claims this implementation doesn't guarantee:
+never "fully private," never "never leaves your device," never a specific retention promise about
+the underlying provider, never "your entire document is sent" (bounded-context partial-source
+disclosure — `generateDeck.coverage.*` — is separate and unchanged by this).
+
+**Mechanism:** a native `Alert.alert` (`src/ui/aiConsentDialog.ts`) — the same Cancel/explicit-
+action convention already used throughout this app (action sheets, the existing "discard draft"
+confirmation), not a new custom modal. This gets a meaningful title, logical read order, clearly
+exposed actions, RTL layout, and focus handling for free from the OS. Cancel has no `onPress` at
+all — dismissing the alert any other way a platform allows is equally inert. **Only an explicit
+tap on Continue** calls back into the generate flow; nothing is ever inferred from merely opening
+the screen, and no checkbox is ever pre-checked (there is no checkbox at all).
+
+**If canceled:** nothing happens. No backend request, no quota consumed, no lease acquired, no
+generation starts — the consent check runs entirely before `runGenerateDeckFlow` is ever called.
+
+**Persistence (`src/storage/aiConsent.ts`):** `interval.aiGenerationConsent.v1`, scoped per
+account via the existing `scopedKey(WorkspaceScope, ...)` mechanism (same convention as Discover
+progress) — **local-only, per-account, not synced**. A second device signed into the same account
+re-prompts once, exactly like a fresh install would; no backend preference infrastructure was
+added for this. Record shape: `{version, acceptedAt}` (`src/domain/ai/aiConsent.ts`'s
+`AiConsentRecord`), versioned so a future *materially different* data-sharing behavior (not a
+wording tweak) can require renewed acknowledgment by raising `CURRENT_AI_CONSENT_VERSION` —
+existing accepted records below that version simply stop satisfying `hasCurrentAiConsent` and the
+prompt reappears exactly once per such change. A malformed/corrupted stored record is rejected,
+never coerced, and treated identically to "no consent yet."
+
+**Settings/privacy disclosure:** `app/privacy-notice.tsx`'s existing Beta Privacy Notice screen
+gained a new `aiGeneration` section explaining the same thing in the same place users already go
+for data-use information; the old `futureFeatures` section's claim that "AI-powered features...
+are not yet active" was corrected (removed) to stop contradicting this, without redesigning that
+screen or touching its Library/Canvas claims (separate, unrelated staleness — out of scope here).
+
+**No new logging was added for this feature.** The consent decision and dialog are pure
+client-side UI state; nothing about it is logged anywhere (so there is nothing to audit for
+source text, prompts, card contents, tokens, or filenames — the general logging guardrail is
+satisfied by having no new log line at all, not by a careful one).
+
 ## Backend architecture (design only — not deployed)
 
 Preferred flow, matching the mission's own diagram:

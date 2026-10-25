@@ -156,7 +156,19 @@ For anything not covered directly in this file, these are the authoritative docu
     pre-existing provider-throttle `rate-limited`. See that document's "Rate limits and cost
     controls" section for the full design. No model/provider/prompt/context-limit change, no
     Staging/Production AI enablement change — see that section's "Known limitation" for the
-    disclosed no-request-idempotency-key gap.
+    disclosed no-request-idempotency-key gap. **A first-use AI consent/disclosure flow is now
+    implemented** (`src/domain/ai/aiConsent.ts`, `src/storage/aiConsent.ts`,
+    `src/ui/aiConsentDialog.ts`): before a user's first REAL cloud-AI generation (never for mock
+    generation), a plain-language `Alert.alert` explains what text leaves the device and requires
+    an explicit Continue tap — Cancel starts nothing, consumes no quota. Persisted locally,
+    per-account (`scopedKey`, not synced), as a versioned `{version, acceptedAt}` record so a
+    future materially-different data-sharing change can require renewed acknowledgment. Gated by
+    `isRealProviderActive()` (`providerSelection.ts`), the same mock/real decision
+    `selectModelProvider()` already makes, so this tracks any future Staging/Production real-AI
+    rollout automatically. User-facing copy is deliberately provider-neutral ("Interval's cloud
+    AI service," never "Bedrock"/"Nova"). See that document's "First-use consent" section for the
+    full design, including the Settings/Privacy Notice disclosure
+    (`app/privacy-notice.tsx`'s new `aiGeneration` section).
 21. `docs/generate-study-deck-ux.md` — the Library Source → Generate Study Deck workflow.
     **Implemented, founder-QA verified, integrated into `v3.2-dev`**, gated to Development/Staging
     (hidden in Production). TXT and PDF generation use the real Development backend provider;
@@ -613,15 +625,15 @@ grandfathering"). None of this blocked closing out the three-environment milesto
 - No broad app-level / end-to-end / UI automated test harness exists — all app-flow verification
   is manual founder QA plus local static checks (`tsc`, lint, `cdk synth`). What automated
   coverage does exist is five focused, zero-dependency `node --test` suites of pure-logic unit
-  tests (338 tests total as of the AI rate-limiting/metering batch), not full application
+  tests (353 tests total as of the AI consent/disclosure batch), not full application
   coverage:
   - `npm run test:sync` (39) — sync push/pull helpers (`backend/lambdas/sync-{push,pull}/lib.test.mjs`),
     also covering the client push helpers in `src/cloud/sync/pushHelpers.mjs`.
-  - `npm run test:ai` (157) — AI foundation helpers (`src/domain/ai/*.test.ts`,
-    `src/cloud/ai/*.test.ts`, `src/domain/normalization/*.test.ts`,
-    `backend/lambdas/ai-generate-study-deck/*.test.mjs`, including the rate limiter's own
-    `rateLimiter.test.mjs` and the handler-level rate-limit integration tests in
-    `index.test.mjs`) via `scripts/ai-test-loader.mjs`.
+  - `npm run test:ai` (172) — AI foundation helpers (`src/domain/ai/*.test.ts`, including the
+    first-use consent decision logic in `aiConsent.test.ts`; `src/cloud/ai/*.test.ts`;
+    `src/domain/normalization/*.test.ts`; `backend/lambdas/ai-generate-study-deck/*.test.mjs`,
+    including the rate limiter's own `rateLimiter.test.mjs` and the handler-level rate-limit
+    integration tests in `index.test.mjs`) via `scripts/ai-test-loader.mjs`.
   - `npm run test:docx` (11) — the pure `computeDocxTableLayout` table-sizing helper
     (`src/domain/docxTableLayout.test.ts`).
   - `npm run test:scheduling` (104) — the FSRS scheduling foundation
@@ -710,6 +722,17 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   completed server-side is counted as a new request (see
   `docs/ai-generation-foundation.md`'s "Known limitation: no request-level idempotency" for the
   one incidental mitigation this still has via the concurrency lease).
+- **A first-use AI consent/disclosure flow is now implemented**, gated to real cloud-AI
+  generation only (`src/domain/ai/aiConsent.ts`/`src/storage/aiConsent.ts`/
+  `src/ui/aiConsentDialog.ts`) — see `docs/ai-generation-foundation.md`'s "First-use consent"
+  section. Known, accepted limitations: the consent record is local-only and per-account but NOT
+  synced across a signed-in user's own multiple devices — a second device re-prompts once, same
+  posture as Discover progress/Deck Collections. A guest (not signed in) in a Development build
+  can in principle see the consent prompt even though `backendProvider.ts` would refuse their
+  attempt immediately afterward for lacking an access token — harmless (consent is stored under
+  the guest-scoped key, which doesn't carry over once they sign in, so nothing is lost or
+  incorrectly granted) but not specifically guarded against, since real AI generation by a guest
+  is not a realistic scenario in practice.
 - **Discover Production exposure — founder-decided for v3.2: Discover stays visible in
   Production.** It has no `INTERVAL_ENV` gate by design — fixture/local-only, no backend, no
   provider call, no cost, bounded, localized chrome, English fixture lesson content accepted for

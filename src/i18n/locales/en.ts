@@ -490,10 +490,15 @@ const en = {
         body:
           "Interval is beta software and may contain defects. We recommend keeping your own exported copies of anything important to you — per-deck export is available from within the app.",
       },
-      futureFeatures: {
-        title: "AI, Library, and Canvas features",
+      aiGeneration: {
+        title: "AI-powered study deck generation",
         body:
-          "AI-powered features, a document/audio Library, and any Canvas connection are not yet active in Interval. If they're added in a future update, this notice will be updated to explain what data they use and how.",
+          "Interval's Generate Study Deck feature can use a cloud AI service to turn a source into study cards. When real AI generation is used, only the text you've selected from that source is sent to Interval's cloud AI service — never your original file. You'll always review AI-generated cards before saving them, and Interval asks for your confirmation the first time you use real AI generation.",
+      },
+      futureFeatures: {
+        title: "Library and Canvas features",
+        body:
+          "A document/audio Library and any Canvas connection are not yet fully active in Interval. If that changes, this notice will be updated to explain what data they use and how.",
       },
       contact: {
         title: "Questions or concerns",
@@ -1099,6 +1104,12 @@ const en = {
     checkingSource: "Checking this source…",
     fromSource: "Generating from “{{title}}”.",
     devPreviewNotice: "Development preview: cards are made by a local mock, not a production AI model.",
+    consent: {
+      title: "Generate with AI",
+      body:
+        "To create cards, Interval sends the text selected from this source to its cloud AI service. Your original file is not sent to the AI model. AI-generated cards may contain mistakes, so you'll review them before saving.",
+      continueButton: "Continue",
+    },
     generateButton: "Generate deck",
     generatingTitle: "Generating your deck",
     generatingBody: "Reading the source and drafting cards. This stays on your device.",

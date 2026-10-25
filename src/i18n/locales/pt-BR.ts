@@ -485,10 +485,15 @@ const ptBR = {
         body:
           "O Interval é um software beta e pode conter defeitos. Recomendamos manter suas próprias cópias exportadas de tudo o que for importante para você — a exportação por baralho está disponível dentro do aplicativo.",
       },
-      futureFeatures: {
-        title: "Recursos de IA, Biblioteca e Canvas",
+      aiGeneration: {
+        title: "Geração de baralhos de estudo com IA",
         body:
-          "Recursos com IA, uma Biblioteca de documentos/áudio e qualquer conexão com o Canvas ainda não estão ativos no Interval. Se forem adicionados em uma atualização futura, este aviso será atualizado para explicar quais dados usam e como.",
+          "O recurso Gerar baralho de estudo do Interval pode usar um serviço de IA na nuvem para transformar uma fonte em cartões de estudo. Quando a IA real é usada, apenas o texto que você selecionou dessa fonte é enviado ao serviço de IA na nuvem do Interval — nunca o seu arquivo original. Você sempre revisará os cartões gerados por IA antes de salvá-los, e o Interval pedirá sua confirmação na primeira vez que você usar a geração real com IA.",
+      },
+      futureFeatures: {
+        title: "Recursos de Biblioteca e Canvas",
+        body:
+          "Uma Biblioteca de documentos/áudio e qualquer conexão com o Canvas ainda não estão totalmente ativos no Interval. Se isso mudar, este aviso será atualizado para explicar quais dados usam e como.",
       },
       contact: {
         title: "Dúvidas ou preocupações",
@@ -1084,6 +1089,12 @@ const ptBR = {
     checkingSource: "Verificando esta fonte…",
     fromSource: "Gerando a partir de “{{title}}”.",
     devPreviewNotice: "Prévia de desenvolvimento: os cartões são criados por um mock local, não por um modelo de IA de produção.",
+    consent: {
+      title: "Gerar com IA",
+      body:
+        "Para criar os cartões, o Interval envia o texto selecionado desta fonte para seu serviço de IA na nuvem. Seu arquivo original não é enviado ao modelo de IA. Os cartões gerados por IA podem conter erros, então você os revisará antes de salvar.",
+      continueButton: "Continuar",
+    },
     generateButton: "Gerar baralho",
     generatingTitle: "Gerando seu baralho",
     generatingBody: "Lendo a fonte e redigindo os cartões. Isso fica no seu dispositivo.",
