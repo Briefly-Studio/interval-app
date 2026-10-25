@@ -1094,7 +1094,7 @@ const de = {
     },
     generateButton: "Stapel erstellen",
     generatingTitle: "Dein Stapel wird erstellt",
-    generatingBody: "Die Quelle wird gelesen und Karten werden entworfen. Das bleibt auf deinem Gerät.",
+    generatingBody: "Das ausgewählte Quellmaterial wird gelesen und deine Karten werden erstellt.",
     retryButton: "Erneut versuchen",
     backToSourceButton: "Zurück zur Quelle",
     entry: {
@@ -1176,6 +1176,14 @@ const de = {
         other: "{{count}} Karten",
       },
       fromSource: "aus „{{title}}“",
+      insufficientContent: {
+        title: "Nicht genug eigenständiger Inhalt für {{target}} Karten",
+        body: {
+          one: "Interval hat genug eigenständiges Material für 1 nützliche Karte in den für diese Generierung verwendeten Quellabschnitten gefunden.",
+          other: "Interval hat genug eigenständiges Material für {{count}} nützliche Karten in den für diese Generierung verwendeten Quellabschnitten gefunden.",
+        },
+        hint: "Du kannst diese Karten behalten oder später mit mehr Quellmaterial erneut generieren.",
+      },
       cardsHeading: "Karten",
       noCardsBody: "Du hast alle Karten entfernt. Verwirf diesen Entwurf, um neu zu beginnen.",
       editCardButton: "Bearbeiten",

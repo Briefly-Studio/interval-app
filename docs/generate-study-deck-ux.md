@@ -86,6 +86,17 @@ correctly refused to invent cards from material it never saw — but the UI neve
 boundedness clear before the user chose a card count, so "25 cards" read as a promise rather
 than a maximum.
 
+**This is one of two independent causes of "fewer cards than expected," not the whole story.**
+A later founder-QA example (Medium selected, 19 of 193 sections supplied, only 7 cards returned)
+showed the model ALSO under-producing relative to what the SUPPLIED context could actually
+support — 19 sections is plenty of material for well more than 7 cards. That second cause — the
+model instruction itself only ever stating a ceiling ("produce up to N — fewer if not enough"),
+with no stated quality floor and no requirement to explain an undershoot — is fixed separately by
+`docs/ai-generation-foundation.md`'s "Count contract and insufficient-distinct-content" section
+(`targetMinimumCardCount`/`GenerationStatus`). That batch does not touch anything described below
+— bounded `GenerationContext` sizing is unchanged, and "19 of 193 sections used" vs "N cards
+generated" remain two different, independently-explained numbers.
+
 `src/domain/ai/generationCoverage.ts` is the generic (not PDF-specific) decision layer for this:
 
 - `summarizeGenerationCoverage()` reshapes the **existing** context-preparation fields
@@ -139,7 +150,10 @@ multi-model generation, automatic chapter summarization, page-range/topic select
 context limit, retries to fill a requested card count, or a forced minimum card count. No invented
 page ranges — `scopeSummary` only ever cites chunk counts, which are always exact (never a
 "percent of document" estimate). Whole-document generation for very large sources remains future,
-founder-gated work (see "Limitations").
+founder-gated work (see "Limitations"). This still holds after the separate count-contract batch
+referenced above: `targetMinimumCardCount` is a quality TARGET the model is instructed to aim
+for and self-report honestly against, never a mechanically forced minimum — nothing anywhere
+retries automatically or locally fabricates/duplicates a card to reach it.
 
 ## Mock-provider status
 
@@ -149,6 +163,14 @@ mistaken for real AI output. The options screen and the review screen both show 
 **"Development preview"** notice stating that cards come from a local mock, not a production AI
 model. The generating state is a short, calm in-place transition — there is **no artificial
 multi-second delay** (mock generation is local and near-instant).
+
+**Loading-screen copy correction.** The generating screen's body text previously read "This stays
+on your device" — incorrect once the real backend provider is active (selected source text is
+sent to Interval's backend/cloud AI service; see `docs/ai-generation-foundation.md`'s "Privacy
+model" and "First-use consent" sections, which remain the authoritative disclosure). Corrected to
+one generic, provider-neutral sentence ("Reading the selected source material and generating your
+cards.") used for both mock and real generation — this batch does not add environment-specific
+loading copy, per the mission's own explicit allowance for a single generic, truthful message.
 
 Architecture is preserved end to end: **UI → `runGenerateDeckFlow` → `generateStudyDeck`
 (aiService) → `ModelProvider` (mock)**. No screen imports the mock provider or `aiService`
@@ -168,6 +190,10 @@ synced. It holds:
   generation time (see "Source coverage disclosure" below)
 - `generatedCardCount` — the card count generation itself produced, BEFORE any review-screen
   deletion; distinct from `cards.length`, which shrinks as the user deletes cards
+- `targetMinimumCardCount`, `generationStatus` — the tier's quality floor and the AUTHORITATIVE
+  (never model-self-report-trusted) shortfall status; see `docs/ai-generation-foundation.md`'s
+  "Count contract and insufficient-distinct-content" section. Drives the review screen's
+  "fewer cards were created" banner.
 - `edited` — set on any title/card change or deletion; drives the discard-confirmation prompt
 
 If the app is killed mid-review the draft is simply gone. That is the intended behavior for

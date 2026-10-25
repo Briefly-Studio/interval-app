@@ -1112,7 +1112,7 @@ const en = {
     },
     generateButton: "Generate deck",
     generatingTitle: "Generating your deck",
-    generatingBody: "Reading the source and drafting cards. This stays on your device.",
+    generatingBody: "Reading the selected source material and generating your cards.",
     retryButton: "Try again",
     backToSourceButton: "Back to source",
     entry: {
@@ -1194,6 +1194,14 @@ const en = {
         other: "{{count}} cards",
       },
       fromSource: "from “{{title}}”",
+      insufficientContent: {
+        title: "Not enough distinct content for {{target}} cards",
+        body: {
+          one: "Interval found enough distinct material for 1 useful card in the source sections used for this generation.",
+          other: "Interval found enough distinct material for {{count}} useful cards in the source sections used for this generation.",
+        },
+        hint: "You can keep these cards, or try generating again later from more source material.",
+      },
       cardsHeading: "Cards",
       noCardsBody: "You've removed every card. Discard this draft to start over.",
       editCardButton: "Edit",

@@ -6,6 +6,7 @@ import type {
   GeneratedCardDraft,
   GeneratedDeckDraft,
   GenerationContext,
+  GenerationStatus,
   ModelGeneratedDeckResponse,
 } from "./types";
 
@@ -35,6 +36,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * moment any structural expectation is violated — never a best-effort salvage of a malformed
  * shape.
  */
+const KNOWN_GENERATION_STATUSES: ReadonlySet<string> = new Set<GenerationStatus>(["complete", "insufficient-distinct-content"]);
+
+/** Accepts only a recognized status string; anything else (missing, malformed, an unrecognized
+ * value) becomes `undefined` — never a structural rejection reason on its own, since this field is
+ * advisory (see `GenerationStatus`'s doc comment) and an older/malformed response omitting it must
+ * still be usable. */
+function coerceGenerationStatus(value: unknown): GenerationStatus | undefined {
+  return typeof value === "string" && KNOWN_GENERATION_STATUSES.has(value) ? (value as GenerationStatus) : undefined;
+}
+
 function coerceToModelResponse(raw: unknown): ModelGeneratedDeckResponse | null {
   if (!isPlainObject(raw)) return null;
   if (typeof raw.title !== "string") return null;
@@ -47,7 +58,23 @@ function coerceToModelResponse(raw: unknown): ModelGeneratedDeckResponse | null 
     if (!Array.isArray(entry.sourceChunkIds) || !entry.sourceChunkIds.every((id) => typeof id === "string")) return null;
     cards.push({ front: entry.front, back: entry.back, sourceChunkIds: entry.sourceChunkIds });
   }
-  return { title: raw.title, cards };
+  return { title: raw.title, generationStatus: coerceGenerationStatus(raw.generationStatus), cards };
+}
+
+/**
+ * The single, authoritative derivation of the final `GenerationStatus` a draft carries —
+ * deliberately a pure function of the actual accepted card count vs. the tier's quality floor,
+ * NEVER the model's own self-reported status. This is the fail-safe design this mission's own
+ * "invalid semantics" guardrail calls for: a model claiming `"complete"` while under-delivering
+ * (e.g. 7 of a 10-minimum Medium request) must not be silently trusted, and a model claiming
+ * `"insufficient-distinct-content"` despite actually meeting the floor must not trigger a
+ * shortfall warning the numbers themselves disprove. The model's self-report still matters as a
+ * PROMPTING mechanism (see bedrockClient.mjs's buildGenerationPrompt) — it gives the model a
+ * disciplined, structured way to decide to stop early — but it is never the gate for what the app
+ * does afterward.
+ */
+export function deriveGenerationStatus(resultingCardCount: number, targetMinimumCardCount: number): GenerationStatus {
+  return resultingCardCount >= targetMinimumCardCount ? "complete" : "insufficient-distinct-content";
 }
 
 // FNV-1a 32-bit — same deterministic, dependency-free approach as
@@ -105,6 +132,19 @@ export function validateGeneratedDeckResponse(
     };
   }
 
+  // Tier-specific ceiling — distinct from, and always checked before reaching, the global
+  // ABSOLUTE_MAX_CARDS_PER_DECK check above. A model badly over-producing relative to what THIS
+  // request asked for (e.g. 20 cards for a Small request whose ceiling is 8) is rejected outright
+  // rather than silently truncated — truncating would mean the app itself picks which cards
+  // survive, an editorial decision this validator deliberately never makes.
+  if (coerced.cards.length > request.requestedCardCount) {
+    return {
+      status: "invalid",
+      deckIssues: [{ code: "exceeds-requested-max", detail: `${coerced.cards.length} > ${request.requestedCardCount}` }],
+      cardIssues: [],
+    };
+  }
+
   const contextChunkIds = new Set(context.chunks.map((c) => c.id));
   const seenNormalized = new Set<string>();
   const cardIssues: CardValidationIssue[] = [];
@@ -153,7 +193,9 @@ export function validateGeneratedDeckResponse(
       sourceId: request.sourceId,
       selectedChunkIds: request.selectedChunkIds,
       requestedCardCount: request.requestedCardCount,
+      targetMinimumCardCount: request.targetMinimumCardCount,
       resultingCardCount: acceptedCards.length,
+      generationStatus: deriveGenerationStatus(acceptedCards.length, request.targetMinimumCardCount),
       generatedAt: now(),
       providerId,
       fullSourceIncluded: context.fullSourceIncluded,

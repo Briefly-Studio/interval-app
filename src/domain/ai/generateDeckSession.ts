@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import type { ChunkProvenance } from "../normalization/types";
 import type { GenerationCoverage } from "./generationCoverage";
-import type { GeneratedDeckDraft, GenerationOptions } from "./types";
+import type { GeneratedDeckDraft, GenerationOptions, GenerationStatus } from "./types";
 
 // In-memory, single-slot holder for the ONE Generate Study Deck draft the user is currently
 // reviewing. Deliberately NOT persisted anywhere — no AsyncStorage key, no file, nothing synced.
@@ -58,6 +58,15 @@ export type GenerateDeckSession = {
    * from `cards.length`, which shrinks as the user deletes cards. Used to judge "fewer cards than
    * requested" against what generation actually returned, never against the user's own edits. */
   generatedCardCount: number;
+  /** The tier's quality floor this generation was judged against (`resolveTargetMinimumCardCount`
+   * at generation time) — carried alongside `generationStatus` so the review screen can show the
+   * exact number in its shortfall explanation without re-deriving it. */
+  targetMinimumCardCount: number;
+  /** AUTHORITATIVE status from `GenerationMetadata.generationStatus` (see responseValidation.ts's
+   * `deriveGenerationStatus`) — never the model's raw self-report. Drives whether the review
+   * screen shows the "fewer cards were created" explanation (see docs/ai-generation-foundation.md's
+   * "Count contract and insufficient-distinct-content" section). */
+  generationStatus: GenerationStatus;
   /** Set once the user changes the title or any card, or deletes a card — drives the
    * discard-confirmation prompt so an untouched draft can be abandoned without a nag. */
   edited: boolean;
@@ -107,6 +116,8 @@ export function startGenerateDeckSession(input: StartSessionInput): void {
     requestedCardCount: input.draft.generation.requestedCardCount,
     coverage: input.coverage,
     generatedCardCount: input.draft.generation.resultingCardCount,
+    targetMinimumCardCount: input.draft.generation.targetMinimumCardCount,
+    generationStatus: input.draft.generation.generationStatus,
     edited: false,
   };
   emit();

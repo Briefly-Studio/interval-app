@@ -74,6 +74,14 @@ const MAX_TITLE_LENGTH = 80;
 const MAX_FRONT_LENGTH = 300;
 const MAX_BACK_LENGTH = 500;
 
+// Mirrors src/domain/ai/responseValidation.ts's deriveGenerationStatus exactly — restated, not
+// imported (no shared module between Lambdas/mobile). Deliberately a pure function of the actual
+// accepted count vs. the tier's quality floor, never the model's own self-reported
+// generationStatus — see that file's doc comment for the full fail-safe rationale.
+function deriveGenerationStatus(resultingCardCount, targetMinimumCardCount) {
+  return resultingCardCount >= targetMinimumCardCount ? "complete" : "insufficient-distinct-content";
+}
+
 // Constructed once at module scope — reused across warm Lambda invocations rather than
 // reconstructed per request. No explicit region is passed: Lambda sets AWS_REGION automatically
 // to the function's own deployed region (us-east-2 for both Development and Staging — see
@@ -129,6 +137,16 @@ function validateRequestBody(body) {
   if (typeof request.requestedCardCount !== "number" || request.requestedCardCount < 1 || request.requestedCardCount > LIMITS.maxCardsPerRequest) {
     return { error: "invalid-requested-card-count" };
   }
+  // Mirrors the requestedCardCount check above — the companion quality floor must be a sane
+  // number that never exceeds the ceiling it's paired with (see generationOptions.ts's
+  // resolveTargetMinimumCardCount, which this request field is always computed from client-side).
+  if (
+    typeof request.targetMinimumCardCount !== "number" ||
+    request.targetMinimumCardCount < 1 ||
+    request.targetMinimumCardCount > request.requestedCardCount
+  ) {
+    return { error: "invalid-requested-card-count" };
+  }
   if (!Array.isArray(request.selectedChunkIds) || !request.selectedChunkIds.every((id) => typeof id === "string")) {
     return { error: "malformed-request" };
   }
@@ -166,7 +184,7 @@ function validateRequestBody(body) {
 // reasoning). Kept intentionally minimal here — this Lambda is not a second source of truth for
 // the validation contract; it exists so a real deployment enforces the same rules regardless of
 // which provider produced the raw response.
-function validateModelResponse(raw, contextChunkIds) {
+function validateModelResponse(raw, contextChunkIds, request) {
   if (!isPlainObject(raw) || typeof raw.title !== "string" || !Array.isArray(raw.cards)) {
     return { status: "invalid", deckIssues: [{ code: "malformed-response" }] };
   }
@@ -177,6 +195,11 @@ function validateModelResponse(raw, contextChunkIds) {
   }
   if (raw.cards.length > LIMITS.maxCardsPerRequest) {
     return { status: "invalid", deckIssues: [{ code: "too-many-cards" }] };
+  }
+  // Tier-specific ceiling, checked before any per-card work — mirrors
+  // src/domain/ai/responseValidation.ts's identical "exceeds-requested-max" check exactly.
+  if (raw.cards.length > request.requestedCardCount) {
+    return { status: "invalid", deckIssues: [{ code: "exceeds-requested-max" }] };
   }
 
   const seen = new Set();
@@ -399,10 +422,25 @@ export async function handleGenerateStudyDeck(event, deps = {}) {
     );
 
     const contextChunkIds = new Set(context.chunks.map((chunk) => chunk.id));
-    const validation = validateModelResponse(providerResult.raw, contextChunkIds);
+    const validation = validateModelResponse(providerResult.raw, contextChunkIds, request);
     if (validation.status === "invalid") {
       return resp(422, { error: "validation-failed", deckIssues: validation.deckIssues, cardIssues: validation.cardIssues || [] });
     }
+
+    const generationStatus = deriveGenerationStatus(validation.cards.length, request.targetMinimumCardCount);
+    // Category-level aggregate counts only — never source text, prompts, or card content — so a
+    // future pass can measure whether Small/Medium/Large are actually behaving as intended.
+    console.log(
+      "[ai-generate-study-deck] generation result:",
+      "requestedMax:",
+      request.requestedCardCount,
+      "targetMinimum:",
+      request.targetMinimumCardCount,
+      "generatedCount:",
+      validation.cards.length,
+      "generationStatus:",
+      generationStatus
+    );
 
     return resp(200, {
       title: validation.title,
@@ -413,7 +451,9 @@ export async function handleGenerateStudyDeck(event, deps = {}) {
         sourceId: request.sourceId,
         selectedChunkIds: request.selectedChunkIds,
         requestedCardCount: request.requestedCardCount,
+        targetMinimumCardCount: request.targetMinimumCardCount,
         resultingCardCount: validation.cards.length,
+        generationStatus,
         generatedAt: new Date().toISOString(),
         issues: validation.cardIssues || [],
       },

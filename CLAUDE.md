@@ -240,6 +240,32 @@ For anything not covered directly in this file, these are the authoritative docu
     the existing `/import` screen (`src/domain/deckPortability.ts`'s own `.interval`/`.briefly`
     JSON import) — that importer is untouched. No new npm dependency, no backend/AWS/CDK/EAS/
     Staging/Production change.
+30. `docs/ai-generation-foundation.md`'s "Count contract and insufficient-distinct-content"
+    section — fixes Generate Study Deck's card-count semantics so Small/Medium/Large (still "Up to
+    8/15/25 cards" in the UI, unchanged) are meaningfully distinct, by pairing each ceiling with an
+    internal quality-floor target minimum (5/10/18) the model is instructed to aim for, with a
+    structured, validated `generationStatus: "complete" | "insufficient-distinct-content"` signal
+    for a genuine content shortfall. **Implemented, merged into `v3.3-dev`; not yet founder-QA
+    verified.** The model's self-reported status is advisory only — the AUTHORITATIVE status is
+    always derived deterministically from the actual accepted card count vs. the request's
+    `targetMinimumCardCount` (`deriveGenerationStatus`, `src/domain/ai/responseValidation.ts`,
+    restated independently in `backend/lambdas/ai-generate-study-deck/index.mjs` per the existing
+    no-shared-module convention) — never a blind pass-through of model metadata, so a model
+    claiming "complete" while under-delivering is never silently trusted, and a model claiming
+    insufficiency despite meeting the floor is never shown as a false warning. A new
+    `exceeds-requested-max` validation rule rejects a response whose raw card count exceeds THIS
+    request's own ceiling (distinct from the pre-existing global `ABSOLUTE_MAX_CARDS_PER_DECK`
+    safety check) — never truncated locally. **Never implements** chapter/heading detection, a
+    page-range/source-section picker, whole-source multi-batch generation, or automatic retries —
+    a below-target shortfall is reported exactly once, honestly, with the generated cards kept for
+    the user to review/save as normal; no local filler/duplication/fabrication was added anywhere.
+    Bounded `GenerationContext` sizing (`contextPreparation.ts`) is completely unchanged — this is
+    a different concern from the pre-existing "source coverage disclosure" (partial-context
+    budget) work. Also corrects the generating screen's loading copy, which previously claimed
+    "This stays on your device" — false once the real backend provider is active (source text is
+    sent to Interval's cloud AI service) — to one generic, provider-neutral sentence used for both
+    mock and real generation. No backend/AWS/CDK/EAS/Staging/Production environment change; no
+    rate-limit change.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -773,6 +799,16 @@ grandfathering"). None of this blocked closing out the three-environment milesto
 - DOCX cache media (`Paths.cache/librarySourceReaderDocxMedia/<sourceId>`) is cleared on every
   reader load, but shares the same known gap as the rest of the cache/retained-file story: there
   is no proactive eviction policy for the canonical durable `librarySourceFiles/` store.
+- **Generate Study Deck's new count-contract/`generationStatus` work (item 30 above) is
+  implemented but not yet founder-QA verified on a real device against the real Development
+  backend provider** — only Bedrock/Nova's actual behavior under the new prompt (whether Medium
+  now reliably lands near 10–15 on rich source material, and whether `insufficient-distinct-
+  content` is reported honestly rather than as a new excuse to under-generate) can confirm the
+  prompt change actually works as intended; static validation alone cannot.
+- `expo-doctor`'s known, accepted package-drift baseline (see the `expo-doctor` entry above) now
+  also flags `expo-asset` (12.0.13 found vs. 12.0.14 expected) — that entry's claim that
+  `expo-audio`/`expo-asset` are "not flagged" is now stale by one patch version; not fixed here
+  (unrelated to this batch, and package version bumps require their own approval).
 
 ## Accessibility Guardrails
 

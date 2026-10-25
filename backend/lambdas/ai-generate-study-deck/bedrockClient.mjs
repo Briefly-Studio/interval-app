@@ -59,18 +59,31 @@ export function buildGenerationPrompt(request, context) {
     "that are not present in the supplied chunks.\n" +
     "3. Respond with ONLY a single JSON object — no commentary, no markdown code fences, no text " +
     "before or after the JSON — matching exactly this shape:\n" +
-    '{"title": "string", "cards": [{"front": "string", "back": "string", "sourceChunkIds": ["string"]}]}\n' +
+    '{"title": "string", "generationStatus": "complete" | "insufficient-distinct-content", ' +
+    '"cards": [{"front": "string", "back": "string", "sourceChunkIds": ["string"]}]}\n' +
     "4. Every card's sourceChunkIds must be a non-empty array containing ONLY ids drawn from this " +
     `exact list of real supplied chunk ids: ${JSON.stringify(validChunkIds)}. Never invent a chunk id ` +
     "that is not in that list.\n" +
-    `5. Produce up to ${request.requestedCardCount} cards — fewer if the source does not support ` +
-    "that many distinct, non-duplicate cards. Never repeat the same question/answer pair.\n" +
+    `5. Produce between ${request.targetMinimumCardCount} and ${request.requestedCardCount} ` +
+    "distinct, source-grounded cards. Treat this as a real target range, not merely a ceiling: make " +
+    `a serious, genuine effort to identify at least ${request.targetMinimumCardCount} distinct, ` +
+    "study-worthy concepts in the supplied material before concluding there are not enough. Do not " +
+    "pad the count by splitting one fact into multiple trivial cards, duplicating a concept under " +
+    "different wording, or inventing content not present in the supplied chunks — quality always " +
+    `comes before hitting the number. Only when the supplied material genuinely cannot support ` +
+    `${request.targetMinimumCardCount} distinct, non-duplicate, well-supported cards without resorting ` +
+    'to those shortcuts, produce as many good cards as the material actually supports and set ' +
+    '"generationStatus" to "insufficient-distinct-content" — otherwise set it to "complete". Never ' +
+    `use "insufficient-distinct-content" merely because reaching ${request.targetMinimumCardCount} ` +
+    "would take extra effort; use it only when doing so would require unsupported facts, substantial " +
+    `duplication, meaningless fragmentation, or low-value filler. Never exceed ${request.requestedCardCount} ` +
+    "cards under any circumstance. Never repeat the same question/answer pair.\n" +
     `6. Difficulty level: ${request.options.difficulty}. Card style: ${request.options.cardStyle}.\n` +
     "7. Keep the title under 80 characters, each card's front under 300 characters, and each card's " +
     "back under 500 characters.\n" +
     "8. If the supplied source does not contain enough usable material to produce even one valid " +
-    'card, respond with {"title": "<a short title describing the source>", "cards": []} rather than ' +
-    "inventing content." +
+    'card, respond with {"title": "<a short title describing the source>", "generationStatus": ' +
+    '"insufficient-distinct-content", "cards": []} rather than inventing content.' +
     languageLine;
 
   const user = `Source title: ${request.sourceTitle}\n\nSource content (each chunk labeled with its id):\n\n${sourceBlocks}`;

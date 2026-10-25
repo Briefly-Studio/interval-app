@@ -1095,7 +1095,7 @@ const es = {
     },
     generateButton: "Generar mazo",
     generatingTitle: "Generando tu mazo",
-    generatingBody: "Leyendo la fuente y redactando tarjetas. Esto se queda en tu dispositivo.",
+    generatingBody: "Leyendo el material de la fuente seleccionada y generando tus tarjetas.",
     retryButton: "Reintentar",
     backToSourceButton: "Volver a la fuente",
     entry: {
@@ -1177,6 +1177,14 @@ const es = {
         other: "{{count}} tarjetas",
       },
       fromSource: "de «{{title}}»",
+      insufficientContent: {
+        title: "No hay suficiente contenido distinto para {{target}} tarjetas",
+        body: {
+          one: "Interval encontró suficiente material distinto para 1 tarjeta útil en las secciones de la fuente usadas para esta generación.",
+          other: "Interval encontró suficiente material distinto para {{count}} tarjetas útiles en las secciones de la fuente usadas para esta generación.",
+        },
+        hint: "Puedes conservar estas tarjetas o intentar generar más adelante con más material de origen.",
+      },
       cardsHeading: "Tarjetas",
       noCardsBody: "Has eliminado todas las tarjetas. Descarta este borrador para empezar de nuevo.",
       editCardButton: "Editar",

@@ -31,10 +31,18 @@ export function createMockProvider(): ModelProvider {
         };
       });
 
+      // Honestly self-reports the SAME way a real provider is asked to — one card per available
+      // chunk, capped by context size rather than fabricated/duplicated to reach the target, so
+      // this fixture exercises the insufficient-distinct-content contract too (e.g. a Medium
+      // request with only 6 context chunks available legitimately falls short of its 10-card
+      // floor here, same as it honestly would with a real model).
+      const generationStatus = cards.length >= request.targetMinimumCardCount ? "complete" : "insufficient-distinct-content";
+
       return {
         status: "ok",
         raw: {
           title: `[MOCK] ${request.sourceTitle}`.slice(0, MAX_TITLE_LENGTH),
+          generationStatus,
           cards,
         },
       };

@@ -1054,7 +1054,7 @@ const ja = {
     },
     generateButton: "デッキを生成",
     generatingTitle: "デッキを生成しています",
-    generatingBody: "ソースを読み取り、カードを作成しています。この処理は端末内で行われます。",
+    generatingBody: "選択したソース内容を読み取り、カードを生成しています。",
     retryButton: "再試行",
     backToSourceButton: "ソースに戻る",
     entry: {
@@ -1135,6 +1135,13 @@ const ja = {
         other: "{{count}}枚のカード",
       },
       fromSource: "「{{title}}」より",
+      insufficientContent: {
+        title: "{{target}}枚のカードに十分な独自の内容がありません",
+        body: {
+          other: "Intervalは、今回の生成に使用したソースの部分から、有用なカード{{count}}枚分の十分な独自素材を見つけました。",
+        },
+        hint: "これらのカードをそのまま使うか、後でソース素材を増やしてから再度生成してみてください。",
+      },
       cardsHeading: "カード",
       noCardsBody: "すべてのカードを削除しました。この下書きを破棄してやり直してください。",
       editCardButton: "編集",
