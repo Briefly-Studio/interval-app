@@ -40,6 +40,8 @@ const KNOWN_ERROR_CODES: ReadonlySet<string> = new Set<GenerationErrorCode>([
   "unsupported-source",
   "context-too-large",
   "rate-limited",
+  "daily-limit-reached",
+  "generation-in-progress",
   "generation-timeout",
   "provider-unavailable",
   "malformed-model-output",
@@ -52,6 +54,8 @@ const KNOWN_ERROR_CODES: ReadonlySet<string> = new Set<GenerationErrorCode>([
 // sanitizes its error messages, this mobile-side mapping never depends on that remaining true).
 const MESSAGE_FOR: Partial<Record<GenerationErrorCode, string>> = {
   "rate-limited": "You've reached the generation limit for now — try again later.",
+  "daily-limit-reached": "You've reached today's AI generation limit. Try again tomorrow.",
+  "generation-in-progress": "Another deck is already being generated. Finish that request before starting another.",
   "generation-timeout": "Generating took too long. Try again.",
   "provider-unavailable": "The generation service is unavailable right now.",
   "malformed-model-output": "The generation service returned an unexpected response.",

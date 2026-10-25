@@ -1132,6 +1132,8 @@ const es = {
       tooLarge: "Esta fuente es demasiado grande para generar un mazo.",
       unsupported: "No se pueden generar mazos de estudio a partir de esta fuente.",
       rateLimited: "Has generado mucho hace poco. Inténtalo más tarde.",
+      dailyLimitReached: "Has alcanzado el límite de generación de hoy. Inténtalo de nuevo mañana.",
+      generationInProgress: "Ya se está generando otro mazo. Termina esa solicitud antes de iniciar otra.",
       timeout: "La generación tardó demasiado. Inténtalo de nuevo.",
       providerUnavailable: "La generación no está disponible ahora mismo. Inténtalo de nuevo.",
       badOutput: "Las tarjetas generadas no pasaron la validación. Inténtalo de nuevo.",

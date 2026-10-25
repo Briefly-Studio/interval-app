@@ -1134,6 +1134,8 @@ const ptBR = {
       tooLarge: "Esta fonte é grande demais para gerar um baralho.",
       unsupported: "Não é possível gerar baralhos de estudo a partir desta fonte.",
       rateLimited: "Você gerou muito recentemente. Tente novamente mais tarde.",
+      dailyLimitReached: "Você atingiu o limite de geração de IA de hoje. Tente novamente amanhã.",
+      generationInProgress: "Outro baralho já está sendo gerado. Termine essa solicitação antes de iniciar outra.",
       timeout: "A geração demorou demais. Tente novamente.",
       providerUnavailable: "A geração não está disponível no momento. Tente novamente.",
       badOutput: "Os cartões gerados não passaram na validação. Tente novamente.",

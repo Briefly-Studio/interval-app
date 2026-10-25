@@ -147,7 +147,16 @@ For anything not covered directly in this file, these are the authoritative docu
     contract and boundary (`src/domain/ai/`). **Implemented and integrated into `v3.2-dev`; a
     real backend provider (Bedrock/Nova 2 Lite) is enabled in Development as of
     `feat/enable-development-real-ai`** — Staging remains mock and Production Generate remains
-    gated off.
+    gated off. **Backend-authoritative rate limiting and usage metering are now implemented**
+    (`backend/lambdas/ai-generate-study-deck/rateLimiter.mjs`, a new Development-only DynamoDB
+    table `interval-dev-ai-rate-limits`): an atomic per-user daily quota (20/UTC day) and a
+    single-slot-per-user concurrency lease, both backend-enforced (mobile counters are never
+    trusted), fail-closed if limiter state can't be determined, with two new
+    `GenerationErrorCode`s (`daily-limit-reached`, `generation-in-progress`) distinct from the
+    pre-existing provider-throttle `rate-limited`. See that document's "Rate limits and cost
+    controls" section for the full design. No model/provider/prompt/context-limit change, no
+    Staging/Production AI enablement change — see that section's "Known limitation" for the
+    disclosed no-request-idempotency-key gap.
 21. `docs/generate-study-deck-ux.md` — the Library Source → Generate Study Deck workflow.
     **Implemented, founder-QA verified, integrated into `v3.2-dev`**, gated to Development/Staging
     (hidden in Production). TXT and PDF generation use the real Development backend provider;
@@ -604,12 +613,15 @@ grandfathering"). None of this blocked closing out the three-environment milesto
 - No broad app-level / end-to-end / UI automated test harness exists — all app-flow verification
   is manual founder QA plus local static checks (`tsc`, lint, `cdk synth`). What automated
   coverage does exist is five focused, zero-dependency `node --test` suites of pure-logic unit
-  tests (305 tests total as of the flashcard-import batch), not full application coverage:
+  tests (338 tests total as of the AI rate-limiting/metering batch), not full application
+  coverage:
   - `npm run test:sync` (39) — sync push/pull helpers (`backend/lambdas/sync-{push,pull}/lib.test.mjs`),
     also covering the client push helpers in `src/cloud/sync/pushHelpers.mjs`.
-  - `npm run test:ai` (124) — AI foundation helpers (`src/domain/ai/*.test.ts`,
+  - `npm run test:ai` (157) — AI foundation helpers (`src/domain/ai/*.test.ts`,
     `src/cloud/ai/*.test.ts`, `src/domain/normalization/*.test.ts`,
-    `backend/lambdas/ai-generate-study-deck/*.test.mjs`) via `scripts/ai-test-loader.mjs`.
+    `backend/lambdas/ai-generate-study-deck/*.test.mjs`, including the rate limiter's own
+    `rateLimiter.test.mjs` and the handler-level rate-limit integration tests in
+    `index.test.mjs`) via `scripts/ai-test-loader.mjs`.
   - `npm run test:docx` (11) — the pure `computeDocxTableLayout` table-sizing helper
     (`src/domain/docxTableLayout.test.ts`).
   - `npm run test:scheduling` (104) — the FSRS scheduling foundation
@@ -679,11 +691,25 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   changed).
 - **Real provider-backed AI generation is enabled in Development only** (merged via
   `feat/enable-development-real-ai`/`feat/bedrock-nova2-phase-a`/`-b` — Bedrock/Nova 2 Lite,
-  per this repository's own commit history; this file's AI-related entries elsewhere had not all
-  been updated to reflect that merge until this edit). Staging remains on `createMockProvider()`;
+  per this repository's own commit history). Staging remains on `createMockProvider()`;
   Production Generate remains gated off entirely. The mobile client must never hold a provider
   secret — this repository has not re-verified that constraint end-to-end as part of the current
-  multiformat-generation batch; treat it as carried forward, not re-audited here.
+  multiformat-generation batch; treat it as carried forward, not re-audited here. **This
+  repository's own source disagrees with itself about whether the Development Lambda has
+  actually been `cdk deploy`'d**: `providerSelection.ts`'s own comment says the Development
+  backend "is now deployed and has been smoke-tested end to end," while `index.mjs`'s header and
+  `docs/cdk-infrastructure.md` describe it as code-complete but not confirmed deployed — this
+  cannot be resolved from source alone (it would require live, read-only AWS inspection) and is
+  noted here rather than silently resolved one way or the other.
+- **A real, DynamoDB-backed rate limiter and usage meter are now implemented** for the AI
+  Generate Study Deck Lambda (`backend/lambdas/ai-generate-study-deck/rateLimiter.mjs`, a new
+  Development-only `interval-dev-ai-rate-limits` table) — closing the gap
+  `docs/cdk-infrastructure.md`'s "Rate limiting" section previously flagged as a blocker before
+  any Staging deployment of this Lambda. Known, accepted limitation: there is no request-level
+  idempotency key, so a mobile client retry after a local timeout whose original request already
+  completed server-side is counted as a new request (see
+  `docs/ai-generation-foundation.md`'s "Known limitation: no request-level idempotency" for the
+  one incidental mitigation this still has via the concurrency lease).
 - **Discover Production exposure — founder-decided for v3.2: Discover stays visible in
   Production.** It has no `INTERVAL_ENV` gate by design — fixture/local-only, no backend, no
   provider call, no cost, bounded, localized chrome, English fixture lesson content accepted for

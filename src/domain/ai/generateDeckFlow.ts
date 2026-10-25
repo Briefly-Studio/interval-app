@@ -117,6 +117,8 @@ export const GENERATION_ERROR_COPY_KEYS: Record<GenerationErrorCode, string> = {
   "unsupported-source": "generateDeck.error.unsupported",
   "context-too-large": "generateDeck.error.tooLarge",
   "rate-limited": "generateDeck.error.rateLimited",
+  "daily-limit-reached": "generateDeck.error.dailyLimitReached",
+  "generation-in-progress": "generateDeck.error.generationInProgress",
   "generation-timeout": "generateDeck.error.timeout",
   "provider-unavailable": "generateDeck.error.providerUnavailable",
   "malformed-model-output": "generateDeck.error.badOutput",

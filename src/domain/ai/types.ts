@@ -149,6 +149,16 @@ export type GenerationErrorCode =
   | "unsupported-source"
   | "context-too-large"
   | "rate-limited"
+  // Interval's own per-user DAILY QUOTA was reached (backend-enforced — see
+  // docs/ai-generation-foundation.md's "Rate limits and cost controls"). Deliberately distinct
+  // from "rate-limited", which remains reserved for the underlying PROVIDER (Bedrock) throttling
+  // — a transient, retry-soon condition — never Interval's own day-scoped cap, which is a
+  // retry-tomorrow condition with genuinely different, non-interchangeable user-facing copy.
+  | "daily-limit-reached"
+  // Interval's own per-user CONCURRENCY limit (max 1 active generation at a time) rejected this
+  // request because another one is already in flight for the same user — backend-enforced, never
+  // a client-side guess.
+  | "generation-in-progress"
   | "generation-timeout"
   | "provider-unavailable"
   | "malformed-model-output"

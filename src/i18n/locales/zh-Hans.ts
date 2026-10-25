@@ -1087,6 +1087,8 @@ const zhHans = {
       tooLarge: "此来源过大，无法生成卡组。",
       unsupported: "无法根据此来源生成学习卡组。",
       rateLimited: "你最近生成得较多。请稍后重试。",
+      dailyLimitReached: "你已达到今天的 AI 生成次数上限，请明天再试。",
+      generationInProgress: "系统正在生成另一个卡组，请先完成该请求再开始新的请求。",
       timeout: "生成耗时过长。请重试。",
       providerUnavailable: "生成当前不可用。请重试。",
       badOutput: "生成的卡片未通过校验。请重试。",

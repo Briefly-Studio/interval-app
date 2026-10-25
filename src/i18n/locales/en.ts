@@ -1149,6 +1149,8 @@ const en = {
       tooLarge: "This source is too large to generate a deck from.",
       unsupported: "Study decks can't be generated from this source.",
       rateLimited: "You've generated a lot recently. Try again later.",
+      dailyLimitReached: "You've reached today's AI generation limit. Try again tomorrow.",
+      generationInProgress: "Another deck is already being generated. Finish that request before starting another.",
       timeout: "Generation took too long. Please try again.",
       providerUnavailable: "Generation isn't available right now. Please try again.",
       badOutput: "The generated cards didn't pass validation. Please try again.",

@@ -1130,6 +1130,8 @@ const nl = {
       tooLarge: "Deze bron is te groot om een set van te genereren.",
       unsupported: "Er kunnen geen studiesets worden gegenereerd vanuit deze bron.",
       rateLimited: "Je hebt recent veel gegenereerd. Probeer het later opnieuw.",
+      dailyLimitReached: "Je hebt de AI-generatielimiet van vandaag bereikt. Probeer het morgen opnieuw.",
+      generationInProgress: "Er wordt al een ander stapel gegenereerd. Rond dat verzoek af voordat je een nieuw begint.",
       timeout: "Genereren duurde te lang. Probeer het opnieuw.",
       providerUnavailable: "Genereren is momenteel niet beschikbaar. Probeer het opnieuw.",
       badOutput: "De gegenereerde kaarten zijn niet gevalideerd. Probeer het opnieuw.",

@@ -37,12 +37,15 @@ keys, short-lived non-persisted upload/download URLs, and a second Development d
 account confirmed able to securely retrieve the cloud original. See "Library source storage" below
 for the full design.
 
-**AI Generate Study Deck Lambda — implemented in CDK, NOT yet deployed.** Phase B of the Bedrock/
-Nova 2 Lite integration (Phase A: `backend/lambdas/ai-generate-study-deck/`, `src/domain/ai/`,
-`src/cloud/ai/` — see `docs/ai-generation-foundation.md`) added a dedicated IAM role, Lambda, and
-one authenticated API route to `infra/lib/interval-sync-stack.ts`, **Development-only**. This is
-code only — no `cdk deploy` has been run for it. Development deployment is pending founder
-approval. See "AI Generate Study Deck Lambda" below for the full design.
+**AI Generate Study Deck Lambda — implemented in CDK, including rate limiting.** Phase B of the
+Bedrock/Nova 2 Lite integration (Phase A: `backend/lambdas/ai-generate-study-deck/`,
+`src/domain/ai/`, `src/cloud/ai/` — see `docs/ai-generation-foundation.md`) added a dedicated IAM
+role, Lambda, and one authenticated API route to `infra/lib/interval-sync-stack.ts`,
+**Development-only**. A later batch added a second, narrowly-scoped DynamoDB table and IAM policy
+statement (same role, same conditional) for a real, atomic, per-user daily quota and concurrency
+lease — see "AI rate-limit table" below. This repository cannot confirm from source alone whether
+`cdk deploy` has actually been run against a live AWS account for any of this. See "AI Generate
+Study Deck Lambda" below for the full design.
 
 **Staging Library Feature Parity, deployed to Staging and founder-QA verified:** a later batch
 extended the identical Library metadata cloud sync and private source-storage capability to
@@ -96,12 +99,13 @@ automatically from CloudShell's own authenticated session; nothing here needs to
 
 ## Development resource names
 
-Thirteen application resources, per `docs/environment-separation-plan.md` §4's naming standard for
+Fourteen application resources, per `docs/environment-separation-plan.md` §4's naming standard for
 the original eight, plus three Library-source-storage resources added by the Library Organization
-+ Private Source Storage batch (see "Library source storage" below), plus two AI Generate Study
-Deck resources added by Phase B of the Bedrock integration (see "AI Generate Study Deck Lambda"
-below — **implemented in CDK, not yet deployed**, unlike every other row in this table, which is
-**deployed and founder-QA verified**):
++ Private Source Storage batch (see "Library source storage" below), plus three AI Generate Study
+Deck resources added by Phase B of the Bedrock integration and its later rate-limiting batch (see
+"AI Generate Study Deck Lambda" below — **implemented in CDK; whether `cdk deploy` has actually
+been run against a live account is not confirmable from source alone**, unlike every other row in
+this table, which is **deployed and founder-QA verified**):
 
 | Resource | Name |
 |---|---|
@@ -116,8 +120,9 @@ below — **implemented in CDK, not yet deployed**, unlike every other row in th
 | Lambda (library source storage) | `interval-dev-library-source-storage` |
 | IAM role (library source storage only) | `interval-dev-library-source-storage-role` |
 | S3 bucket (library source originals) | CloudFormation-auto-generated, no fixed name — see "Library source storage" below |
-| Lambda (AI Generate Study Deck) — **not yet deployed** | `interval-dev-ai-generate-study-deck` |
-| IAM role (AI Generate Study Deck only) — **not yet deployed** | `interval-dev-ai-generate-study-deck-role` |
+| Lambda (AI Generate Study Deck) | `interval-dev-ai-generate-study-deck` |
+| IAM role (AI Generate Study Deck only) | `interval-dev-ai-generate-study-deck-role` |
+| DynamoDB (AI rate limits — quota + concurrency lease) | `interval-dev-ai-rate-limits` |
 
 CloudFormation stack name: **`IntervalDevelopmentStack`**.
 
@@ -255,9 +260,11 @@ Packages `backend/lambdas/ai-generate-study-deck/` directly via `lambda.Code.fro
 other Lambda in this project. Handler: `index.handler` (`handleGenerateStudyDeck`, Phase A).
 
 **Memory 512 MB, timeout 28 seconds** — deliberately not copied from either existing Lambda
-sizing precedent. Not the sync Lambdas' 256 MB/15 s (no DynamoDB round trips here); not the
-presigned-URL Lambda's 128 MB/3 s (this Lambda parses a model response and carries the AWS SDK
-Bedrock client's own overhead, a meaningfully heavier workload). The 28 s timeout is deliberately
+sizing precedent. Not the sync Lambdas' 256 MB/15 s (this Lambda's own DynamoDB calls, added by
+the rate-limiting batch, are single-item conditional writes — not the sync Lambdas' bulk
+read/write workload); not the presigned-URL Lambda's 128 MB/3 s (this Lambda parses a model
+response and carries the AWS SDK Bedrock client's own overhead, a meaningfully heavier workload).
+The 28 s timeout is deliberately
 tight against API Gateway HTTP API's fixed, non-configurable 29-second integration ceiling — Phase
 A's own timing contract (`src/domain/ai/limits.ts`'s `GENERATION_LIMITS.requestTimeoutMs=25_000`,
 `backend/lambdas/ai-generate-study-deck/bedrockClient.mjs`'s `BEDROCK_CALL_TIMEOUT_MS=20_000`)
@@ -301,21 +308,42 @@ API Gateway resource, no new user pool, no second identity system. The path matc
 `src/cloud/ai/http.ts`'s `GENERATE_STUDY_DECK_PATH` constant exactly — verified by direct
 comparison, not assumed.
 
-### Rate limiting — explicitly deferred, explicitly flagged
+### AI rate-limit table — implemented
 
-Phase A's `checkRateLimit()` (`backend/lambdas/ai-generate-study-deck/index.mjs`) remains a NOOP
-placeholder — always allows. Phase B does not add a persistent limiter: building one (a durable,
-atomic, per-user counter — e.g. a new DynamoDB table or access pattern, plus the IAM to use it)
-is not trivial, and is explicitly out of scope for "wire the already-implemented backend into
-Development infrastructure." **This is a real, currently-unmitigated gap: once this Lambda is
-deployed and the mobile switch is flipped, real paid Bedrock requests are not currently limited
-per user, per day, or by concurrency**, despite `src/domain/ai/limits.ts`'s
-`GENERATION_LIMITS.maxRequestsPerUserPerDay`/`maxConcurrentRequestsPerUser` already existing as
-*contract* values. Recommendation: acceptable to leave deferred through an initial
-Development-only founder smoke test (Development is founder-only, disposable, and bounded by the
-founder's own usage) — but a real, durable limiter must land in its own dedicated batch **before**
-any Staging deployment of this Lambda, since Staging is where real external beta-tester accounts
-exist.
+`checkRateLimit()` (`backend/lambdas/ai-generate-study-deck/index.mjs` +
+`rateLimiter.mjs`) is no longer a NOOP. A new table, `<env>-ai-rate-limits`
+(`names.aiRateLimits`, Development-only — same `if (environmentName === "development")`
+conditional as the AI Lambda itself), holds two ephemeral record kinds keyed `PK = U#<sub>`:
+
+- `SK = QUOTA#<UTC-date>` — `{count, ttl}`, a per-day counter incremented via a conditional
+  `UpdateItem` (`ConditionExpression: attribute_not_exists(count) OR count < :limit`) — the same
+  conditional-write idiom `sync-push`'s own Records-table update already relies on, so this is a
+  proven pattern in this codebase, not a new one.
+- `SK = LEASE` — `{leaseToken, expiresAt, ttl}`, a single-slot-per-user concurrency lease acquired
+  via a conditional `PutItem` (`attribute_not_exists(PK) OR :now > expiresAt`) and released via a
+  conditional `DeleteItem` keyed on the exact token the acquirer was given.
+
+Schema mirrors `recordsTable`/`changesTable` (`PK`/`SK` string, `PAY_PER_REQUEST`, `AWS_MANAGED`
+encryption, PITR off) plus one addition: a native `timeToLiveAttribute: "ttl"` — the first table
+in this project to use DynamoDB's native TTL, appropriate here because both record kinds are
+intentionally ephemeral (TTL is cleanup only; the UTC-date sort key and the `expiresAt` check in
+the lease's own acquiring condition are what actually provide correctness, independent of
+whether DynamoDB's background TTL sweep has run yet).
+
+IAM is a single custom `PolicyStatement` on the existing `aiGenerateStudyDeckRole` — no new role
+— granting only `dynamodb:UpdateItem`/`PutItem`/`DeleteItem` (deliberately NOT the broader
+`grantReadWriteData` helper, which would also grant `Scan`/`Query`/`GetItem` this Lambda never
+needs, since every read it requires is folded into its own conditional writes), scoped to only
+this one table's ARN.
+
+This closes the gap this section previously flagged ("real paid Bedrock requests are not
+currently limited per user, per day, or by concurrency") for **Development**. The same gap for
+Staging/Production is moot for now, since real AI generation itself remains Development-only
+(Staging stays on the mock provider; Production Generate remains gated) — widening the rate
+limiter anywhere follows, never precedes, a separate founder decision to widen real generation
+itself. See `docs/ai-generation-foundation.md`'s "Rate limits and cost controls" section for the
+full policy (charging point, fail-closed behavior, error categories, metering, and the disclosed
+no-idempotency-key limitation).
 
 ## Staging resource names
 
@@ -494,10 +522,14 @@ only difference from Development is which table names get injected as environmen
 Production table name, API ID, or Cognito identifier appears in any function's environment or
 anywhere else in this project.
 
-`interval-dev-ai-generate-study-deck` (Development only, **implemented, not yet deployed**) is
-the one Lambda in this project that bundles its own `node_modules` rather than relying on the
-runtime-provided SDK — see "AI Generate Study Deck Lambda" above for the full packaging record,
-including the `npm ci` build-step requirement this introduces.
+`interval-dev-ai-generate-study-deck` (Development only) is the one Lambda in this project that
+bundles its own `node_modules` rather than relying entirely on the runtime-provided SDK — see "AI
+Generate Study Deck Lambda" above for the full packaging record, including the `npm ci`
+build-step requirement this introduces. Its `package.json` vendors `@aws-sdk/client-dynamodb` and
+`@aws-sdk/lib-dynamodb` too (added by the rate-limiting batch) purely so this Lambda's own local
+tests can resolve them under plain `node --test`, which has no access to the Lambda runtime's own
+built-in copy — real deployed invocations are unaffected either way, since a locally-bundled copy
+simply shadows the runtime's.
 
 ## Sync Lambda sizing incident (2026-08)
 
