@@ -52,6 +52,7 @@ const zhHans = {
     sync: "同步",
     recentlyDeleted: "最近删除",
     importDeck: "导入卡组",
+    importFlashcards: "导入抽认卡",
     helpFeedback: "帮助与反馈",
     betaNotice: "测试版说明",
     privacyNotice: "隐私声明",
@@ -873,6 +874,72 @@ const zhHans = {
       invalidDeckMetadata: "卡组元数据缺失或无效。",
       invalidCardsList: "卡片列表缺失或无效。",
       invalidCardData: "卡片数据缺失或无效。",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "导入抽认卡",
+    subtitle: "从 CSV 或 TSV 文件导入卡片，例如从 Quizlet 导出的文件。",
+    formatNote: "两列：第一列是卡片正面，第二列是卡片背面。",
+    noFileSelected: "未选择文件",
+    readyToImport: "已就绪，可以导入",
+    chooseFileButton: "选择文件",
+    chooseDifferentFileButton: "选择其他文件",
+    submitButton: "继续",
+    failedTitle: "导入失败",
+    errors: {
+      emptyFile: "此文件为空。",
+      noReadableRows: "此文件中未找到可读的行。",
+      generic: "无法读取或解析此文件。",
+      fileTooLarge: "此文件太大，无法导入。",
+      noUsableCards: "此文件中未找到可用的卡片。",
+      fileReadFailed: "无法读取此文件。",
+    },
+    preview: {
+      screenTitle: "查看导入内容",
+      deckNameLabel: "卡组名称",
+      cardCount: {
+        other: "{{count}} 张卡片",
+      },
+      warningsHeading: "提醒",
+      sampleHeading: "预览",
+      moreCards: {
+        other: "另外还有 {{count}} 张卡片",
+      },
+      confirmButton: {
+        other: "导入 {{count}} 张卡片",
+      },
+      importedTitle: "已导入",
+      importedBody: {
+        other: "已成功导入 {{count}} 张卡片。",
+      },
+      noDraftTitle: "没有正在进行的导入",
+      noDraftBody: "请先选择要导入的文件。",
+      scopeChangedTitle: "工作区已更改",
+      scopeChangedBody: "当前的工作区或账户已更改。请切换回原来的环境以导入此文件，或者重新开始。",
+      saveInvalidTitle: "没有可导入的内容",
+      saveInvalidBody: "此次导入需要一个卡组名称和至少一张有效的卡片。",
+      saveRollbackTitle: "导入失败",
+      saveRollbackBody: "出现了问题，卡组未能完全创建。请在重试之前检查你的卡组。",
+      saveFailedTitle: "导入失败",
+      saveFailedBody: "出现了问题，请重试。",
+    },
+    warnings: {
+      headerRowSkipped: "第一行看起来像标题行，已被跳过。",
+      rowsSkippedEmpty: {
+        other: "已跳过 {{count}} 张卡片，因为它们没有可读的正面或背面内容。",
+      },
+      rowsSkippedTooLong: {
+        other: "已跳过 {{count}} 张卡片，因为其中某个字段过长。",
+      },
+      rowsSkippedMalformed: {
+        other: "已跳过 {{count}} 行，因为无法将其识别为卡片。",
+      },
+      duplicatesFound: {
+        other: "发现 {{count}} 张重复卡片——已保留。",
+      },
+      cardsTruncated: {
+        other: "已跳过 {{count}} 张卡片，因为此次导入的内容过多。",
+      },
     },
   },
   deckDetail: {

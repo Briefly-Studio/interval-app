@@ -49,6 +49,7 @@ const ptBR = {
     sync: "Sincronização",
     recentlyDeleted: "Excluídos recentemente",
     importDeck: "Importar baralho",
+    importFlashcards: "Importar flashcards",
     helpFeedback: "Ajuda e feedback",
     betaNotice: "Aviso de beta",
     privacyNotice: "Aviso de privacidade",
@@ -905,6 +906,83 @@ const ptBR = {
       invalidDeckMetadata: "Os metadados do baralho estão ausentes ou inválidos.",
       invalidCardsList: "A lista de cartões está ausente ou inválida.",
       invalidCardData: "Os dados do cartão estão ausentes ou inválidos.",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "Importar flashcards",
+    subtitle: "Importe cartões de um arquivo CSV ou TSV, como uma exportação do Quizlet.",
+    formatNote: "Duas colunas: a primeira é a frente do cartão, a segunda é o verso.",
+    noFileSelected: "Nenhum arquivo selecionado",
+    readyToImport: "Pronto para importar",
+    chooseFileButton: "Escolher arquivo",
+    chooseDifferentFileButton: "Escolher outro arquivo",
+    submitButton: "Continuar",
+    failedTitle: "Falha na importação",
+    errors: {
+      emptyFile: "Este arquivo está vazio.",
+      noReadableRows: "Nenhuma linha legível foi encontrada neste arquivo.",
+      generic: "Não foi possível ler ou analisar o arquivo.",
+      fileTooLarge: "Este arquivo é grande demais para importar.",
+      noUsableCards: "Nenhum cartão utilizável foi encontrado neste arquivo.",
+      fileReadFailed: "Não foi possível ler o arquivo.",
+    },
+    preview: {
+      screenTitle: "Revisar importação",
+      deckNameLabel: "Nome do baralho",
+      cardCount: {
+        one: "{{count}} cartão",
+        other: "{{count}} cartões",
+      },
+      warningsHeading: "Avisos",
+      sampleHeading: "Pré-visualização",
+      moreCards: {
+        one: "e mais {{count}} cartão",
+        other: "e mais {{count}} cartões",
+      },
+      confirmButton: {
+        one: "Importar {{count}} cartão",
+        other: "Importar {{count}} cartões",
+      },
+      importedTitle: "Importado",
+      importedBody: {
+        one: "{{count}} cartão importado com sucesso.",
+        other: "{{count}} cartões importados com sucesso.",
+      },
+      noDraftTitle: "Nenhuma importação em andamento",
+      noDraftBody: "Escolha um arquivo para importar primeiro.",
+      scopeChangedTitle: "Workspace alterado",
+      scopeChangedBody:
+        "O workspace ou conta ativa mudou. Volte para esse contexto para importar este arquivo, ou comece novamente.",
+      saveInvalidTitle: "Nada para importar",
+      saveInvalidBody: "Esta importação precisa de um nome de baralho e pelo menos um cartão válido.",
+      saveRollbackTitle: "Falha na importação",
+      saveRollbackBody:
+        "Algo deu errado e o baralho não pôde ser totalmente criado. Verifique seus baralhos antes de tentar novamente.",
+      saveFailedTitle: "Falha na importação",
+      saveFailedBody: "Algo deu errado. Tente novamente.",
+    },
+    warnings: {
+      headerRowSkipped: "A primeira linha parecia um cabeçalho e foi ignorada.",
+      rowsSkippedEmpty: {
+        one: "{{count}} cartão foi ignorado porque não tinha frente ou verso legível.",
+        other: "{{count}} cartões foram ignorados porque não tinham frente ou verso legível.",
+      },
+      rowsSkippedTooLong: {
+        one: "{{count}} cartão foi ignorado porque um campo era muito longo.",
+        other: "{{count}} cartões foram ignorados porque um campo era muito longo.",
+      },
+      rowsSkippedMalformed: {
+        one: "{{count}} linha foi ignorada porque não pôde ser lida como um cartão.",
+        other: "{{count}} linhas foram ignoradas porque não puderam ser lidas como cartões.",
+      },
+      duplicatesFound: {
+        one: "{{count}} cartão duplicado foi encontrado — ele foi mantido.",
+        other: "{{count}} cartões duplicados foram encontrados — eles foram mantidos.",
+      },
+      cardsTruncated: {
+        one: "{{count}} cartão foi ignorado porque esta importação é grande demais.",
+        other: "{{count}} cartões foram ignorados porque esta importação é grande demais.",
+      },
     },
   },
   deckDetail: {

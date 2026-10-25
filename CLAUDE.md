@@ -201,6 +201,24 @@ For anything not covered directly in this file, these are the authoritative docu
     considerations" section for the full design, the deterministic-ordering/clock-skew contract,
     and why `CardSchedulingState` stays a local-only derived cache. No backend/AWS/CDK change was
     needed (the sync Lambdas are already fully entity-agnostic); no EAS/Staging/Production change.
+29. `docs/flashcard-import.md` — format-neutral flashcard import
+    (`src/domain/import/`, `app/import-flashcards/**`) so an existing flashcard user can move into
+    Interval without manually recreating decks. **CSV/TSV (Quizlet-compatible) import is
+    implemented**: pure parse → preview → explicit confirm → ordinary `DeckRecord`/`CardRecord`
+    via the exact same creation contract `generateDeckSave.ts` uses, so an imported card is
+    indistinguishable from a hand-created one (no `importedCard` type, no source-origin field on
+    either record). Imported cards are always honest "New" cards — **no `ReviewEvent` or
+    `CardSchedulingState` is ever fabricated on import**, for CSV/TSV or any future format. **Anki
+    `.apkg` import was investigated in depth and is explicitly BLOCKED, not implemented** — the
+    default Anki export since 2.1.55 (Dec 2022) is Zstandard-compressed, and the only pure-JS zstd
+    decoder found is unmaintained (~2.5 years, as of this audit) with documented correctness gaps
+    on exactly the kind of untrusted/arbitrary input this feature must handle safely; see that
+    document's "Anki support level" section for the full reasoning and exact unmet prerequisites
+    (`expo-sqlite` native module + a vetted zstd solution + schema-version-aware parsing) before
+    ever attempting this without a separate founder decision. A distinct feature/entry point from
+    the existing `/import` screen (`src/domain/deckPortability.ts`'s own `.interval`/`.briefly`
+    JSON import) — that importer is untouched. No new npm dependency, no backend/AWS/CDK/EAS/
+    Staging/Production change.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -585,17 +603,24 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   only, not a functional issue) — remains unaddressed cleanup work.
 - No broad app-level / end-to-end / UI automated test harness exists — all app-flow verification
   is manual founder QA plus local static checks (`tsc`, lint, `cdk synth`). What automated
-  coverage does exist is three focused, zero-dependency `node --test` suites of pure-logic unit
-  tests (70 tests total), not full application coverage:
+  coverage does exist is five focused, zero-dependency `node --test` suites of pure-logic unit
+  tests (305 tests total as of the flashcard-import batch), not full application coverage:
   - `npm run test:sync` (39) — sync push/pull helpers (`backend/lambdas/sync-{push,pull}/lib.test.mjs`),
     also covering the client push helpers in `src/cloud/sync/pushHelpers.mjs`.
-  - `npm run test:ai` (20) — AI foundation helpers (`src/domain/ai/*.test.ts`,
+  - `npm run test:ai` (124) — AI foundation helpers (`src/domain/ai/*.test.ts`,
+    `src/cloud/ai/*.test.ts`, `src/domain/normalization/*.test.ts`,
     `backend/lambdas/ai-generate-study-deck/*.test.mjs`) via `scripts/ai-test-loader.mjs`.
   - `npm run test:docx` (11) — the pure `computeDocxTableLayout` table-sizing helper
     (`src/domain/docxTableLayout.test.ts`).
+  - `npm run test:scheduling` (104) — the FSRS scheduling foundation
+    (`src/domain/scheduling/*.test.ts`, `src/models/cardScheduling.test.ts`,
+    `src/models/reviewEvent.test.ts`) plus the ReviewEvent sync merge/validation logic
+    (`src/cloud/sync/reviewEventMerge.test.ts`, `src/cloud/sync/validateChange.reviewEvent.test.ts`).
+  - `npm run test:import` (27) — the CSV/TSV flashcard-import parser and save-draft validation
+    (`src/domain/import/*.test.ts`).
   There is no Audio-specific suite yet (`src/domain/sourceAudioPlayer.ts`'s pure helpers are a
-  reasonable future `test:audio`), and no automated coverage of the DOCX parser or any RN
-  rendering.
+  reasonable future `test:audio`), and no automated coverage of the DOCX parser, SyncService.ts's
+  own storage-coupled logic, or any RN rendering.
 - Development/Staging sync Lambdas were raised from `128 MB / 3 s` to `256 MB / 15 s` after a
   confirmed 2026-08 Development incident (`interval-dev-sync-push` timing out at exactly 3000 ms
   on every invocation → `Http500`), then further hardened after an independent audit of that

@@ -48,6 +48,7 @@ const it = {
     sync: "Sincronizzazione",
     recentlyDeleted: "Eliminati di recente",
     importDeck: "Importa mazzo",
+    importFlashcards: "Importa flashcard",
     helpFeedback: "Assistenza e feedback",
     betaNotice: "Avviso beta",
     privacyNotice: "Informativa sulla privacy",
@@ -904,6 +905,83 @@ const it = {
       invalidDeckMetadata: "I metadati del mazzo sono mancanti o non validi.",
       invalidCardsList: "L'elenco delle carte è mancante o non valido.",
       invalidCardData: "I dati della carta sono mancanti o non validi.",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "Importa flashcard",
+    subtitle: "Importa carte da un file CSV o TSV, come un'esportazione da Quizlet.",
+    formatNote: "Due colonne: la prima è il fronte della carta, la seconda è il retro.",
+    noFileSelected: "Nessun file selezionato",
+    readyToImport: "Pronto per l'importazione",
+    chooseFileButton: "Scegli file",
+    chooseDifferentFileButton: "Scegli un altro file",
+    submitButton: "Continua",
+    failedTitle: "Importazione non riuscita",
+    errors: {
+      emptyFile: "Questo file è vuoto.",
+      noReadableRows: "Non è stata trovata nessuna riga leggibile in questo file.",
+      generic: "Impossibile leggere o analizzare il file.",
+      fileTooLarge: "Questo file è troppo grande per essere importato.",
+      noUsableCards: "Non è stata trovata nessuna carta utilizzabile in questo file.",
+      fileReadFailed: "Impossibile leggere il file.",
+    },
+    preview: {
+      screenTitle: "Rivedi importazione",
+      deckNameLabel: "Nome del mazzo",
+      cardCount: {
+        one: "{{count}} carta",
+        other: "{{count}} carte",
+      },
+      warningsHeading: "Avvisi",
+      sampleHeading: "Anteprima",
+      moreCards: {
+        one: "e {{count}} altra carta",
+        other: "e altre {{count}} carte",
+      },
+      confirmButton: {
+        one: "Importa {{count}} carta",
+        other: "Importa {{count}} carte",
+      },
+      importedTitle: "Importato",
+      importedBody: {
+        one: "{{count}} carta importata correttamente.",
+        other: "{{count}} carte importate correttamente.",
+      },
+      noDraftTitle: "Nessuna importazione in corso",
+      noDraftBody: "Scegli prima un file da importare.",
+      scopeChangedTitle: "Spazio di lavoro cambiato",
+      scopeChangedBody:
+        "Lo spazio di lavoro o l'account attivo è cambiato. Torna a quel contesto per importare questo file, oppure ricomincia.",
+      saveInvalidTitle: "Niente da importare",
+      saveInvalidBody: "Questa importazione richiede un nome del mazzo e almeno una carta valida.",
+      saveRollbackTitle: "Importazione non riuscita",
+      saveRollbackBody:
+        "Qualcosa è andato storto e il mazzo non è stato creato completamente. Controlla i tuoi mazzi prima di riprovare.",
+      saveFailedTitle: "Importazione non riuscita",
+      saveFailedBody: "Qualcosa è andato storto. Riprova.",
+    },
+    warnings: {
+      headerRowSkipped: "La prima riga sembrava un'intestazione ed è stata ignorata.",
+      rowsSkippedEmpty: {
+        one: "{{count}} carta è stata ignorata perché non aveva un fronte o un retro leggibile.",
+        other: "{{count}} carte sono state ignorate perché non avevano un fronte o un retro leggibile.",
+      },
+      rowsSkippedTooLong: {
+        one: "{{count}} carta è stata ignorata perché un campo era troppo lungo.",
+        other: "{{count}} carte sono state ignorate perché un campo era troppo lungo.",
+      },
+      rowsSkippedMalformed: {
+        one: "{{count}} riga è stata ignorata perché non è stato possibile leggerla come carta.",
+        other: "{{count}} righe sono state ignorate perché non è stato possibile leggerle come carte.",
+      },
+      duplicatesFound: {
+        one: "È stata trovata {{count}} carta duplicata — è stata mantenuta.",
+        other: "Sono state trovate {{count}} carte duplicate — sono state mantenute.",
+      },
+      cardsTruncated: {
+        one: "{{count}} carta è stata ignorata perché questa importazione è troppo grande.",
+        other: "{{count}} carte sono state ignorate perché questa importazione è troppo grande.",
+      },
     },
   },
   deckDetail: {

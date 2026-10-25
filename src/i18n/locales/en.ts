@@ -39,6 +39,7 @@ const en = {
     sync: "Sync",
     recentlyDeleted: "Recently Deleted",
     importDeck: "Import deck",
+    importFlashcards: "Import flashcards",
     helpFeedback: "Help & Feedback",
     betaNotice: "Beta Notice",
     privacyNotice: "Privacy Notice",
@@ -917,6 +918,83 @@ const en = {
       invalidDeckMetadata: "Deck metadata is missing or invalid.",
       invalidCardsList: "Cards list is missing or invalid.",
       invalidCardData: "Card data is missing or invalid.",
+    },
+  },
+  importFlashcards: {
+    screenTitle: "Import flashcards",
+    subtitle: "Import cards from a CSV or TSV file, such as a Quizlet export.",
+    formatNote: "Two columns: the first is the front of the card, the second is the back.",
+    noFileSelected: "No file selected",
+    readyToImport: "Ready to import",
+    chooseFileButton: "Choose file",
+    chooseDifferentFileButton: "Choose a different file",
+    submitButton: "Continue",
+    failedTitle: "Import failed",
+    errors: {
+      emptyFile: "This file is empty.",
+      noReadableRows: "No readable rows were found in this file.",
+      generic: "Unable to read or parse the file.",
+      fileTooLarge: "This file is too large to import.",
+      noUsableCards: "No usable cards were found in this file.",
+      fileReadFailed: "Unable to read the file.",
+    },
+    preview: {
+      screenTitle: "Review import",
+      deckNameLabel: "Deck name",
+      cardCount: {
+        one: "{{count}} card",
+        other: "{{count}} cards",
+      },
+      warningsHeading: "Warnings",
+      sampleHeading: "Preview",
+      moreCards: {
+        one: "and {{count}} more card",
+        other: "and {{count}} more cards",
+      },
+      confirmButton: {
+        one: "Import {{count}} card",
+        other: "Import {{count}} cards",
+      },
+      importedTitle: "Imported",
+      importedBody: {
+        one: "{{count}} card imported successfully.",
+        other: "{{count}} cards imported successfully.",
+      },
+      noDraftTitle: "No import in progress",
+      noDraftBody: "Choose a file to import first.",
+      scopeChangedTitle: "Workspace changed",
+      scopeChangedBody: "The active workspace or account changed. Switch back to import this file, or start over.",
+      saveInvalidTitle: "Nothing to import",
+      saveInvalidBody: "This import needs a deck name and at least one valid card.",
+      saveRollbackTitle: "Import failed",
+      saveRollbackBody: "Something went wrong and the deck could not be fully created. Check your decks before trying again.",
+      saveFailedTitle: "Import failed",
+      saveFailedBody: "Something went wrong. Please try again.",
+    },
+    // Structured warnings only — never a raw parser error, filesystem path, or stack trace. See
+    // src/domain/import/types.ts's ImportWarningCode.
+    warnings: {
+      headerRowSkipped: "The first row looked like a header and was skipped.",
+      rowsSkippedEmpty: {
+        one: "{{count}} card was skipped because it had no readable front or back.",
+        other: "{{count}} cards were skipped because they had no readable front or back.",
+      },
+      rowsSkippedTooLong: {
+        one: "{{count}} card was skipped because a field was too long.",
+        other: "{{count}} cards were skipped because a field was too long.",
+      },
+      rowsSkippedMalformed: {
+        one: "{{count}} row was skipped because it couldn't be read as a card.",
+        other: "{{count}} rows were skipped because they couldn't be read as cards.",
+      },
+      duplicatesFound: {
+        one: "{{count}} duplicate card was found — it was kept.",
+        other: "{{count}} duplicate cards were found — they were kept.",
+      },
+      cardsTruncated: {
+        one: "{{count}} card was skipped because this import is too large.",
+        other: "{{count}} cards were skipped because this import is too large.",
+      },
     },
   },
   deckDetail: {
