@@ -1168,6 +1168,15 @@ const ja = {
       saveButton: "カードを保存",
     },
   },
+  sourceCoverage: {
+    heading: "学習カバー状況",
+    loading: "カバー状況を確認中…",
+    noContent: "このソースには、まだ学習カードを生成できるコンテンツがありません。",
+    noCardsYet: "このソースをカバーする学習カードはまだありません。",
+    fullyCovered: "利用可能なすべてのセクションがカバーされています。",
+    summary: "ソースの{{total}}セクション中{{covered}}セクションがカバーされています",
+    percentLabel: "{{percent}}%",
+  },
   export: {
     screenTitle: "デッキをエクスポート",
     description: "このデッキのカードを含む Interval デッキファイルを作成します。共有や他のデバイスへのインポートに使用できます。",

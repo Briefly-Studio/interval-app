@@ -1212,6 +1212,15 @@ const ptBR = {
       saveButton: "Salvar cartão",
     },
   },
+  sourceCoverage: {
+    heading: "Cobertura de estudo",
+    loading: "Verificando a cobertura…",
+    noContent: "Esta fonte ainda não tem conteúdo para gerar cartões de estudo.",
+    noCardsYet: "Nenhum cartão de estudo cobre esta fonte ainda.",
+    fullyCovered: "Todas as seções disponíveis estão cobertas.",
+    summary: "{{covered}} de {{total}} seções da fonte cobertas",
+    percentLabel: "{{percent}}%",
+  },
   export: {
     screenTitle: "Exportar baralho",
     description: "Cria um arquivo de baralho do Interval com os cartões deste baralho, pronto para compartilhar ou importar em outro dispositivo.",

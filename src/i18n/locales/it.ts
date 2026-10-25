@@ -1211,6 +1211,15 @@ const it = {
       saveButton: "Salva carta",
     },
   },
+  sourceCoverage: {
+    heading: "Copertura di studio",
+    loading: "Verifica della copertura…",
+    noContent: "Questa fonte non ha ancora contenuti per generare carte di studio.",
+    noCardsYet: "Nessuna carta di studio copre ancora questa fonte.",
+    fullyCovered: "Tutte le sezioni disponibili sono coperte.",
+    summary: "{{covered}} di {{total}} sezioni della fonte coperte",
+    percentLabel: "{{percent}}%",
+  },
   export: {
     screenTitle: "Esporta mazzo",
     description: "Crea un file di mazzo Interval con le carte di questo mazzo, pronto per essere condiviso o importato su un altro dispositivo.",

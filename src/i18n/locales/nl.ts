@@ -1208,6 +1208,15 @@ const nl = {
       saveButton: "Kaart opslaan",
     },
   },
+  sourceCoverage: {
+    heading: "Studiedekking",
+    loading: "Dekking controleren…",
+    noContent: "Deze bron heeft nog geen inhoud om studiekaarten van te maken.",
+    noCardsYet: "Nog geen studiekaarten dekken deze bron.",
+    fullyCovered: "Alle beschikbare secties zijn gedekt.",
+    summary: "{{covered}} van {{total}} secties van de bron gedekt",
+    percentLabel: "{{percent}}%",
+  },
   export: {
     screenTitle: "Stapel exporteren",
     description: "Maakt een Interval-stapelbestand met de kaarten van deze stapel, klaar om te delen of te importeren op een ander apparaat.",

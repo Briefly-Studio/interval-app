@@ -1209,6 +1209,15 @@ const de = {
       saveButton: "Karte speichern",
     },
   },
+  sourceCoverage: {
+    heading: "Lernabdeckung",
+    loading: "Abdeckung wird geprüft…",
+    noContent: "Diese Quelle hat noch keinen Inhalt, aus dem Lernkarten erstellt werden können.",
+    noCardsYet: "Noch keine Lernkarte deckt diese Quelle ab.",
+    fullyCovered: "Alle verfügbaren Abschnitte sind abgedeckt.",
+    summary: "{{covered}} von {{total}} Abschnitten der Quelle abgedeckt",
+    percentLabel: "{{percent}} %",
+  },
   export: {
     screenTitle: "Stapel exportieren",
     description: "Erstellt eine Interval-Stapeldatei mit den Karten dieses Stapels, bereit zum Teilen oder Importieren auf einem anderen Gerät.",

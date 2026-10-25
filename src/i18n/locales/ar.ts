@@ -1287,6 +1287,15 @@ const ar = {
       saveButton: "حفظ البطاقة",
     },
   },
+  sourceCoverage: {
+    heading: "تغطية الدراسة",
+    loading: "جارٍ التحقق من التغطية…",
+    noContent: "لا يحتوي هذا المصدر على محتوى لإنشاء بطاقات دراسية حتى الآن.",
+    noCardsYet: "لا توجد بطاقات دراسية تغطي هذا المصدر حتى الآن.",
+    fullyCovered: "جميع الأقسام المتاحة مُغطّاة.",
+    summary: "تمت تغطية {{covered}} من {{total}} أقسام من المصدر",
+    percentLabel: "{{percent}}%",
+  },
   export: {
     screenTitle: "تصدير Deck",
     description: "ينشئ ملف Interval deck يحتوي على بطاقات هذا Deck، جاهزًا للمشاركة أو الاستيراد على جهاز آخر.",

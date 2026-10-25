@@ -240,6 +240,23 @@ For anything not covered directly in this file, these are the authoritative docu
     the existing `/import` screen (`src/domain/deckPortability.ts`'s own `.interval`/`.briefly`
     JSON import) — that importer is untouched. No new npm dependency, no backend/AWS/CDK/EAS/
     Staging/Production change.
+30. `docs/source-coverage.md` — a read-only, truthful layer answering "which of this source's
+    normalized chunks already have a live saved study card?" (`src/domain/sourceCoverage.ts`,
+    Library Source Detail's new "Study coverage" section). **Implemented, merged into
+    `v3.3-dev`; not yet founder-QA verified.** Required building the local-only, unsynced
+    `GeneratedCardProvenance` link store (`src/models/generatedCardProvenance.ts`,
+    `src/storage/generatedCardProvenance.ts`) that `docs/generate-study-deck-ux.md`'s "Source
+    relationship & provenance persistence" section had previously deferred — `saveDraftDeck`
+    (`src/domain/ai/generateDeckSave.ts`) now writes one entry per generated card right after the
+    card/deck save succeeds (best-effort; never rolls that save back). Never a field on
+    `CardRecord`/`DeckRecord` (still forbidden — both are on the live Production sync path) and
+    never read by `src/cloud/sync/**`. Coverage math is distinct from `GenerationCoverage`
+    (`src/domain/ai/generationCoverage.ts`, generation-time context-budget disclosure, a
+    different concept) and from FSRS scheduling/mastery (coverage never implies the card has
+    been studied, only that one exists). Coverage card visibility reuses the existing
+    `isGenerateStudyDeckEnabled()` gate (Development/Staging) rather than introducing a second
+    one — see that doc's "Known limitations" section. No Discover UI, no stale-card detection, no
+    source versioning, no backend/AWS/CDK/EAS/Staging/Production change.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -773,6 +790,14 @@ grandfathering"). None of this blocked closing out the three-environment milesto
 - DOCX cache media (`Paths.cache/librarySourceReaderDocxMedia/<sourceId>`) is cleared on every
   reader load, but shares the same known gap as the rest of the cache/retained-file story: there
   is no proactive eviction policy for the canonical durable `librarySourceFiles/` store.
+- **Source Coverage's `GeneratedCardProvenance` link store does not sync across devices** — same
+  local-only posture as Deck Collections/Discover progress. A card generated and saved on one
+  device shows correct coverage only on that device; a second device signed into the same account
+  sees the synced card/deck itself but not its provenance, so its own coverage computation
+  under-counts. See `docs/source-coverage.md`'s "Known limitations" section. Also: a future
+  `NORMALIZATION_VERSION` bump invalidates all existing provenance for every source (chunk ids are
+  content-addressed and include the version), with no migration step — a one-time, intentional
+  consequence of a deliberate algorithm change, not a defect introduced by this feature.
 
 ## Accessibility Guardrails
 
