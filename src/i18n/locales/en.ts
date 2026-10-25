@@ -1227,6 +1227,18 @@ const en = {
       saveButton: "Save card",
     },
   },
+  // Source Coverage (app/library/[id]/index.tsx) — a read-only, truthful summary of which of a
+  // source's normalized sections already have a saved study card, never a mastery/learning
+  // claim. See docs/source-coverage.md.
+  sourceCoverage: {
+    heading: "Study coverage",
+    loading: "Checking coverage…",
+    noContent: "This source doesn't have content to generate study cards from yet.",
+    noCardsYet: "No study cards cover this source yet.",
+    fullyCovered: "All available sections are covered.",
+    summary: "{{covered}} of {{total}} source sections covered",
+    percentLabel: "{{percent}}%",
+  },
   export: {
     screenTitle: "Export deck",
     description: "Creates an Interval deck file with this deck's cards, ready to share or import on another device.",

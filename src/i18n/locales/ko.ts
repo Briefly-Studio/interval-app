@@ -1162,6 +1162,15 @@ const ko = {
       saveButton: "카드 저장",
     },
   },
+  sourceCoverage: {
+    heading: "학습 커버리지",
+    loading: "커버리지 확인 중…",
+    noContent: "이 소스에는 아직 학습 카드를 생성할 콘텐츠가 없습니다.",
+    noCardsYet: "아직 이 소스를 다루는 학습 카드가 없습니다.",
+    fullyCovered: "사용 가능한 모든 섹션이 다루어졌습니다.",
+    summary: "소스 섹션 {{total}}개 중 {{covered}}개가 다루어짐",
+    percentLabel: "{{percent}}%",
+  },
   export: {
     screenTitle: "덱 내보내기",
     description: "이 덱의 카드가 포함된 Interval 덱 파일을 생성합니다. 공유하거나 다른 기기로 가져올 수 있습니다.",
