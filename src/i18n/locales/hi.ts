@@ -1216,11 +1216,15 @@ const hi = {
   sourceCoverage: {
     heading: "अध्ययन कवरेज",
     loading: "कवरेज की जाँच हो रही है…",
-    noContent: "इस स्रोत में अभी अध्ययन कार्ड बनाने के लिए सामग्री नहीं है।",
+    noContent: "पढ़ाई के लिए कोई खंड नहीं मिला।",
     noCardsYet: "अभी तक कोई अध्ययन कार्ड इस स्रोत को कवर नहीं करता।",
-    fullyCovered: "सभी उपलब्ध खंड कवर किए गए हैं।",
-    summary: "स्रोत के {{total}} में से {{covered}} खंड कवर किए गए",
+    fullyCovered: { one: "एकमात्र खंड कवर है।", other: "सभी {{count}} खंड कवर हैं।" },
+    summary: { one: "{{total}} में से {{covered}} खंड कवर है", other: "{{total}} में से {{covered}} खंड कवर हैं" },
     percentLabel: "{{percent}}%",
+    unavailable: "कवरेज की जाँच नहीं हो सकी। फिर से कोशिश करने के लिए इस स्रोत पर वापस आएँ।",
+    explanation: "कवरेज बताता है कि स्रोत के किन खंडों के लिए कम से कम एक सहेजा गया अध्ययन कार्ड है।",
+    remaining: { one: "{{count}} खंड बाकी है", other: "{{count}} खंड बाकी हैं" },
+    available: { one: "{{count}} खंड उपलब्ध है।", other: "{{count}} खंड उपलब्ध हैं।" },
   },
   export: {
     screenTitle: "डेक एक्सपोर्ट करें",

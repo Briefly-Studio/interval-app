@@ -1206,11 +1206,15 @@ const ko = {
   sourceCoverage: {
     heading: "학습 커버리지",
     loading: "커버리지 확인 중…",
-    noContent: "이 소스에는 아직 학습 카드를 생성할 콘텐츠가 없습니다.",
+    noContent: "학습에 사용할 수 있는 섹션이 없습니다.",
     noCardsYet: "아직 이 소스를 다루는 학습 카드가 없습니다.",
-    fullyCovered: "사용 가능한 모든 섹션이 다루어졌습니다.",
-    summary: "소스 섹션 {{total}}개 중 {{covered}}개가 다루어짐",
+    fullyCovered: { other: "{{count}}개 섹션 모두에 카드가 있습니다." },
+    summary: { other: "{{total}}개 섹션 중 {{covered}}개에 카드가 있음" },
     percentLabel: "{{percent}}%",
+    unavailable: "학습 범위를 확인하지 못했습니다. 이 소스를 다시 열어 재시도하세요.",
+    explanation: "학습 범위는 저장된 학습 카드가 하나 이상 있는 소스 섹션을 보여 줍니다.",
+    remaining: { other: "{{count}}개 섹션 남음" },
+    available: { other: "{{count}}개 섹션 이용 가능." },
   },
   export: {
     screenTitle: "덱 내보내기",

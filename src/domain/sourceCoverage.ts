@@ -71,23 +71,32 @@ export function deriveCoveredChunkIds(provenance: GeneratedCardProvenance[], liv
   return covered;
 }
 
+type CoverageDisplayCounts = {
+  coveredChunkCount: number;
+  totalChunkCount: number;
+  uncoveredChunkCount: number;
+  percent: number;
+};
+
 export type SourceCoverageDisplayState =
   | { kind: "no-content" }
-  | { kind: "no-cards"; totalChunkCount: number }
-  | { kind: "full"; totalChunkCount: number }
-  | { kind: "partial"; coveredChunkCount: number; totalChunkCount: number; percent: number };
+  | (CoverageDisplayCounts & { kind: "no-cards" | "full" | "partial" });
 
-/** Picks which of the four honest copy states the UI should show — see docs/source-coverage.md's
- * "What the UI says" section for the exact wording and why each threshold is handled distinctly
- * (never a fabricated percentage, never conflating "no content" with "no cards yet"). */
+/** Presentation only: the underlying coverage sets/ratio are never changed. Counts are bounded
+ * defensively so malformed input cannot show negative remaining sections or invalid progress.
+ * Whole percentages use nearest-integer rounding, capped at 99 for partial coverage; only an
+ * actually complete, nonempty source displays 100. See docs/source-coverage.md. */
 export function deriveSourceCoverageDisplayState(coverage: SourceCoverage): SourceCoverageDisplayState {
-  if (coverage.totalChunkCount === 0) return { kind: "no-content" };
-  if (coverage.coveredChunkCount === 0) return { kind: "no-cards", totalChunkCount: coverage.totalChunkCount };
-  if (coverage.coveredChunkCount === coverage.totalChunkCount) return { kind: "full", totalChunkCount: coverage.totalChunkCount };
+  const total = Number.isSafeInteger(coverage.totalChunkCount) ? Math.max(0, coverage.totalChunkCount) : 0;
+  if (total === 0) return { kind: "no-content" };
+  const covered = Number.isSafeInteger(coverage.coveredChunkCount)
+    ? Math.min(total, Math.max(0, coverage.coveredChunkCount))
+    : 0;
   return {
-    kind: "partial",
-    coveredChunkCount: coverage.coveredChunkCount,
-    totalChunkCount: coverage.totalChunkCount,
-    percent: Math.round((coverage.coveredChunkCount / coverage.totalChunkCount) * 100),
+    kind: covered === 0 ? "no-cards" : covered === total ? "full" : "partial",
+    coveredChunkCount: covered,
+    totalChunkCount: total,
+    uncoveredChunkCount: total - covered,
+    percent: covered === total ? 100 : Math.min(99, Math.round((covered / total) * 100)),
   };
 }

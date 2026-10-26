@@ -1212,11 +1212,15 @@ const ja = {
   sourceCoverage: {
     heading: "学習カバー状況",
     loading: "カバー状況を確認中…",
-    noContent: "このソースには、まだ学習カードを生成できるコンテンツがありません。",
+    noContent: "学習に使えるセクションが見つかりません。",
     noCardsYet: "このソースをカバーする学習カードはまだありません。",
-    fullyCovered: "利用可能なすべてのセクションがカバーされています。",
-    summary: "ソースの{{total}}セクション中{{covered}}セクションがカバーされています",
+    fullyCovered: { other: "全 {{count}} セクションをカバーしています。" },
+    summary: { other: "{{total}} セクション中 {{covered}} セクションをカバー" },
     percentLabel: "{{percent}}%",
+    unavailable: "カバー状況を確認できませんでした。このソースを開き直して再試行してください。",
+    explanation: "カバー状況は、保存済みの学習カードが1枚以上あるソースのセクションを示します。",
+    remaining: { other: "残り {{count}} セクション" },
+    available: { other: "{{count}} セクションが利用可能です。" },
   },
   export: {
     screenTitle: "デッキをエクスポート",

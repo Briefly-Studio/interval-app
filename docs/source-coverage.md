@@ -8,7 +8,8 @@ one **live, saved** study card referencing them, and which don't.
 network call beyond what `normalizeSource()` already does for Generate/Reader/Preview, no AI, no
 cost, no backend/AWS/CDK change.
 
-Split across two files, same pure/impure separation `src/domain/ai/aiConsent.ts` already
+The domain/service are split across two files, with presentation in
+`src/ui/SourceCoverageCard.tsx`, using the same pure/impure separation `src/domain/ai/aiConsent.ts` already
 established: `src/domain/sourceCoverage.ts` (types + `computeSourceCoverage`,
 `deriveCoveredChunkIds`, `deriveSourceCoverageDisplayState` — pure, no storage/RN import, directly
 `node --test`-able) and `src/domain/sourceCoverageService.ts` (`loadSourceCoverage` — the async
@@ -28,6 +29,61 @@ orchestration that actually calls `normalizeSource`/storage).
   about whether the user has studied, remembers, or has mastered that card — that's FSRS
   scheduling state (`docs/spaced-repetition-foundation.md`), a completely separate concept. UI
   copy is deliberately worded to avoid implying otherwise (never "29% of this book learned").
+
+## Presentation states
+
+The Source Detail card uses the existing themed Card/ProgressBar surfaces. Its hierarchy is
+Study coverage → covered/total statement → whole percentage → compact progress bar → remaining
+count (or available count when nothing is covered) → a short explanation. No generation action
+or navigation is added; a future source-scope CTA can sit beneath this summary without changing
+the read-only component or the coverage calculation.
+
+| State | Presentation |
+| --- | --- |
+| Loading | “Checking coverage…” with a small activity indicator; no percentage or stale counts |
+| Load failure | Generic retry-on-return guidance, distinct from a successful empty result |
+| Zero sections | “No studyable sections found.” No percentage or progress bar |
+| Zero covered | “No study cards cover this source yet.”, 0%, and “193 sections available.” |
+| Partial | “8 of 193 sections covered”, 4%, and “185 sections remaining” |
+| Complete | “All 193 sections are covered.” and 100%; singular copy for a one-section source |
+
+“Sections” means normalized chunks across formats, never inferred chapters/pages/cells. The
+caption explains that coverage means at least one saved study card per section; it is not a
+claim about mastery, memory, learning, or reading completion. All 13 locales include this copy
+and use the existing CLDR plural selection for count-bearing messages.
+
+### Percentage and remaining count
+
+Presentation uses nearest-integer rounding (`Math.round(covered / total * 100)`) with partial
+coverage capped at 99%. Thus 8/193 → 4%, 192/193 → 99%, 999/1000 → 99%, and 193/193 → 100%.
+Very small positive coverage may round to 0%; the exact covered/total text remains visible.
+Zero sections has no percentage, while zero covered out of a real total displays 0%.
+The bar retains the real fraction, independent of whole-number rounding.
+
+Remaining is `total - covered`, after presentation-only validation of safe integer counts and
+clamping covered to [0, total]. It cannot be negative. Invalid totals show no-content; invalid
+covered counts display zero. The domain coverage sets, provenance, ratio, and normalization are
+unchanged. `uncoveredChunkCount` already exists on SourceCoverage; the display helper derives
+the same count defensively instead of trusting inconsistent input hints.
+
+### Accessibility and loading
+
+The heading is a screen-reader heading. The progress bar exposes the progressbar role,
+covered/total numeric values, and localized covered/total plus percentage text. Visible counts,
+remaining text, and the explanation keep coverage understandable without color. Text scales
+normally without single-line truncation; content is stacked to accommodate large type. Arabic
+text follows the local RTL helper and the bar fills from the right. Other progress-bar consumers
+retain their existing defaults. VoiceOver/TalkBack and largest-type device QA are still pending.
+
+Coverage remains asynchronous and never gates Source Detail actions. A minimum-height content
+area reduces loading transitions without fixing the card's height. Loading hides prior counts;
+a failed load does not masquerade as 0% or a successful empty extraction. A request id now
+invalidates results before metadata awaits and on blur as well as on refocus. It discards stale
+results, not the underlying normalization work. Returning to the source recalculates coverage
+from current live cards after card/deck deletion or restoration; no counters or cache were added.
+Errors are handled without logging or showing raw storage/parser errors. Normalization outcomes
+that return an empty chunk set still map to the existing no-content state; this polish does not
+change normalization semantics or the service result contract.
 
 ## Exact meaning of coverage
 
@@ -153,8 +209,8 @@ No `sourceType` branching exists anywhere in `src/domain/sourceCoverage.ts` or
 - **TXT / PDF / DOCX / XLSX**: real chunk counts from their respective adapters; coverage behaves
   identically across all four.
 - **image / audio**: structural stubs that always produce `chunks: []` (no OCR/transcription —
-  see `docs/source-normalization-foundation.md`), so these sources always show the "no content to
-  generate study cards from yet" (`totalChunkCount === 0`) state. Fast and free to compute — the
+  see `docs/source-normalization-foundation.md`), so these sources always show the
+  "No studyable sections found." (`totalChunkCount === 0`) state. Fast and free to compute — the
   image/audio adapters need no file resolution at all, only already-known `LibrarySourceRecord`
   metadata.
 - **Any source whose normalization result is `empty` / `unsupported` / `pending-extraction` /
@@ -182,7 +238,8 @@ blocking**, the rest of the screen:
   of the screen (actions, Open Original, Generate) on normalization finishing.
 - A monotonically increasing request-id ref discards a stale result if the screen re-focuses
   (and so re-triggers coverage loading) before a previous call resolves — this prevents a
-  slow earlier call from clobbering a newer one's result; it does not cancel the earlier call's
+  slow earlier call from clobbering a newer one's result; it also invalidates on blur and before
+  metadata awaits; it does not cancel the earlier call's
   actual work (no `AbortController` plumbing was added to `normalizeSource` for this batch).
 - For `pdf`/`docx`/`xlsx`/`text` sources, computing coverage can mean a real local file read and,
   if no local copy exists, a cloud-fallback download (`resolveSourceOriginal`) — the exact same
@@ -243,6 +300,10 @@ existing content-addressed identity is already sufficient — adding a separate 
 would be redundant.
 
 ## Founder QA
+
+Presentation polish still requires device QA: zero-card, partial, near-complete (999/1000 must
+show 99%), complete, loading/error, navigate away/back, card delete/restore, deck delete/restore,
+Arabic RTL, largest Dynamic Type, and VoiceOver/TalkBack. No device verification is claimed.
 
 1. Open a source with zero generated cards → "No study cards cover this source yet," 0%
    progress.

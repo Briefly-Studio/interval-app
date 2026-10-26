@@ -1258,11 +1258,15 @@ const it = {
   sourceCoverage: {
     heading: "Copertura di studio",
     loading: "Verifica della copertura…",
-    noContent: "Questa fonte non ha ancora contenuti per generare carte di studio.",
+    noContent: "Nessuna sezione da studiare trovata.",
     noCardsYet: "Nessuna carta di studio copre ancora questa fonte.",
-    fullyCovered: "Tutte le sezioni disponibili sono coperte.",
-    summary: "{{covered}} di {{total}} sezioni della fonte coperte",
+    fullyCovered: { one: "L’unica sezione è coperta.", other: "Tutte le {{count}} sezioni sono coperte." },
+    summary: { one: "{{covered}} sezione su {{total}} coperta", other: "{{covered}} sezioni su {{total}} coperte" },
     percentLabel: "{{percent}}%",
+    unavailable: "Impossibile verificare la copertura. Torna a questa fonte per riprovare.",
+    explanation: "La copertura indica quali sezioni della fonte hanno almeno una scheda di studio salvata.",
+    remaining: { one: "{{count}} sezione rimanente", other: "{{count}} sezioni rimanenti" },
+    available: { one: "{{count}} sezione disponibile.", other: "{{count}} sezioni disponibili." },
   },
   export: {
     screenTitle: "Esporta mazzo",

@@ -1262,11 +1262,15 @@ const fr = {
   sourceCoverage: {
     heading: "Couverture d'étude",
     loading: "Vérification de la couverture…",
-    noContent: "Cette source n'a pas encore de contenu permettant de générer des cartes d'étude.",
+    noContent: "Aucune section à étudier trouvée.",
     noCardsYet: "Aucune carte d'étude ne couvre encore cette source.",
-    fullyCovered: "Toutes les sections disponibles sont couvertes.",
-    summary: "{{covered}} sur {{total}} sections de la source couvertes",
+    fullyCovered: { one: "La seule section est couverte.", other: "Les {{count}} sections sont couvertes." },
+    summary: { one: "{{covered}} section sur {{total}} couverte", other: "{{covered}} sections sur {{total}} couvertes" },
     percentLabel: "{{percent}} %",
+    unavailable: "Impossible de vérifier la couverture. Revenez à cette source pour réessayer.",
+    explanation: "La couverture indique les sections de la source qui ont au moins une fiche d’étude enregistrée.",
+    remaining: { one: "{{count}} section restante", other: "{{count}} sections restantes" },
+    available: { one: "{{count}} section disponible.", other: "{{count}} sections disponibles." },
   },
   export: {
     screenTitle: "Exporter le paquet",

@@ -1256,11 +1256,15 @@ const de = {
   sourceCoverage: {
     heading: "Lernabdeckung",
     loading: "Abdeckung wird geprüft…",
-    noContent: "Diese Quelle hat noch keinen Inhalt, aus dem Lernkarten erstellt werden können.",
+    noContent: "Keine Abschnitte zum Lernen gefunden.",
     noCardsYet: "Noch keine Lernkarte deckt diese Quelle ab.",
-    fullyCovered: "Alle verfügbaren Abschnitte sind abgedeckt.",
-    summary: "{{covered}} von {{total}} Abschnitten der Quelle abgedeckt",
+    fullyCovered: { one: "Der einzige Abschnitt ist abgedeckt.", other: "Alle {{count}} Abschnitte sind abgedeckt." },
+    summary: { one: "{{covered}} von {{total}} Abschnitt abgedeckt", other: "{{covered}} von {{total}} Abschnitten abgedeckt" },
     percentLabel: "{{percent}} %",
+    unavailable: "Die Abdeckung konnte nicht geprüft werden. Öffne diese Quelle erneut, um es noch einmal zu versuchen.",
+    explanation: "Die Abdeckung zeigt, für welche Abschnitte der Quelle mindestens eine gespeicherte Lernkarte vorhanden ist.",
+    remaining: { one: "{{count}} Abschnitt verbleibend", other: "{{count}} Abschnitte verbleibend" },
+    available: { one: "{{count}} Abschnitt verfügbar.", other: "{{count}} Abschnitte verfügbar." },
   },
   export: {
     screenTitle: "Stapel exportieren",
