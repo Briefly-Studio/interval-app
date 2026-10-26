@@ -1173,11 +1173,15 @@ const zhHans = {
   sourceCoverage: {
     heading: "学习覆盖情况",
     loading: "正在检查覆盖情况…",
-    noContent: "此来源暂无可用于生成学习卡片的内容。",
+    noContent: "未找到可供学习的部分。",
     noCardsYet: "尚无学习卡片覆盖此来源。",
-    fullyCovered: "所有可用部分均已覆盖。",
-    summary: "已覆盖来源的 {{covered}} / {{total}} 个部分",
+    fullyCovered: { other: "全部 {{count}} 个部分均已覆盖。" },
+    summary: { other: "已覆盖 {{total}} 个部分中的 {{covered}} 个" },
     percentLabel: "{{percent}}%",
+    unavailable: "无法检查覆盖情况。请重新打开此来源以重试。",
+    explanation: "覆盖情况显示来源中哪些部分至少有一张已保存的学习卡片。",
+    remaining: { other: "还有 {{count}} 个部分未覆盖" },
+    available: { other: "有 {{count}} 个部分可用。" },
   },
   export: {
     screenTitle: "导出卡组",

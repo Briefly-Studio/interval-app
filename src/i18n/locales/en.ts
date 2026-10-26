@@ -1241,11 +1241,15 @@ const en = {
   sourceCoverage: {
     heading: "Study coverage",
     loading: "Checking coverage…",
-    noContent: "This source doesn't have content to generate study cards from yet.",
+    noContent: "No studyable sections found.",
     noCardsYet: "No study cards cover this source yet.",
-    fullyCovered: "All available sections are covered.",
-    summary: "{{covered}} of {{total}} source sections covered",
+    fullyCovered: { one: "The only section is covered.", other: "All {{count}} sections are covered." },
+    summary: { one: "{{covered}} of {{total}} section covered", other: "{{covered}} of {{total}} sections covered" },
     percentLabel: "{{percent}}%",
+    unavailable: "Coverage couldn't be checked. Return to this source to try again.",
+    explanation: "Coverage shows which source sections have at least one saved study card.",
+    remaining: { one: "{{count}} section remaining", other: "{{count}} sections remaining" },
+    available: { one: "{{count}} section available.", other: "{{count}} sections available." },
   },
   export: {
     screenTitle: "Export deck",
