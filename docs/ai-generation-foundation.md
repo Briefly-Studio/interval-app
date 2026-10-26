@@ -678,6 +678,11 @@ skeleton's size-ceiling and selected-chunk-id consistency checks.
   anywhere — a below-target result is reported exactly once, honestly), RAG, embeddings, a context-
   window expansion, or any model/provider switch. None of these change the bounded
   `GenerationContext` sizing this batch left untouched.
+  - **Update (Source Generation Scope batch):** a page-range (PDF)/generic-section-range picker
+    and "Uncovered material" generation are now implemented — see `docs/source-generation-scope.md`.
+    Chapter/heading-based selection, whole-source multi-batch generation, and automatic retries
+    remain not implemented; the bounded `GenerationContext` sizing/budget itself is still
+    completely unchanged by that batch too.
 
 ## Provider landscape (non-binding — informs, does not select)
 
