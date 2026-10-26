@@ -269,14 +269,15 @@ For anything not covered directly in this file, these are the authoritative docu
 31. `docs/source-coverage.md` — a read-only, truthful layer answering "which of this source's
     normalized chunks already have a live saved study card?" (`src/domain/sourceCoverage.ts`,
     Library Source Detail's new "Study coverage" section). **Implemented, merged into
-    `v3.3-dev`; not yet founder-QA verified.** Required building the local-only, unsynced
+    `v3.3-dev`; not yet founder-QA verified.** Required building the separate
     `GeneratedCardProvenance` link store (`src/models/generatedCardProvenance.ts`,
     `src/storage/generatedCardProvenance.ts`) that `docs/generate-study-deck-ux.md`'s "Source
     relationship & provenance persistence" section had previously deferred — `saveDraftDeck`
     (`src/domain/ai/generateDeckSave.ts`) now writes one entry per generated card right after the
     card/deck save succeeds (best-effort; never rolls that save back). Never a field on
     `CardRecord`/`DeckRecord` (still forbidden — both are on the live Production sync path) and
-    never read by `src/cloud/sync/**`. Coverage math is distinct from `GenerationCoverage`
+    now synced as its own metadata entity in Development/Staging (see item 33). Coverage math is
+    distinct from `GenerationCoverage`
     (`src/domain/ai/generationCoverage.ts`, generation-time context-budget disclosure, a
     different concept) and from FSRS scheduling/mastery (coverage never implies the card has
     been studied, only that one exists). Coverage card visibility reuses the existing
@@ -349,11 +350,18 @@ For anything not covered directly in this file, these are the authoritative docu
     `GeneratedCardProvenance` (a different branch's territory), no model/provider change, no new
     npm dependency.
 
+33. `docs/sync-generated-card-provenance.md` — separate metadata sync entity for generated-card
+    provenance, gated to Development/Staging. Covers stable card identity, revisioned conflict
+    repairs, retained provenance plus card/deck liveness, lazy migration, scoped serialized
+    storage, payload bounds and inherited cursor/replay limitations. No source text, card schema
+    changes, provider changes, Production enablement or AWS deployment. Device QA remains pending.
+
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
 dating for why. Current-facing documentation and in-app copy use Interval branding throughout,
 except where legacy `.briefly` compatibility is being explicitly explained (see "Legacy Briefly
 identifiers" above).
+
 
 ## Core Product Rule
 
@@ -891,14 +899,11 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   also flags `expo-asset` (12.0.13 found vs. 12.0.14 expected) — that entry's claim that
   `expo-audio`/`expo-asset` are "not flagged" is now stale by one patch version; not fixed here
   (unrelated to this batch, and package version bumps require their own approval).
-- **Source Coverage's `GeneratedCardProvenance` link store does not sync across devices** — same
-  local-only posture as Deck Collections/Discover progress. A card generated and saved on one
-  device shows correct coverage only on that device; a second device signed into the same account
-  sees the synced card/deck itself but not its provenance, so its own coverage computation
-  under-counts. See `docs/source-coverage.md`'s "Known limitations" section. Also: a future
-  `NORMALIZATION_VERSION` bump invalidates all existing provenance for every source (chunk ids are
-  content-addressed and include the version), with no migration step — a one-time, intentional
-  consequence of a deliberate algorithm change, not a defect introduced by this feature.
+- **GeneratedCardProvenance now syncs in Development/Staging**, independently gated and never
+  added to CardRecord/DeckRecord. Production/guest provenance remains local-only. Device QA is
+  pending. Existing timestamp-cursor delivery gaps and previously skipped entity history require
+  deliberate replay; see `docs/sync-generated-card-provenance.md`. A normalization-version bump
+  still invalidates chunk references without fuzzy remapping or migration.
 - **Source Generation Scope (item 32 above) is implemented but not yet founder-QA verified on a
   real device** — only real device testing (PDF page range against an actual multi-page PDF,
   Uncovered material against real saved cards, the live validation/disabled-Generate behavior)

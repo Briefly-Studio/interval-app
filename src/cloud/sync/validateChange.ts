@@ -1,3 +1,4 @@
+import { isProvenanceTimestamp, parseGeneratedCardProvenanceRecord } from "../../models/generatedCardProvenance";
 import type { CardRecord } from "../../models/card";
 import type { DeckRecord } from "../../models/deck";
 import type { LibrarySourceRecord } from "../../models/librarySource";
@@ -7,7 +8,7 @@ import type { SourceCollectionRecord } from "../../models/sourceCollection";
 import { isReviewRating } from "../../domain/scheduling/types";
 import type { Change, EntityType } from "./types";
 
-const ENTITY_TYPES: readonly EntityType[] = ["deck", "card", "session", "librarySource", "sourceCollection", "reviewEvent"];
+const ENTITY_TYPES: readonly EntityType[] = ["deck", "card", "session", "librarySource", "sourceCollection", "reviewEvent", "generatedCardProvenance"];
 const OPS: readonly Change["op"][] = ["upsert", "delete"];
 const DIFFICULTIES: readonly string[] = ["easy", "medium", "hard"];
 const MODES: readonly string[] = ["review", "quiz"];
@@ -194,6 +195,13 @@ export function validateChange(raw: unknown): ValidationResult {
   }
 
   const entityType = entity as EntityType;
+  if (entityType === "generatedCardProvenance") {
+    const parsed = parseGeneratedCardProvenanceRecord(record);
+    const invalid = !parsed || parsed.id !== id || !isProvenanceTimestamp(ts) || ts !== parsed.updatedAt
+      || (op === "delete") !== !!parsed.deletedAt;
+    if (invalid) return { ok: false, rejected: { entity, reason: "malformed-generatedCardProvenance-record" } };
+    return { ok: true, change: { id, entity: entityType, op: op as Change["op"], record: parsed, ts } };
+  }
   const recordIsValid =
     entityType === "deck"
       ? isDeckRecordShape(record)

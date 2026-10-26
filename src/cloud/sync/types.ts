@@ -1,3 +1,4 @@
+import type { GeneratedCardProvenanceRecord } from "../../models/generatedCardProvenance";
 import type { CardRecord } from "../../models/card";
 import type { DeckRecord } from "../../models/deck";
 import type { LibrarySourceRecord } from "../../models/librarySource";
@@ -5,13 +6,13 @@ import type { ReviewEventRecord } from "../../models/reviewEvent";
 import type { SessionRecord } from "../../models/session";
 import type { SourceCollectionRecord } from "../../models/sourceCollection";
 
-export type EntityType = "deck" | "card" | "session" | "librarySource" | "sourceCollection" | "reviewEvent";
+export type EntityType = "deck" | "card" | "session" | "librarySource" | "sourceCollection" | "reviewEvent" | "generatedCardProvenance";
 
 export type Change = {
   id: string;
   entity: EntityType;
   op: "upsert" | "delete";
-  record: DeckRecord | CardRecord | SessionRecord | LibrarySourceRecord | SourceCollectionRecord | ReviewEventRecord;
+  record: DeckRecord | CardRecord | SessionRecord | LibrarySourceRecord | SourceCollectionRecord | ReviewEventRecord | GeneratedCardProvenanceRecord;
   ts: string;
 };
 
