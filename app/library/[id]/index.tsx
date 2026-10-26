@@ -21,11 +21,10 @@ import { formatAudioDuration, formatFileSize } from "../../../src/domain/library
 import { SOURCE_TYPE_LABEL_KEYS, STATUS_LABEL_KEYS } from "../../../src/domain/librarySourceLabels";
 import { hasEmbeddedSourcePreview } from "../../../src/domain/sourcePreview";
 import { hasFullSourceReader } from "../../../src/domain/sourceReader";
-import { deriveSourceCoverageDisplayState, type SourceCoverage } from "../../../src/domain/sourceCoverage";
+import type { SourceCoverage } from "../../../src/domain/sourceCoverage";
 import { loadSourceCoverage } from "../../../src/domain/sourceCoverageService";
 import { detectSourceTypeFromFile, extensionFromFileName } from "../../../src/domain/sourceTypeDetection";
 import { useTranslation } from "../../../src/i18n";
-import { useLayoutDirection } from "../../../src/i18n/direction";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
 import type { SourceCollectionRecord } from "../../../src/models/sourceCollection";
 import {
@@ -41,7 +40,7 @@ import { useTheme } from "@/src/theme";
 import { Button } from "../../../src/ui/Button";
 import { Card } from "../../../src/ui/Card";
 import { IconButton } from "../../../src/ui/IconButton";
-import { ProgressBar } from "../../../src/ui/ProgressBar";
+import { SourceCoverageCard } from "../../../src/ui/SourceCoverageCard";
 import { Screen } from "../../../src/ui/Screen";
 
 function openFailedBodyKey(reason: OpenSourceErrorReason): string {
@@ -78,7 +77,6 @@ export default function LibrarySourceDetailScreen() {
   const router = useRouter();
   const { t, language } = useTranslation();
   const { colors, spacing, typography } = useTheme();
-  const { text } = useLayoutDirection();
 
   const params = useLocalSearchParams();
   const idParam = params.id;
@@ -102,7 +100,13 @@ export default function LibrarySourceDetailScreen() {
 
   const load = useCallback(async () => {
     if (!id) return;
+    // Invalidate before any await, including metadata reads on refocus. Loading never presents
+    // stale values as current, and an older request cannot publish into this screen.
+    const requestId = ++coverageRequestIdRef.current;
+    setCoverage(null);
+    setCoverageLoading(generateEnabled);
     const scope = await AuthService.getActiveScope();
+    if (coverageRequestIdRef.current !== requestId) return;
     // hasLocalFile reflects real on-disk presence of Interval's own durable copy (see
     // src/storage/librarySourceFileStorage.ts), not merely a record in the local file map — this
     // is what lets Retry/Attach correctly detect a persisted copy that has since disappeared.
@@ -111,6 +115,7 @@ export default function LibrarySourceDetailScreen() {
       getActiveSourceCollections(scope),
       isSourceFileAvailableOnThisDevice(id),
     ]);
+    if (coverageRequestIdRef.current !== requestId) return;
     const found = all.find((s) => s.id === id) ?? null;
     setSource(found);
     setCollections(cols);
@@ -122,8 +127,6 @@ export default function LibrarySourceDetailScreen() {
     // even a cloud fallback download (see normalizeSource.ts). Intentionally kicked off here
     // rather than awaited above, so the screen's main content/actions render immediately.
     if (found && !found.archivedAt && generateEnabled) {
-      const requestId = ++coverageRequestIdRef.current;
-      setCoverageLoading(true);
       loadSourceCoverage(scope, found)
         .then((result) => {
           if (coverageRequestIdRef.current === requestId) setCoverage(result);
@@ -135,7 +138,6 @@ export default function LibrarySourceDetailScreen() {
           if (coverageRequestIdRef.current === requestId) setCoverageLoading(false);
         });
     } else {
-      coverageRequestIdRef.current++;
       setCoverage(null);
       setCoverageLoading(false);
     }
@@ -150,6 +152,7 @@ export default function LibrarySourceDetailScreen() {
       })();
       return () => {
         alive = false;
+        coverageRequestIdRef.current++;
       };
     }, [load])
   );
@@ -521,53 +524,7 @@ export default function LibrarySourceDetailScreen() {
         </Card>
       ) : null}
 
-      {generateEnabled && !source.archivedAt ? (
-        <Card style={[styles.detailCard, { gap: spacing.sm }]}>
-          <Text style={[typography.subheading, text, { color: colors.textPrimary }]}>{t("sourceCoverage.heading")}</Text>
-          {(() => {
-            if (!coverage) {
-              return (
-                <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>
-                  {coverageLoading ? t("sourceCoverage.loading") : t("sourceCoverage.noContent")}
-                </Text>
-              );
-            }
-            const state = deriveSourceCoverageDisplayState(coverage);
-            if (state.kind === "no-content") {
-              return (
-                <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>{t("sourceCoverage.noContent")}</Text>
-              );
-            }
-            if (state.kind === "no-cards") {
-              return (
-                <>
-                  <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>{t("sourceCoverage.noCardsYet")}</Text>
-                  <ProgressBar current={0} total={state.totalChunkCount} />
-                </>
-              );
-            }
-            if (state.kind === "full") {
-              return (
-                <>
-                  <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>{t("sourceCoverage.fullyCovered")}</Text>
-                  <ProgressBar current={state.totalChunkCount} total={state.totalChunkCount} />
-                </>
-              );
-            }
-            return (
-              <>
-                <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>
-                  {t("sourceCoverage.summary", { covered: state.coveredChunkCount, total: state.totalChunkCount })}
-                </Text>
-                <ProgressBar current={state.coveredChunkCount} total={state.totalChunkCount} />
-                <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
-                  {t("sourceCoverage.percentLabel", { percent: state.percent })}
-                </Text>
-              </>
-            );
-          })()}
-        </Card>
-      ) : null}
+      {generateEnabled && !source.archivedAt ? <SourceCoverageCard coverage={coverage} loading={coverageLoading} /> : null}
 
       <Text style={[typography.subheading, { color: colors.textPrimary }]}>{t("librarySource.detail.actionsHeading")}</Text>
       <View style={[styles.actions, { gap: spacing.sm }]}>

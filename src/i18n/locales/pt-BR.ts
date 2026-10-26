@@ -1223,11 +1223,15 @@ const ptBR = {
   sourceCoverage: {
     heading: "Cobertura de estudo",
     loading: "Verificando a cobertura…",
-    noContent: "Esta fonte ainda não tem conteúdo para gerar cartões de estudo.",
+    noContent: "Nenhuma seção para estudar encontrada.",
     noCardsYet: "Nenhum cartão de estudo cobre esta fonte ainda.",
-    fullyCovered: "Todas as seções disponíveis estão cobertas.",
-    summary: "{{covered}} de {{total}} seções da fonte cobertas",
+    fullyCovered: { one: "A única seção está coberta.", other: "Todas as {{count}} seções estão cobertas." },
+    summary: { one: "{{covered}} de {{total}} seção coberta", other: "{{covered}} de {{total}} seções cobertas" },
     percentLabel: "{{percent}}%",
+    unavailable: "Não foi possível verificar a cobertura. Volte a esta fonte para tentar novamente.",
+    explanation: "A cobertura mostra quais seções da fonte têm pelo menos um cartão de estudo salvo.",
+    remaining: { one: "{{count}} seção restante", other: "{{count}} seções restantes" },
+    available: { one: "{{count}} seção disponível.", other: "{{count}} seções disponíveis." },
   },
   export: {
     screenTitle: "Exportar baralho",

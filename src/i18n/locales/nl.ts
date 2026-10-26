@@ -1219,11 +1219,15 @@ const nl = {
   sourceCoverage: {
     heading: "Studiedekking",
     loading: "Dekking controleren…",
-    noContent: "Deze bron heeft nog geen inhoud om studiekaarten van te maken.",
+    noContent: "Geen secties om te bestuderen gevonden.",
     noCardsYet: "Nog geen studiekaarten dekken deze bron.",
-    fullyCovered: "Alle beschikbare secties zijn gedekt.",
-    summary: "{{covered}} van {{total}} secties van de bron gedekt",
+    fullyCovered: { one: "De enige sectie is gedekt.", other: "Alle {{count}} secties zijn gedekt." },
+    summary: { one: "{{covered}} van {{total}} sectie gedekt", other: "{{covered}} van {{total}} secties gedekt" },
     percentLabel: "{{percent}}%",
+    unavailable: "De dekking kon niet worden gecontroleerd. Open deze bron opnieuw om het nog eens te proberen.",
+    explanation: "De dekking laat zien welke secties van de bron minstens één opgeslagen studiekaart hebben.",
+    remaining: { one: "{{count}} sectie resterend", other: "{{count}} secties resterend" },
+    available: { one: "{{count}} sectie beschikbaar.", other: "{{count}} secties beschikbaar." },
   },
   export: {
     screenTitle: "Stapel exporteren",
