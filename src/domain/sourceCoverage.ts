@@ -65,7 +65,7 @@ export function computeSourceCoverage(chunkIds: string[], liveCoveredChunkIds: I
 export function deriveCoveredChunkIds(provenance: GeneratedCardProvenance[], liveCardIds: ReadonlySet<string>): Set<string> {
   const covered = new Set<string>();
   for (const entry of provenance) {
-    if (!liveCardIds.has(entry.cardId)) continue;
+    if (entry.deletedAt || !liveCardIds.has(entry.cardId)) continue;
     for (const chunkId of entry.sourceChunkIds) covered.add(chunkId);
   }
   return covered;

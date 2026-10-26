@@ -21,9 +21,9 @@ import type { DifficultyOption } from "./types";
 //
 // Source relationship: a DeckRecord/CardRecord has no field for an originating source, and
 // CLAUDE.md explicitly forbids adding one (both are on the live Production sync path). So the
-// card→chunk link is instead recorded in the separate, local-only, unsynced
-// GeneratedCardProvenance store (src/storage/generatedCardProvenance.ts) immediately after cards
-// are durably saved — never on CardRecord itself, never read by src/cloud/sync/**. See
+// card→chunk link is recorded in the separate GeneratedCardProvenance store immediately after
+// cards are durably saved. The store initializes dirty revisioned metadata for opportunistic
+// Development/Staging sync, without changing this offline save contract or CardRecord. See
 // docs/source-coverage.md for why this exists and docs/generate-study-deck-ux.md's "Source
 // relationship & provenance persistence" section for the history (this was previously deferred).
 // Best-effort: a failure here never rolls back the deck/card save that already succeeded (see

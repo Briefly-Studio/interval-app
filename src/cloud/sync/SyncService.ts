@@ -1,3 +1,4 @@
+import type { GeneratedCardProvenanceRecord } from "../../models/generatedCardProvenance";
 import type { CardRecord } from "../../models/card";
 import type { DeckRecord } from "../../models/deck";
 import type { LibrarySourceRecord } from "../../models/librarySource";
@@ -11,6 +12,7 @@ import { recomputeCardSchedulingState } from "../../domain/scheduling/recomputeC
 import { upsertCardScheduling } from "../../storage/cardScheduling";
 import { getCardsAll, setCards } from "../../storage/cards";
 import { getDecksAll, setDecks } from "../../storage/decks";
+import { applyGeneratedCardProvenance, getGeneratedCardProvenance, markGeneratedCardProvenanceClean } from "../../storage/generatedCardProvenance";
 import { getDeviceId } from "../../storage/device";
 import { getLibrarySources, setLibrarySources } from "../../storage/librarySources";
 import { getReviewEventsForDeck, setReviewEventsForDeck } from "../../storage/reviewEvents";
@@ -20,8 +22,10 @@ import { getSyncCursor, setSyncCursor } from "../../storage/sync";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import { sameScope } from "../../storage/workspaceScope";
 import { describeSyncFailure, getSyncDiagnosticCode, isSyncNetworkError, pullChanges, pushChanges } from "./http";
+import { isGeneratedCardProvenanceSyncEnabled } from "./generatedCardProvenanceSyncCapability";
 import { isLibraryMetadataCloudSyncEnabled } from "./libraryMetadataSyncCapability";
-import { ackCount, isAcked, parseAckList, partitionPushChanges, pushBatchesSequentially } from "./pushHelpers.mjs";
+import { ackCount, isAcked, parseAckList, pushBatchesSequentially } from "./pushHelpers.mjs";
+import { partitionProvenancePushChanges } from "./generatedCardProvenanceSyncPayload";
 import { mergeIncomingReviewEvents } from "./reviewEventMerge";
 import { isReviewEventSyncEnabled } from "./reviewEventSyncCapability";
 import {
@@ -94,7 +98,9 @@ function partitionChanges(rawChanges: unknown[]): { changes: Change[]; rejected:
       // Concise, safe diagnostic only — entity type, change id, and a fixed reason string.
       // Never the record itself: no card front/back, no deck title, no tokens, no other
       // personal data ever reaches this log line.
-      console.warn("[sync] skipping malformed pulled record:", result.rejected);
+      console.warn("[sync] skipping malformed pulled record:", result.rejected.entity === "generatedCardProvenance"
+        ? { entity: "generatedCardProvenance", reason: result.rejected.reason }
+        : result.rejected);
     }
   }
 
@@ -303,6 +309,11 @@ async function applyChanges(scope: WorkspaceScope, rawChanges: unknown[]): Promi
     await setSourceCollections(scope, Array.from(byId.values()));
   }
 
+  if (isGeneratedCardProvenanceSyncEnabled()) {
+    const records = ordered.filter((c) => c.entity === "generatedCardProvenance").map((c) => c.record as GeneratedCardProvenanceRecord);
+    if (records.length) await applyGeneratedCardProvenance(scope, records, now);
+  }
+
   if (reviewEventChanges.length) {
     const byDeckId = new Map<string, Change[]>();
     for (const ch of reviewEventChanges) {
@@ -426,6 +437,15 @@ async function collectDirty(scope: WorkspaceScope): Promise<Change[]> {
     }
   }
 
+  if (isGeneratedCardProvenanceSyncEnabled()) {
+    for (const record of await getGeneratedCardProvenance(scope)) {
+      if (!record.dirty) continue;
+      // Local bookkeeping never crosses the wire; only whitelisted metadata does.
+      const { dirty: _dirty, lastSyncedAt: _lastSyncedAt, ...metadata } = record;
+      changes.push({ id: record.id, entity: "generatedCardProvenance", op: record.deletedAt ? "delete" : "upsert",
+        record: metadata as GeneratedCardProvenanceRecord, ts: record.updatedAt });
+    }
+  }
   return changes;
 }
 
@@ -502,6 +522,12 @@ async function markClean(
     return;
   }
 
+  if (entity === "generatedCardProvenance") {
+    await markGeneratedCardProvenanceClean(scope, acknowledged, now);
+    return;
+  }
+  if (entity !== "reviewEvent") return;
+
   // entity === "reviewEvent" — per-deck, mirroring "card" above (same per-deck-keyed storage
   // shape). No `lastSyncedAt` field exists on ReviewEventRecord (unlike every other entity here):
   // the record is write-once (rev is always 1) and is never re-pushed once acknowledged, so there
@@ -564,7 +590,7 @@ async function runSync(): Promise<void> {
     // and the thrown error propagates (stopping sync before pull, exactly as an un-chunked push
     // failure always has). setPendingDirtyCount is recomputed on the failure path so the UI
     // reflects the batches that did land.
-    const batches = partitionPushChanges(outgoing);
+    const batches = partitionProvenancePushChanges(outgoing);
 
     const applyBatch = async (batch: Change[]): Promise<"abort" | void> => {
       const pushJson = await pushChanges(accessToken, { deviceId, changes: batch });
@@ -609,6 +635,7 @@ async function runSync(): Promise<void> {
         // acknowledgedFor("reviewEvent") is empty and markClean's own early-return makes this a
         // no-op.
         await markClean(scope, "reviewEvent", acknowledgedFor("reviewEvent"));
+        await markClean(scope, "generatedCardProvenance", acknowledgedFor("generatedCardProvenance"));
       }
     };
 

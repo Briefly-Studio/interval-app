@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { upgradeGeneratedCardProvenance } from "./generatedCardProvenance";
+import { MAX_PROVENANCE_CHUNK_IDS, parseGeneratedCardProvenanceRecord, upgradeGeneratedCardProvenance } from "./generatedCardProvenance";
 
 const valid = {
   cardId: "card-1",
@@ -40,4 +40,23 @@ test("upgradeGeneratedCardProvenance rejects missing/malformed required fields",
   assert.equal(upgradeGeneratedCardProvenance({ ...valid, deckId: undefined }), null);
   assert.equal(upgradeGeneratedCardProvenance({ ...valid, sourceId: 5 }), null);
   assert.equal(upgradeGeneratedCardProvenance({ ...valid, generatedAt: "" }), null);
+});
+
+test("strict synced record rejects malformed IDs, timestamp, revision, flags, and arbitrary content", () => {
+  const record=upgradeGeneratedCardProvenance(valid)!;
+  for(const patch of [
+    {id:"other"},{cardId:"../card"},{deckId:" "},{sourceId:""},{sourceId:"x".repeat(129)},
+    {generatedAt:"yesterday"},{generatedAt:"2026-02-30T00:00:00.000Z"},{updatedAt:"invalid"},
+    {rev:0},{rev:-1},{rev:1.5},{rev:Infinity},{dirty:"true"},{deletedAt:"bad"},{lastSyncedAt:"bad"},
+    {normalizationVersion:0},{normalizationVersion:1.5},{sourceText:"private"},
+    {sourceChunkIds:[]},{sourceChunkIds:["x".repeat(65)]},{sourceChunkIds:["bad/path"]},
+    {sourceChunkIds:Array(MAX_PROVENANCE_CHUNK_IDS+1).fill("chunk_a")},
+  ]) assert.equal(parseGeneratedCardProvenanceRecord({...record,...patch}),null,JSON.stringify(patch).slice(0,90));
+  assert.deepEqual(upgradeGeneratedCardProvenance(record),record);
+  assert.equal(record.normalizationVersion,undefined);
+});
+
+test("valid tombstone/optional normalization version and deduplicated remote chunk ids",()=>{
+  const r=upgradeGeneratedCardProvenance(valid)!;
+  assert.deepEqual(parseGeneratedCardProvenanceRecord({...r,deletedAt:r.updatedAt,normalizationVersion:1,sourceChunkIds:["chunk_b","chunk_a","chunk_a"]})?.sourceChunkIds,["chunk_a","chunk_b"]);
 });

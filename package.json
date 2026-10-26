@@ -14,7 +14,8 @@
     "test:docx": "node --test src/domain/docxTableLayout.test.ts",
     "test:scheduling": "node --import ./scripts/ai-test-loader.mjs --test src/domain/scheduling/*.test.ts src/models/cardScheduling.test.ts src/models/reviewEvent.test.ts src/cloud/sync/reviewEventMerge.test.ts src/cloud/sync/validateChange.reviewEvent.test.ts",
     "test:import": "node --import ./scripts/ai-test-loader.mjs --test src/domain/import/*.test.ts",
-    "test:coverage": "node --import ./scripts/ai-test-loader.mjs --test src/domain/sourceCoverage.test.ts src/models/generatedCardProvenance.test.ts"
+    "test:coverage": "node --import ./scripts/ai-test-loader.mjs --test src/domain/sourceCoverage.test.ts src/models/generatedCardProvenance.test.ts",
+    "test:provenance": "node --experimental-test-module-mocks --import ./scripts/ai-test-loader.mjs --test src/models/generatedCardProvenance.test.ts src/cloud/sync/generatedCardProvenance*.test.ts src/storage/generatedCardProvenanceStore.test.ts src/domain/sourceCoverageLiveness.test.ts"
   },
   "dependencies": {
     "@config-plugins/react-native-blob-util": "12.0.0",
