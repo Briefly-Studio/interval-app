@@ -4,7 +4,7 @@ A read-only, truthful layer over the Library/Source Normalization/Generate Study
 architecture: for a given Library source, which of its normalized chunks already have at least
 one **live, saved** study card referencing them, and which don't.
 
-**Implemented, merged into `v3.3-dev`; not yet founder-QA verified.** Local-only computation, no
+**Implemented, merged into `v3.3-dev`; not yet founder-QA verified.** On-device computation with gated metadata sync, no
 network call beyond what `normalizeSource()` already does for Generate/Reader/Preview, no AI, no
 cost, no backend/AWS/CDK change.
 
@@ -107,7 +107,8 @@ uncovered chunk = a current normalized chunk from this source with no live card 
 
 - A generation draft that was reviewed but never saved (`GenerateDeckSession` is in-memory only
   and is simply discarded — see `src/domain/ai/generateDeckSession.ts`).
-- A deleted card or a card whose deck was deleted (soft-delete tombstone present).
+- Deleted provenance, a missing/deleted card, or a card whose parent deck is missing/deleted.
+  Parent-deck exclusion applies even when cascade card changes have not arrived yet.
 - A card that was never generated from this source — a different source's cards, a manual card,
   or a CSV/Quizlet-imported card (`docs/flashcard-import.md`). None of these ever produce a
   `GeneratedCardProvenance` entry, so they are excluded by construction, not by a special check.
@@ -141,7 +142,7 @@ doesn't appear in the CURRENT normalized chunk list as simply absent — it is n
 never throws. This is what makes both of the scenarios above degrade safely instead of crashing
 or showing a nonsensical number.
 
-## Why a new local-only link store was needed
+## Why provenance remains a separate link store
 
 Before this batch, a saved `CardRecord`/`DeckRecord` carried **zero** trace of the source/chunks
 it was generated from — `src/domain/ai/generateDeckSave.ts` read `draftCard.sourceChunkIds` only
@@ -152,22 +153,23 @@ a source-origin field to `CardRecord`/`DeckRecord` — both are on the live Prod
 so any new field reaches Production the next time any signed-in user syncs.
 
 So, exactly as `docs/deck-collections.md` already did for deck↔collection membership, this batch
-adds a **separate, local-only, unsynced** link store instead of touching the synced models:
+uses a **separate provenance entity** instead of adding fields to the card/deck models.
+See [Generated card provenance sync](./sync-generated-card-provenance.md) for the schema,
+migration, conflicts, environment gates and rollout limitations:
 
-- **Model**: `src/models/generatedCardProvenance.ts` — `{ cardId, deckId, sourceId,
-  sourceChunkIds, generatedAt }`.
+- **Model**: `src/models/generatedCardProvenance.ts` — card/source/chunk identity and save time,
+  with id/rev/updatedAt/dirty and optional tombstone/version fields. No source or card text.
 - **Storage**: `src/storage/generatedCardProvenance.ts`, key
   `interval.generatedCardProvenance.v1` (`src/storage/generatedCardProvenanceKeys.ts`),
   `scopedKey`-partitioned exactly like decks/cards/Library/Deck Collections.
-- **Never imported by `src/cloud/sync/**`** — `src/cloud/sync/types.ts`'s `EntityType` union has
-  no member for this, deliberately. An entry here never leaves the device and is never pushed or
-  pulled.
+- **Synced in Development/Staging**, under its own fail-closed capability gate. Production and
+  guests retain local-only provenance; AI provider rollout remains separate.
 - **Written once**, in `saveDraftDeck` (`src/domain/ai/generateDeckSave.ts`), immediately after
   `setCards` succeeds — best-effort: a failure to record provenance never rolls back the
   already-successful deck/card save (same "additive, never a new failure mode for the core save"
   posture the rate-limiter and consent batches used for their own non-critical side effects).
 
-This is new persisted (if local-only) state, not a bug fix — flagging it plainly here rather than
+This is persisted source-relationship metadata, not a CardRecord field — flagging it plainly here rather than
 treating it as an implementation detail, since CLAUDE.md's existing guidance for the analogous
 Deck Collections decision called this kind of thing "real product-architecture work."
 
@@ -188,8 +190,8 @@ there is no persistent incremented/decremented counter anywhere that could drift
 - Deleting the last card that covered some chunk removes that chunk from `coveredChunkIds` the
   next time coverage is computed (nothing is pre-computed or cached).
 - Restoring a card (`restoreCardToDeck`) makes its provenance entry "count" again automatically —
-  the provenance entry itself was never touched by the delete; only whether the card is currently
-  live is re-checked.
+  the provenance entry itself was never touched by the delete; card and parent-deck liveness
+  are re-checked. Recovery-deck restores follow the newer card location.
 - Deleting an entire deck cascades `deletedAt` onto every one of its cards
   (`deleteDeckById` in `src/storage/decks.ts`) — those cards stop being live, so their chunks drop
   out of coverage with no special-case code in the coverage layer itself. Restoring a
@@ -256,17 +258,18 @@ blocking**, the rest of the screen:
   would only ever read "No study cards cover this source yet," forever. This was a product
   judgment call made in this batch, not a founder decision — revisit if Generate's own gate ever
   changes.
-- **No cross-device sync of provenance.** `GeneratedCardProvenance` is local-only, exactly like
-  Deck Collections and Discover progress — a card generated and saved on one device shows correct
-  coverage only on that device. A second device signed into the same account sees that card (via
-  the existing card/deck sync) but not its provenance, so that device's coverage computation
-  would under-count. Not solved here; same category of gap `docs/deck-collections.md` already
-  documents for its own local-only membership store.
+- **Provenance now syncs in Development/Staging** as a separate metadata entity. Equal delivered
+  record sets and identical normalized chunks give the same coverage on each device. Production
+  remains local-only. Real-device QA is pending; old clients that skipped provenance need replay,
+  and the inherited timestamp-cursor limitation can miss backdated offline uploads. See
+  [provenance sync](./sync-generated-card-provenance.md) before rollout.
 - **A `NORMALIZATION_VERSION` bump invalidates all existing provenance** for every source, as
   described above — there's no migration step that remaps old chunk ids forward. This has not
   happened yet (the version has been `1` since the normalization foundation shipped) and would be
   a one-time, intentional consequence of a deliberate algorithm change, not a bug.
-- **No automated UI/screen test.** Like the rest of this codebase's RN rendering, the Source
+- **No automated UI/screen test.** Real sync-loop and coverage-service integration now use
+  mocked native/transport boundaries under `npm run test:provenance`; this is not device QA.
+ Like the rest of this codebase's RN rendering, the Source
   Detail coverage section itself is exercised only by founder runtime QA; the pure domain logic
   (`computeSourceCoverage`, `deriveCoveredChunkIds`, `deriveSourceCoverageDisplayState`) has full
   `node --test` coverage (`npm run test:coverage`).
