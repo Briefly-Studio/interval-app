@@ -1,6 +1,6 @@
 import * as DocumentPicker from "expo-document-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../src/auth/AuthService";
@@ -21,8 +21,11 @@ import { formatAudioDuration, formatFileSize } from "../../../src/domain/library
 import { SOURCE_TYPE_LABEL_KEYS, STATUS_LABEL_KEYS } from "../../../src/domain/librarySourceLabels";
 import { hasEmbeddedSourcePreview } from "../../../src/domain/sourcePreview";
 import { hasFullSourceReader } from "../../../src/domain/sourceReader";
+import { deriveSourceCoverageDisplayState, type SourceCoverage } from "../../../src/domain/sourceCoverage";
+import { loadSourceCoverage } from "../../../src/domain/sourceCoverageService";
 import { detectSourceTypeFromFile, extensionFromFileName } from "../../../src/domain/sourceTypeDetection";
 import { useTranslation } from "../../../src/i18n";
+import { useLayoutDirection } from "../../../src/i18n/direction";
 import type { LibrarySourceRecord } from "../../../src/models/librarySource";
 import type { SourceCollectionRecord } from "../../../src/models/sourceCollection";
 import {
@@ -38,6 +41,7 @@ import { useTheme } from "@/src/theme";
 import { Button } from "../../../src/ui/Button";
 import { Card } from "../../../src/ui/Card";
 import { IconButton } from "../../../src/ui/IconButton";
+import { ProgressBar } from "../../../src/ui/ProgressBar";
 import { Screen } from "../../../src/ui/Screen";
 
 function openFailedBodyKey(reason: OpenSourceErrorReason): string {
@@ -74,6 +78,7 @@ export default function LibrarySourceDetailScreen() {
   const router = useRouter();
   const { t, language } = useTranslation();
   const { colors, spacing, typography } = useTheme();
+  const { text } = useLayoutDirection();
 
   const params = useLocalSearchParams();
   const idParam = params.id;
@@ -86,6 +91,12 @@ export default function LibrarySourceDetailScreen() {
   const [hasLocalFile, setHasLocalFile] = useState(false);
   const [fileBusy, setFileBusy] = useState(false);
   const [openStage, setOpenStage] = useState<OpenSourceStage | null>(null);
+  const [coverage, setCoverage] = useState<SourceCoverage | null>(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  // Guards against a stale normalizeSource() call (triggered by an earlier focus) overwriting a
+  // newer one's result — normalizeSource has no cache and nothing here cancels an in-flight call,
+  // so this only discards the stale RESULT; see docs/source-coverage.md's "Performance" section.
+  const coverageRequestIdRef = useRef(0);
   const storageEnabled = isLibrarySourceStorageEnabled();
   const generateEnabled = isGenerateStudyDeckEnabled();
 
@@ -100,11 +111,35 @@ export default function LibrarySourceDetailScreen() {
       getActiveSourceCollections(scope),
       isSourceFileAvailableOnThisDevice(id),
     ]);
-    setSource(all.find((s) => s.id === id) ?? null);
+    const found = all.find((s) => s.id === id) ?? null;
+    setSource(found);
     setCollections(cols);
     setHasLocalFile(hasFile);
     setLoaded(true);
-  }, [id]);
+
+    // Coverage is loaded separately from (and never blocks) the rest of this screen — it may
+    // need to re-normalize the source, which for pdf/docx/xlsx/text can mean a local file read or
+    // even a cloud fallback download (see normalizeSource.ts). Intentionally kicked off here
+    // rather than awaited above, so the screen's main content/actions render immediately.
+    if (found && !found.archivedAt && generateEnabled) {
+      const requestId = ++coverageRequestIdRef.current;
+      setCoverageLoading(true);
+      loadSourceCoverage(scope, found)
+        .then((result) => {
+          if (coverageRequestIdRef.current === requestId) setCoverage(result);
+        })
+        .catch(() => {
+          if (coverageRequestIdRef.current === requestId) setCoverage(null);
+        })
+        .finally(() => {
+          if (coverageRequestIdRef.current === requestId) setCoverageLoading(false);
+        });
+    } else {
+      coverageRequestIdRef.current++;
+      setCoverage(null);
+      setCoverageLoading(false);
+    }
+  }, [id, generateEnabled]);
 
   useFocusEffect(
     useCallback(() => {
@@ -483,6 +518,54 @@ export default function LibrarySourceDetailScreen() {
             disabled={mutating}
             onPress={() => router.push({ pathname: "/library/[id]/generate" as any, params: { id: source.id } })}
           />
+        </Card>
+      ) : null}
+
+      {generateEnabled && !source.archivedAt ? (
+        <Card style={[styles.detailCard, { gap: spacing.sm }]}>
+          <Text style={[typography.subheading, text, { color: colors.textPrimary }]}>{t("sourceCoverage.heading")}</Text>
+          {(() => {
+            if (!coverage) {
+              return (
+                <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>
+                  {coverageLoading ? t("sourceCoverage.loading") : t("sourceCoverage.noContent")}
+                </Text>
+              );
+            }
+            const state = deriveSourceCoverageDisplayState(coverage);
+            if (state.kind === "no-content") {
+              return (
+                <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>{t("sourceCoverage.noContent")}</Text>
+              );
+            }
+            if (state.kind === "no-cards") {
+              return (
+                <>
+                  <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>{t("sourceCoverage.noCardsYet")}</Text>
+                  <ProgressBar current={0} total={state.totalChunkCount} />
+                </>
+              );
+            }
+            if (state.kind === "full") {
+              return (
+                <>
+                  <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>{t("sourceCoverage.fullyCovered")}</Text>
+                  <ProgressBar current={state.totalChunkCount} total={state.totalChunkCount} />
+                </>
+              );
+            }
+            return (
+              <>
+                <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>
+                  {t("sourceCoverage.summary", { covered: state.coveredChunkCount, total: state.totalChunkCount })}
+                </Text>
+                <ProgressBar current={state.coveredChunkCount} total={state.totalChunkCount} />
+                <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+                  {t("sourceCoverage.percentLabel", { percent: state.percent })}
+                </Text>
+              </>
+            );
+          })()}
         </Card>
       ) : null}
 

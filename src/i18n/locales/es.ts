@@ -1218,6 +1218,15 @@ const es = {
       saveButton: "Guardar tarjeta",
     },
   },
+  sourceCoverage: {
+    heading: "Cobertura de estudio",
+    loading: "Comprobando la cobertura…",
+    noContent: "Esta fuente aún no tiene contenido para generar tarjetas de estudio.",
+    noCardsYet: "Ninguna tarjeta de estudio cubre esta fuente todavía.",
+    fullyCovered: "Todas las secciones disponibles están cubiertas.",
+    summary: "{{covered}} de {{total}} secciones de la fuente cubiertas",
+    percentLabel: "{{percent}}%",
+  },
   export: {
     screenTitle: "Exportar mazo",
     description: "Crea un archivo de mazo de Interval con las tarjetas de este mazo, listo para compartir o importar en otro dispositivo.",

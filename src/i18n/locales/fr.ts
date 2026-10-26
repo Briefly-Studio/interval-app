@@ -1223,6 +1223,15 @@ const fr = {
       saveButton: "Enregistrer la carte",
     },
   },
+  sourceCoverage: {
+    heading: "Couverture d'étude",
+    loading: "Vérification de la couverture…",
+    noContent: "Cette source n'a pas encore de contenu permettant de générer des cartes d'étude.",
+    noCardsYet: "Aucune carte d'étude ne couvre encore cette source.",
+    fullyCovered: "Toutes les sections disponibles sont couvertes.",
+    summary: "{{covered}} sur {{total}} sections de la source couvertes",
+    percentLabel: "{{percent}} %",
+  },
   export: {
     screenTitle: "Exporter le paquet",
     description: "Crée un fichier de paquet Interval avec les cartes de ce paquet, prêt à être partagé ou importé sur un autre appareil.",

@@ -1,7 +1,9 @@
 import { type CardRecord, type Difficulty, upgradeCard } from "../../models/card";
 import { type DeckRecord, makeId, upgradeDeck } from "../../models/deck";
+import type { GeneratedCardProvenance } from "../../models/generatedCardProvenance";
 import { deleteCardsForDeck, setCards } from "../../storage/cards";
 import { addDeck, getDecksAll, setDecks } from "../../storage/decks";
+import { recordGeneratedCardProvenance } from "../../storage/generatedCardProvenance";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import { validateDraftCardBack, validateDraftCardFront } from "./draftCardEditing";
 import type { GenerateDeckSession } from "./generateDeckSession";
@@ -17,11 +19,15 @@ import type { DifficultyOption } from "./types";
 // addCard calls) is used only to avoid N AsyncStorage round-trips for an up-to-40-card deck — the
 // records written are identical to what addCard would have produced.
 //
-// Source relationship: a DeckRecord has no field for an originating source, and CLAUDE.md
-// explicitly forbids adding one (DeckRecord is on the live Production sync path). So this batch
-// deliberately does NOT persist a deck→source or card→chunk link — provenance stays a
-// review-time affordance only. See docs/generate-study-deck-ux.md's "Source relationship &
-// provenance persistence" section for the future local-only link-store design.
+// Source relationship: a DeckRecord/CardRecord has no field for an originating source, and
+// CLAUDE.md explicitly forbids adding one (both are on the live Production sync path). So the
+// card→chunk link is instead recorded in the separate, local-only, unsynced
+// GeneratedCardProvenance store (src/storage/generatedCardProvenance.ts) immediately after cards
+// are durably saved — never on CardRecord itself, never read by src/cloud/sync/**. See
+// docs/source-coverage.md for why this exists and docs/generate-study-deck-ux.md's "Source
+// relationship & provenance persistence" section for the history (this was previously deferred).
+// Best-effort: a failure here never rolls back the deck/card save that already succeeded (see
+// recordGeneratedCardProvenance's own header comment).
 
 const DIFFICULTY_BY_OPTION: Record<DifficultyOption, Difficulty> = {
   basic: "easy",
@@ -149,6 +155,22 @@ export async function saveDraftDeck(scope: WorkspaceScope, session: GenerateDeck
     } catch {
       const rolledBack = await rollbackDeck(scope, deckId);
       return { status: "error", code: rolledBack ? "card-write-failed" : "rollback-failed" };
+    }
+
+    try {
+      const provenanceEntries: GeneratedCardProvenance[] = cards
+        .map((card, i) => ({
+          cardId: card.id,
+          deckId,
+          sourceId: session.sourceId,
+          sourceChunkIds: session.cards[i]?.sourceChunkIds ?? [],
+          generatedAt: card.updatedAt,
+        }))
+        .filter((entry) => entry.sourceChunkIds.length > 0);
+      await recordGeneratedCardProvenance(scope, provenanceEntries);
+    } catch {
+      // Best-effort — see this file's header comment. The deck/cards above are already safely
+      // persisted; losing provenance here only means Source Coverage won't see these cards.
     }
 
     return { status: "saved", deckId, cardCount: cards.length };

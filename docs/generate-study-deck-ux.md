@@ -281,24 +281,23 @@ citation via `resolveProvenanceLabel` (`src/domain/ai/draftCardEditing.ts`):
 - If no cited chunk carries location data, the citation is **omitted** — never a fabricated page
   or line number.
 
-## Source relationship & provenance persistence (deliberately deferred)
+## Source relationship & provenance persistence
 
-**This batch does not persist any deck→source or card→chunk link.**
+**Originally deliberately deferred in this batch; now implemented (`feat/source-coverage`,
+merged into `v3.3-dev`) — see `docs/source-coverage.md` for the full design.**
 
-`DeckRecord` (`src/models/deck.ts`) has no field for an originating source, and CLAUDE.md
-explicitly forbids adding one — decks are on the live Production sync path, so any new field
-reaches Production on the next sync of any signed-in user. Forcing a provenance link into that
-model is real product-architecture work, not part of a UX shell.
-
-Card-level generation provenance therefore stays a **review-time affordance only** and is lost
-once the deck is saved.
-
-A future implementation would most naturally add a **local-only, unsynced** link store —
-`interval.generatedDeckSources.v1`, `scopedKey`-partitioned like decks/cards, mapping
-`deckId → { sourceId, generatedAt, providerId, normalizationVersion, generationContractVersion }`
-— analogous to `src/storage/librarySourceLocalFiles.ts`. Card-level chunk provenance would need
-either a `CardRecord` schema decision or a parallel local store keyed by card id. Both are
-explicit, separate, founder-approved work.
+`DeckRecord`/`CardRecord` (`src/models/deck.ts`/`src/models/card.ts`) still have no field for an
+originating source or chunk — CLAUDE.md still explicitly forbids adding one, and that has not
+changed. What changed is that card-level generation provenance is no longer *only* a review-time
+affordance that's lost once the deck is saved: `saveDraftDeck`
+(`src/domain/ai/generateDeckSave.ts`) now also writes a **local-only, unsynced** link record per
+generated card — `GeneratedCardProvenance` (`src/models/generatedCardProvenance.ts`,
+`src/storage/generatedCardProvenance.ts`, key `interval.generatedCardProvenance.v1`) — mapping
+`cardId → { deckId, sourceId, sourceChunkIds, generatedAt }`. This is exactly the local-only
+link-store shape this section used to sketch as future work, built specifically to power Source
+Coverage (`docs/source-coverage.md`) — never read by `src/cloud/sync/**`, and the write is
+best-effort (never rolls back an already-successful deck/card save). The review-time citation
+affordance described above (`provenanceByChunkId`, in-memory only) is unchanged by this.
 
 ## Localization & RTL
 

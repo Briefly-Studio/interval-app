@@ -1170,6 +1170,15 @@ const zhHans = {
       saveButton: "保存卡片",
     },
   },
+  sourceCoverage: {
+    heading: "学习覆盖情况",
+    loading: "正在检查覆盖情况…",
+    noContent: "此来源暂无可用于生成学习卡片的内容。",
+    noCardsYet: "尚无学习卡片覆盖此来源。",
+    fullyCovered: "所有可用部分均已覆盖。",
+    summary: "已覆盖来源的 {{covered}} / {{total}} 个部分",
+    percentLabel: "{{percent}}%",
+  },
   export: {
     screenTitle: "导出卡组",
     description: "生成包含此卡组卡片的 Interval 卡组文件，可用于分享或导入到其他设备。",
