@@ -9,18 +9,19 @@ import type { TranslateParams, TranslationKey } from "../i18n";
 // and focus handling for free from the OS, exactly what this feature needs, with no new
 // accessibility surface to build or get wrong.
 //
-// Cancel is passive by design (no onPress at all) — tapping it, or dismissing the alert any other
-// way a platform allows, must never be mistaken for consent. Only an explicit tap on Continue
-// calls `onContinue`. See docs/ai-generation-foundation.md's "First-use consent" section.
+// Cancel and dismissal settle the pending approval without granting consent. Only an explicit
+// tap on Continue calls `onContinue`. See docs/ai-generation-foundation.md's "First-use consent"
+// section.
 
 type ShowAiConsentDialogParams = {
   t: (key: TranslationKey, params?: TranslateParams) => string;
   onContinue: () => void;
+  onCancel?: () => void;
 };
 
-export function showAiConsentDialog({ t, onContinue }: ShowAiConsentDialogParams): void {
+export function showAiConsentDialog({ t, onContinue, onCancel }: ShowAiConsentDialogParams): void {
   Alert.alert(t("generateDeck.consent.title"), t("generateDeck.consent.body"), [
-    { text: t("common.cancel"), style: "cancel" },
+    { text: t("common.cancel"), style: "cancel", onPress: onCancel },
     { text: t("generateDeck.consent.continueButton"), style: "default", onPress: onContinue },
-  ]);
+  ], { cancelable: true, onDismiss: onCancel });
 }

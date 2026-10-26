@@ -1,7 +1,7 @@
 import type { NormalizedSourceContent } from "../normalization/types";
 import { generateStudyDeck, type ModelProvider } from "./aiService";
 import { allocateCardsAcrossBatches } from "./batchCardAllocation";
-import type { BatchPlan } from "./batchPlanning";
+import { MAX_BATCHES_PER_GENERATION, type BatchPlan } from "./batchPlanning";
 import { resolveRequestedCardCount, resolveTargetMinimumCardCount } from "./generationOptions";
 import { dedupeCombinedCards } from "./multiBatchDedupe";
 import { computeCardDraftId, deriveGenerationStatus } from "./responseValidation";
@@ -22,7 +22,8 @@ import type { GeneratedCardDraft, GeneratedDeckDraft, GenerationError, Generatio
 export type MultiBatchProgress =
   | { phase: "preparing" }
   | { phase: "batch"; batchIndex: number; batchCount: number }
-  | { phase: "combining" };
+  | { phase: "combining" }
+  | { phase: "preparingReview" };
 
 export type MultiBatchOutcome =
   | { status: "ready"; draft: GeneratedDeckDraft }
@@ -45,9 +46,8 @@ export type RunMultiBatchGenerationParams = {
    * failures are handled by the caller (generateDeckFlow.ts) before this function is ever called. */
   plan: BatchPlan & { status: "ok" };
   onProgress?: (progress: MultiBatchProgress) => void;
-  /** Checked BEFORE each batch starts (never mid-batch — an already-dispatched request to the
-   * backend cannot be interrupted; see docs/whole-source-generation.md's "Cancellation" section).
-   * Scheduling simply stops; nothing already completed is undone or saved. */
+  /** Checked before dispatch, after await, and before publishing a combined result. This does
+   * not abort an in-flight HTTP request; it discards its result and stops future requests. */
   isCanceled?: () => boolean;
 };
 
@@ -66,7 +66,18 @@ function logAggregateOutcome(detail: Record<string, unknown>): void {
 export async function runMultiBatchGeneration(params: RunMultiBatchGenerationParams): Promise<MultiBatchOutcome> {
   const { provider, normalizedContent, sourceTitle, language, options, plan } = params;
   const startedAt = Date.now();
+  const canceled = (completedBatchCount: number): MultiBatchOutcome => ({ status: "canceled", completedBatchCount });
+  const failure = (code: GenerationError["code"], index: number): MultiBatchOutcome => ({
+    status: "error", error: { code, message: "Generation did not complete." }, failedAtBatchIndex: index, completedBatchCount: index,
+  });
+  if (params.isCanceled?.()) return canceled(0);
   params.onProgress?.({ phase: "preparing" });
+  const plannedIds = plan.batches.flatMap((batch) => batch.chunkIds);
+  const sourceIds = new Set(normalizedContent.chunks.map((chunk) => chunk.id));
+  if (!plan.batches.length || plan.batches.length > MAX_BATCHES_PER_GENERATION
+    || plan.batches.some((batch, i) => !batch.chunkIds.length || batch.index !== i)
+    || new Set(plannedIds).size !== plannedIds.length || plan.totalCandidateChunks !== plannedIds.length
+    || plannedIds.some((id) => !sourceIds.has(id))) return failure("validation-failed", 0);
 
   const requestedCardCount = resolveRequestedCardCount(options.cardCount);
   const targetMinimumCardCount = resolveTargetMinimumCardCount(options.cardCount);
@@ -93,13 +104,23 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
     params.onProgress?.({ phase: "batch", batchIndex: i + 1, batchCount: plan.batches.length });
 
     const batchOptions: GenerationOptions = { ...options, cardCount: perBatchCeilings[i] };
-    const outcome = await generateStudyDeck(provider, {
-      sourceTitle,
-      normalizedContent,
-      options: batchOptions,
-      language,
-      selectedChunkIds: batch.chunkIds,
-    });
+    // A progress callback can synchronously cancel before this request is dispatched.
+    if (params.isCanceled?.()) return canceled(i);
+    let outcome;
+    try {
+      outcome = await generateStudyDeck(provider, {
+        sourceTitle,
+        normalizedContent,
+        options: batchOptions,
+        language,
+        selectedChunkIds: batch.chunkIds,
+      });
+    } catch {
+      // Intentional cancellation wins over a simultaneous network/provider exception.
+      if (params.isCanceled?.()) return canceled(i);
+      return failure("provider-unavailable", i);
+    }
+    if (params.isCanceled?.()) return canceled(i + (outcome.status === "ready" ? 1 : 0));
 
     if (outcome.status === "error") {
       logAggregateOutcome({
@@ -116,10 +137,16 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
     if (combinedTitle === null) combinedTitle = outcome.draft.title;
     providerId = outcome.draft.generation.providerId;
     combinedCards.push(...outcome.draft.cards);
-    for (const chunkId of batch.chunkIds) consideredChunkIds.add(chunkId);
+    const submitted = outcome.draft.generation.selectedChunkIds;
+    // Planning alone does not prove processing: the existing context budget can still exclude
+    // a chunk (e.g. an oversized batch). Never turn that into a whole-selection success claim.
+    if (batch.chunkIds.some((id) => !submitted.includes(id))) return failure("context-too-large", i);
+    for (const chunkId of submitted) consideredChunkIds.add(chunkId);
   }
 
+  if (params.isCanceled?.()) return canceled(plan.batches.length);
   params.onProgress?.({ phase: "combining" });
+  if (params.isCanceled?.()) return canceled(plan.batches.length);
 
   const { cards: dedupedCards, duplicatesRemoved } = dedupeCombinedCards(combinedCards);
   // Re-stamp a fresh, globally-unique, content-addressed id now that cards from independent
@@ -167,6 +194,9 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
       issues: [],
     },
   };
+
+  params.onProgress?.({ phase: "preparingReview" });
+  if (params.isCanceled?.()) return canceled(plan.batches.length);
 
   logAggregateOutcome({
     multiBatch: true,

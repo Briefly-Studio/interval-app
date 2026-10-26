@@ -201,6 +201,7 @@ test("progress callback reports preparing, each batch in order, then combining",
       { phase: "batch", batchIndex: 1, batchCount: 2 },
       { phase: "batch", batchIndex: 2, batchCount: 2 },
       { phase: "combining" },
+      { phase: "preparingReview" },
     ]);
   })();
 });
@@ -296,6 +297,7 @@ test("exact duplicates across batches are removed from the combined draft, with 
     if (outcome.status === "ready") {
       assert.equal(outcome.draft.cards.length, 1);
       assert.equal(outcome.draft.generation.resultingCardCount, 1);
+      assert.equal(outcome.draft.generation.generationStatus, "insufficient-distinct-content");
       // Provenance from both batches' identical cards is unioned, never silently dropped.
       assert.deepEqual(new Set(outcome.draft.cards[0].sourceChunkIds), new Set(["c0", "c1", "c2", "c3"]));
     }
@@ -403,4 +405,98 @@ test("batches are run strictly sequentially, never concurrently", () => {
 
     assert.equal(maxConcurrent, 1);
   })();
+});
+
+// Deferred requests make cancellation order deterministic without timers or live AI usage.
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+for (const finalIndex of [0, 1, 2]) {
+  test(`cancel during request ${finalIndex + 1}, including final request, never returns a draft`, async () => {
+    const chunks = Array.from({length:3},(_,i)=>makeChunk(`c${i}`,i));
+    const request = deferred<ModelProviderOutcome>(), started = deferred<void>();
+    let calls = 0, canceled = false;
+    const provider: ModelProvider = {id:"deferred", async generate(input) {
+      const index = calls++;
+      if (index === finalIndex) { started.resolve(); return request.promise; }
+      return succeedHandler(input);
+    }};
+    const pending = runMultiBatchGeneration({provider,normalizedContent:makeContent(chunks),sourceTitle:"Source",
+      options:DEFAULT_GENERATION_OPTIONS,plan:planFor(chunks,100),isCanceled:()=>canceled});
+    await started.promise;
+    canceled = true; canceled = true; // repeated native Cancel events are harmless
+    request.resolve({status:"ok",raw:{title:"Draft",cards:[{front:"Final",back:"Answer",sourceChunkIds:[`c${finalIndex}`]}]}});
+    const outcome = await pending;
+    assert.equal(outcome.status,"canceled"); assert.equal(calls,finalIndex+1);
+    assert.equal("draft" in outcome,false);
+  });
+}
+
+for (const phase of ["preparing","batch","combining","preparingReview"] as const) {
+  test(`cancellation from ${phase} progress callback wins before dispatch/publication`, async()=>{
+    const chunks=[makeChunk("c0",0),makeChunk("c1",1)];
+    let canceled=false;
+    const provider=makeProvider([succeedHandler]);
+    const result=await runMultiBatchGeneration({provider,normalizedContent:makeContent(chunks),sourceTitle:"Source",
+      options:DEFAULT_GENERATION_OPTIONS,plan:planFor(chunks,100),isCanceled:()=>canceled,
+      onProgress:p=>{if(p.phase===phase)canceled=true;}});
+    assert.equal(result.status,"canceled");
+    assert.equal(provider.callCount(),phase==="preparing"||phase==="batch"?0:2);
+  });
+}
+
+test("cancel and provider rejection at the same boundary settles as canceled, not an error",async()=>{
+  const chunks=[makeChunk("c0",0),makeChunk("c1",1)];
+  let canceled=false;
+  const provider:ModelProvider={id:"network",async generate(){canceled=true;throw new Error("private network error");}};
+  const outcome=await runMultiBatchGeneration({provider,normalizedContent:makeContent(chunks),sourceTitle:"Source",
+    options:DEFAULT_GENERATION_OPTIONS,plan:planFor(chunks,100),isCanceled:()=>canceled});
+  assert.deepEqual(outcome,{status:"canceled",completedBatchCount:0});
+});
+
+for (const code of ["daily-limit-reached","generation-in-progress","provider-unavailable","generation-timeout","validation-failed"] as const) {
+  for (const failedAt of [0,1,2]) {
+    test(`${code} at step ${failedAt+1} aborts the complete run with exact failure context`,async()=>{
+      const chunks=Array.from({length:3},(_,i)=>makeChunk(`c${i}`,i));
+      let calls=0;
+      const provider:ModelProvider={id:"failure-matrix",async generate(input){
+        return calls++===failedAt?{status:"error",error:{code,message:"Safe category"}}:succeedHandler(input);
+      }};
+      const result=await runMultiBatchGeneration({provider,normalizedContent:makeContent(chunks),sourceTitle:"Source",
+        options:DEFAULT_GENERATION_OPTIONS,plan:planFor(chunks,100)});
+      assert.equal(result.status,"error");
+      if(result.status==="error"){assert.equal(result.error.code,code);assert.equal(result.completedBatchCount,failedAt);}
+      assert.equal(calls,failedAt+1); assert.equal("draft" in result,false);
+    });
+  }
+}
+
+test("network loss between steps is sanitized and stops later calls",async()=>{
+  const chunks=Array.from({length:3},(_,i)=>makeChunk(`c${i}`,i));let calls=0;
+  const provider:ModelProvider={id:"network",async generate(input){if(calls++===1)throw new Error("private-network-message");return succeedHandler(input);}};
+  const result=await runMultiBatchGeneration({provider,normalizedContent:makeContent(chunks),sourceTitle:"Source",options:DEFAULT_GENERATION_OPTIONS,plan:planFor(chunks,100)});
+  assert.equal(result.status,"error");assert.equal(calls,2);assert.equal(JSON.stringify(result).includes("private-network-message"),false);
+});
+
+test("a plan is not proof of processing: context-excluded sections fail instead of claiming whole source",async()=>{
+  const chunks=[{...makeChunk("c0",0),approxSize:20_000},{...makeChunk("c1",1),approxSize:10_000}];
+  const provider=makeProvider([succeedHandler]);
+  const result=await runMultiBatchGeneration({provider,normalizedContent:makeContent(chunks),sourceTitle:"Source",
+    options:DEFAULT_GENERATION_OPTIONS,plan:planFor(chunks,40_000)});
+  assert.equal(result.status,"error");if(result.status==="error")assert.equal(result.error.code,"context-too-large");
+});
+
+test("invalid duplicate/unknown/empty/over-limit plans are rejected before any provider call",async()=>{
+  const chunks=[makeChunk("c0",0)]; const valid=planFor(chunks);
+  const plans=[{...valid,batches:[]},{...valid,batches:[{index:0,chunkIds:["unknown"],approxChars:1}]},
+    {...valid,batches:[{index:0,chunkIds:["c0","c0"],approxChars:1}],totalCandidateChunks:2},
+    {...valid,batches:Array.from({length:9},(_,i)=>({index:i,chunkIds:["c0"],approxChars:1}))}];
+  for(const plan of plans){const provider=makeProvider([succeedHandler]);
+    const result=await runMultiBatchGeneration({provider,normalizedContent:makeContent(chunks),sourceTitle:"Source",options:DEFAULT_GENERATION_OPTIONS,plan});
+    assert.equal(result.status,"error");assert.equal(provider.callCount(),0);
+  }
 });
