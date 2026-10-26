@@ -13,8 +13,10 @@ export type SourceScopeChoice = { value: SourceGenerationScopeKind; labelKey: st
  * chunks/coverage itself:
  *   - "Uncovered material" only when there is at least one actual uncovered chunk (never shown
  *     and immediately erroring — see resolveSourceGenerationScope's "uncovered-unavailable").
- *   - "Entire source" only when it would truthfully fit one generation's context budget (never
- *     shown and then silently truncated).
+ *   - "Entire source" whenever the full source can be processed at all — either in one bounded
+ *     request (today's original behavior) or, now, across several sequential batches (see
+ *     batchPlanning.ts) up to `MAX_BATCHES_PER_GENERATION`. Never shown for a source so large even
+ *     batching can't cover it (never shown and then silently truncated).
  *   - "Page range" only for a source with a known, trustworthy, multi-page count (PDF).
  *   - "Section range" (the generic ordinal fallback) only for a non-PDF source with more than one
  *     normalized section — a single-section source has nothing to range over.
@@ -26,7 +28,10 @@ export function buildSourceScopeChoices(params: {
   /** Only ever defined for PDF sources — see NormalizedSourceContent.metadata.pageCount. */
   pageCount?: number;
   hasUncoveredMaterial: boolean;
-  entireSourceFits: boolean;
+  /** Whether "Entire source" can be offered at all — true whenever the full chunk set fits one
+   * request OR can be planned into <= MAX_BATCHES_PER_GENERATION batches (see
+   * batchPlanning.ts's `canPlanBatchesFor`). No longer means "fits one generation" alone. */
+  entireSourceAvailable: boolean;
 }): SourceScopeChoice[] {
   const choices: SourceScopeChoice[] = [
     { value: "automatic", labelKey: "generateDeck.scope.automaticLabel", descriptionKey: "generateDeck.scope.automaticDescription" },
@@ -36,7 +41,7 @@ export function buildSourceScopeChoices(params: {
     choices.push({ value: "uncovered", labelKey: "generateDeck.scope.uncoveredLabel", descriptionKey: "generateDeck.scope.uncoveredDescription" });
   }
 
-  if (params.entireSourceFits) {
+  if (params.entireSourceAvailable) {
     choices.push({ value: "entireSource", labelKey: "generateDeck.scope.entireSourceLabel", descriptionKey: "generateDeck.scope.entireSourceDescription" });
   }
 

@@ -89,12 +89,18 @@ comment for the short proof: its selection loop is a single forward pass with a 
 non-decreasing running total and no backtracking).
 
 When it fits, "Entire source" resolves identically to "Automatic" (no restriction) — the two
-differ only in this upfront truthfulness guarantee, never in the resulting candidate set. When it
-does NOT fit, the option is simply omitted from the options screen (`buildSourceScopeChoices`);
-the resolver itself would return `entire-source-too-large` if ever reached anyway. **This batch
-never implements multi-batch whole-source generation** — "Entire source" is strictly "the whole
-normalized source, when one request can already hold it," not a mechanism for processing a large
-source across several requests. See "Future work" below.
+differ only in this upfront truthfulness guarantee, never in the resulting candidate set.
+
+**Update (Whole-Source Multi-Batch Generation batch):** "this batch never implements multi-batch
+whole-source generation" (this section's original claim) is no longer true — multi-batch
+generation is now implemented, see `docs/whole-source-generation.md`. `resolveSourceGenerationScope`'s
+`"entireSource"` case no longer gates on `fitsContextBudget` at all; it always resolves an
+explicit chunk-id list whenever there is any content, and a NEW batch-planning layer
+(`batchPlanning.ts`) decides whether that candidate set needs one request or several, up to a
+hard `MAX_BATCHES_PER_GENERATION` safety cap. The options screen now offers "Entire source"
+whenever the source can be PLANNED at all (one request or several sequential batches), not only
+when it fits one request — see that doc's "Scope selection vs. batch planning vs. model context"
+section for the full three-layer design this introduced.
 
 ## Page range (PDF only)
 
@@ -161,23 +167,22 @@ XLSX sources get the generic ordinal section range instead, same as TXT.
 
 ## Interaction with bounded context
 
-A selected scope's candidates can still exceed one generation's context budget — e.g. "Pages
-20–100" on a dense PDF. This batch does not prevent that selection outright (multi-batch
-generation across several requests is separate, future work — see below); instead it is permitted,
-and disclosed truthfully at two points:
+A selected scope's candidates can exceed one generation's context budget — e.g. "Pages 20–100" on
+a dense PDF. **Update (Whole-Source Multi-Batch Generation batch):** this is no longer handled by
+silently permitting a partial-context single call with a warning (`generateDeck.scope.
+partialContextNote`, which this section originally described — that key has since been removed
+from all 13 locales, not left dead). It is now handled by actually processing the WHOLE candidate
+set across several sequential, bounded batches — see `docs/whole-source-generation.md` for the
+full design (batch planning, card allocation, sequential orchestration, the pre-flight step-count
+disclosure that replaced the old warning, and the one remaining scalar truthfulness point below).
 
-1. **Before Generate** (the options screen) — the SAME pure resolver used for the actual request
-   is also dry-run live as the user adjusts their selection. If the resulting candidate chunk set
-   would itself exceed the context budget, a plain note is shown
-   (`generateDeck.scope.partialContextNote`) — deliberately scoped to ONLY the restrictive scopes
-   (uncovered/page range/section range); Automatic's pre-existing partial-source banner already
-   covers that case for Automatic, and a successfully-resolved Entire Source can never exceed
-   budget by construction.
-2. **After generation** — nothing new was needed here. `selectedChunkIds` flows into the existing,
-   unchanged `generateStudyDeck` → `prepareGenerationContext` → `reconcileFullSourceReporting`
-   pipeline, which always recomputes `fullSourceIncluded`/`excludedChunkCount` against the TRUE
-   full source chunk count — so the pre-existing "Using X of Y sections" disclosure on the review
-   screen is automatically correct regardless of which scope produced the request.
+The one thing that did NOT need to change: `selectedChunkIds` (now, for a multi-batch run, the
+UNION of every batch's own chunks) still flows into the existing, unchanged `generateStudyDeck` →
+`prepareGenerationContext` → `reconcileFullSourceReporting` pipeline for each individual batch,
+and the combined draft's own `fullSourceIncluded`/`excludedChunkCount` are aggregated the same
+way — against the TRUE full source chunk count — so the pre-existing "Using X of Y sections"
+disclosure on the review screen is automatically correct regardless of which scope, or how many
+batches, produced the request.
 
 **Scope selection and the model's context limit are never the same decision** — this is stated
 explicitly here and in code comments precisely because it would be easy to conflate "the user
@@ -229,9 +234,10 @@ before any provider is ever called, so it is never confused with a provider/vali
 
 ## Future work
 
-- **Multi-batch whole-source generation** — processing a source larger than one context budget
-  across several linked requests. Explicitly not implemented; "Entire source" in this batch means
-  only "fits in one request," never "we'll get there in several."
+- **Multi-batch whole-source generation** — ~~processing a source larger than one context budget
+  across several linked requests. Explicitly not implemented~~ **now implemented** — see
+  `docs/whole-source-generation.md` for the full design (batch planning, card allocation,
+  sequential orchestration, cross-batch dedupe, failure/cancellation policy, quota implications).
 - **Chapter/heading-based selection** — DOCX's real `heading` provenance field is a solid
   foundation (see above), but needs its own UX design, not an incidental extension of this batch's
   range picker.

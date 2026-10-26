@@ -81,7 +81,7 @@ export function deriveGenerationStatus(resultingCardCount: number, targetMinimum
 // src/domain/normalization/chunking.ts's computeChunkId, reused here for consistency rather than
 // shared code (these are two independent, small, pure-JS hashes with no reason to couple modules
 // across the normalization/AI boundary).
-function computeCardDraftId(index: number, front: string, back: string, sourceChunkIds: string[]): string {
+export function computeCardDraftId(index: number, front: string, back: string, sourceChunkIds: string[]): string {
   const input = `${index}|${front}|${back}|${sourceChunkIds.join(",")}`;
   let hash = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
@@ -91,7 +91,10 @@ function computeCardDraftId(index: number, front: string, back: string, sourceCh
   return `card_${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
-function normalizeForDuplicateCheck(front: string, back: string): string {
+// Exported for reuse by multiBatchDedupe.ts — a cross-batch combination pass needs the EXACT same
+// exact-match normalization within-batch validation already uses, rather than a second,
+// independently-coded (and inevitably slightly different) duplicate definition.
+export function normalizeForDuplicateCheck(front: string, back: string): string {
   const collapse = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
   return `${collapse(front)}\n${collapse(back)}`;
 }

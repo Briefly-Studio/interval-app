@@ -291,22 +291,64 @@ For anything not covered directly in this file, these are the authoritative docu
     `resolveSourceGenerationScope` (`src/domain/ai/sourceGenerationScope.ts`). **Implemented,
     merged into `v3.3-dev`; not yet founder-QA verified.** Automatic (unchanged prior behavior)
     remains the default for every new generation session — nothing persisted. "Uncovered
-    material" reuses Source Coverage's existing `uncoveredChunkIds` with no duplicated math; "Entire
-    source" is only ever offered/resolved when the whole source already fits one generation's
-    context budget (never silently truncated); PDF page ranges rely on the PDF adapter's existing
-    guarantee that a chunk never spans a page boundary; the generic section range (TXT/DOCX/XLSX)
-    reuses the same "N of M sections" vocabulary the existing coverage disclosure already shows
-    the user, never a raw chunk id. Scope selection and the existing bounded `GenerationContext`
-    budget remain two separate concerns — a selected scope whose candidates still exceed one
-    context budget is truthfully disclosed by the SAME pre-existing
-    `fullSourceIncluded`/`excludedChunkCount` machinery, not a new mechanism. **Never implements**
-    chapter/heading-based selection (DOCX's adapter already carries a real, non-heuristic
-    `heading` field per chunk — found during this batch's preflight, deliberately not turned into
-    a UI without its own founder-approved design), XLSX worksheet selection (no structured
-    sheet-identity provenance field exists yet), or multi-batch whole-source generation — see
-    that doc's "Future work" section. No backend/AWS/CDK/EAS/Staging/Production change, no change
-    to the count-quality contract, no change to Source Coverage's own calculations, no new npm
-    dependency.
+    material" reuses Source Coverage's existing `uncoveredChunkIds` with no duplicated math; PDF
+    page ranges rely on the PDF adapter's existing guarantee that a chunk never spans a page
+    boundary; the generic section range (TXT/DOCX/XLSX) reuses the same "N of M sections"
+    vocabulary the existing coverage disclosure already shows the user, never a raw chunk id.
+    Scope selection and the existing bounded `GenerationContext` budget remain two separate
+    concerns — a selected scope whose candidates still exceed one context budget is truthfully
+    disclosed by the SAME pre-existing `fullSourceIncluded`/`excludedChunkCount` machinery, not a
+    new mechanism. **Never implements** chapter/heading-based selection (DOCX's adapter already
+    carries a real, non-heuristic `heading` field per chunk — found during this batch's preflight,
+    deliberately not turned into a UI without its own founder-approved design) or XLSX worksheet
+    selection (no structured sheet-identity provenance field exists yet). No backend/AWS/CDK/EAS/
+    Staging/Production change, no change to the count-quality contract, no change to Source
+    Coverage's own calculations, no new npm dependency. **"Entire source" was originally gated to
+    only when the whole source fit one generation's context budget — a later batch
+    (item 33, below) relaxed this via multi-batch generation**, so `resolveSourceGenerationScope`'s
+    `"entireSource"` case no longer performs that budget check itself (see item 33's own entry for
+    what replaced it).
+33. `docs/whole-source-generation.md` — whole-source multi-batch AI generation: a selected scope
+    (Entire source/Uncovered material/Page range/Section range — **never Automatic, which stays
+    the unchanged, single-request, no-opt-in default by product design**) larger than one bounded
+    AI context is split into several sequential, bounded `generateStudyDeck` calls and combined
+    into one review draft. **Implemented, merged into `v3.3-dev`; not yet founder-QA verified.**
+    New pure modules: `src/domain/ai/batchPlanning.ts` (deterministic partitioning into
+    `GenerationBatch[]`, reusing the EXISTING `DEFAULT_CONTEXT_CHAR_BUDGET` rather than a second
+    size model, hard-capped at `MAX_BATCHES_PER_GENERATION = 8` — refused, never silently
+    processed, past that cap), `src/domain/ai/batchCardAllocation.ts` (splits the SELECTED TIER's
+    own ceiling — never multiplied by batch count — evenly across batches via a standard
+    cumulative-rounding distribution, each batch's own request using the EXISTING numeric-override
+    `GenerationOptions.cardCount` path rather than a new request-contract type), and
+    `src/domain/ai/multiBatchDedupe.ts` (cross-batch exact-duplicate control reusing
+    `responseValidation.ts`'s own `normalizeForDuplicateCheck`/`computeCardDraftId`, now exported
+    for this reuse — no fuzzy/semantic/embedding dedupe). Orchestration
+    (`src/domain/ai/multiBatchGeneration.ts`, impure) runs batches **strictly sequentially, never
+    in parallel** (the backend's single-concurrency-slot lease makes this effectively mandatory,
+    not just a style choice), fails the WHOLE generation honestly on any batch failure (no partial
+    drafts ever combined/saved — `startGenerateDeckSession` is only ever called on full success,
+    an invariant already true before this batch), and supports between-batch-only cancellation (no
+    `AbortSignal` exists to interrupt an in-flight request — a documented limitation, not an
+    oversight). `resolveSourceGenerationScope`'s `"entireSource"` case (`sourceGenerationScope.ts`,
+    item 32) no longer gates on fitting one budget — it always resolves an explicit chunk-id list
+    whenever there is content, deferring the "is this actually processable" question entirely to
+    `batchPlanning.ts`; `buildSourceScopeChoices`'s `entireSourceFits` param was renamed
+    `entireSourceAvailable` to match. The combined result is an ordinary `GeneratedDeckDraft` —
+    **zero changes were needed to `generateDeckSession.ts`, `generateDeckSave.ts`, or
+    `review.tsx`**, since each only ever consumed a flat card list plus scalar metadata, never any
+    notion of how many provider calls produced it. Each batch is a separate backend invocation and
+    consumes one of the user's 20/day quota units (no backend/quota config change — see that
+    doc's "Quota implications"); the options screen discloses the real step count before
+    generation starts and shows real per-batch progress during it (new `generateDeck.scope.
+    multiBatchNotice`/`generateDeck.generatingBatchBody`/`generateDeck.generatingCombiningBody`
+    strings, all 13 locales; the now-false `generateDeck.scope.partialContextNote` key was
+    removed from all 13 locales rather than left dead). **Never implements** safe resume/
+    idempotency after a partial failure (retry restarts from batch 1), true RAG/multi-pass
+    retrieval, or any change to the backend's quota/concurrency scheme — see that doc's "Known
+    limitations" and "Future resume/idempotency opportunities" sections. No backend/AWS/CDK/EAS/
+    Staging/Production change, no change to Source Coverage's own calculations or
+    `GeneratedCardProvenance` (a different branch's territory), no model/provider change, no new
+    npm dependency.
 
 33. `docs/sync-generated-card-provenance.md` — separate metadata sync entity for generated-card
     provenance, gated to Development/Staging. Covers stable card identity, revisioned conflict
@@ -867,6 +909,16 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   Uncovered material against real saved cards, the live validation/disabled-Generate behavior)
   can confirm the resolver's logic, which is unit-tested, actually behaves correctly against real
   normalized sources end to end. See `docs/source-generation-scope.md`'s "Founder QA" section.
+- **Whole-Source Multi-Batch Generation (item 33 above) is implemented but not yet founder-QA
+  verified on a real device against the real Development backend provider** — only real
+  multi-step generation against an actual large PDF/source (not the mock provider's trivially
+  fast per-batch responses) can confirm batch planning, card allocation, sequential orchestration,
+  cross-batch dedupe, cancellation, and the pre-flight step-count disclosure all behave correctly
+  end to end, and that each batch genuinely consumes a separate daily-quota unit as designed. See
+  `docs/whole-source-generation.md`'s "Founder QA" section. Known, accepted (not just untested)
+  limitations, not pending fixes: no safe resume/idempotency after a mid-sequence failure (retry
+  restarts from batch 1, re-consuming quota for already-succeeded batches), and cancellation
+  cannot interrupt an already-in-flight batch request (only stops the NEXT one from starting).
 
 ## Accessibility Guardrails
 

@@ -1101,6 +1101,9 @@ const fr = {
     generateButton: "Générer le paquet",
     generatingTitle: "Génération de votre paquet",
     generatingBody: "Lecture du contenu source sélectionné et génération de vos cartes.",
+    generatingBatchBody: "Génération des cartes — étape {{current}} sur {{total}}.",
+    generatingCombiningBody: "Combinaison des cartes…",
+    canceling: "Annulation…",
     retryButton: "Réessayer",
     backToSourceButton: "Retour à la source",
     entry: {
@@ -1136,7 +1139,7 @@ const fr = {
       uncoveredLabel: "Contenu non couvert",
       uncoveredDescription: "Seulement les sections qui n'ont pas encore de carte d'étude enregistrée.",
       entireSourceLabel: "Source entière",
-      entireSourceDescription: "Utiliser la source entière — disponible uniquement si elle entre dans une génération.",
+      entireSourceDescription: "Utiliser la source entière — peut nécessiter plusieurs étapes de génération pour une source volumineuse.",
       pageRangeLabel: "Plage de pages",
       pageRangeDescription: "Choisissez les pages de cette source à utiliser.",
       sectionRangeLabel: "Plage de sections",
@@ -1156,13 +1159,17 @@ const fr = {
       summaryUncovered: "Utilisation des sections qui n'ont pas encore de cartes d'étude enregistrées.",
       summaryPageRange: "Pages {{start}}–{{end}}.",
       summarySectionRange: "Sections {{start}}–{{end}}.",
-      partialContextNote: "Cette sélection est plus grande que ce qu'une génération peut utiliser — seule une partie sera incluse.",
+      multiBatchNotice: {
+        one: "Cela prendra {{count}} étape de génération IA.",
+        other: "Cela prendra {{count}} étapes de génération IA.",
+      },
       error: {
         entireSourceTooLarge: "Cette source est trop grande pour être utilisée entièrement dans une génération.",
         uncoveredUnavailable: "Il ne reste aucun contenu non couvert à générer.",
         pageRangeUnavailable: "Les informations de page ne sont pas disponibles pour cette source.",
         invalidRange: "Saisissez une plage valide pour cette source.",
         emptySelection: "Aucun contenu n'a été trouvé dans cette sélection.",
+        planTooLarge: "Cette source est trop grande pour générer un paquet maintenant. Essayez une plage plus petite.",
       },
     },
     unavailable: {

@@ -1095,6 +1095,9 @@ const de = {
     generateButton: "Stapel erstellen",
     generatingTitle: "Dein Stapel wird erstellt",
     generatingBody: "Das ausgewählte Quellmaterial wird gelesen und deine Karten werden erstellt.",
+    generatingBatchBody: "Karten werden erstellt — Schritt {{current}} von {{total}}.",
+    generatingCombiningBody: "Karten werden zusammengeführt…",
+    canceling: "Wird abgebrochen…",
     retryButton: "Erneut versuchen",
     backToSourceButton: "Zurück zur Quelle",
     entry: {
@@ -1130,7 +1133,7 @@ const de = {
       uncoveredLabel: "Nicht abgedecktes Material",
       uncoveredDescription: "Nur Abschnitte, die noch keine gespeicherte Lernkarte haben.",
       entireSourceLabel: "Gesamte Quelle",
-      entireSourceDescription: "Die gesamte Quelle verwenden — nur verfügbar, wenn sie in eine Generierung passt.",
+      entireSourceDescription: "Die gesamte Quelle verwenden — kann bei einer großen Quelle mehrere Generierungsschritte benötigen.",
       pageRangeLabel: "Seitenbereich",
       pageRangeDescription: "Wählen Sie, welche Seiten dieser Quelle verwendet werden sollen.",
       sectionRangeLabel: "Abschnittsbereich",
@@ -1150,13 +1153,17 @@ const de = {
       summaryUncovered: "Es werden Abschnitte verwendet, die noch keine gespeicherten Lernkarten haben.",
       summaryPageRange: "Seiten {{start}}–{{end}}.",
       summarySectionRange: "Abschnitte {{start}}–{{end}}.",
-      partialContextNote: "Diese Auswahl ist größer, als eine Generierung verwenden kann — es wird nur ein Teil einbezogen.",
+      multiBatchNotice: {
+        one: "Dies dauert {{count}} KI-Generierungsschritt.",
+        other: "Dies dauert {{count}} KI-Generierungsschritte.",
+      },
       error: {
         entireSourceTooLarge: "Diese Quelle ist zu groß, um vollständig in einer Generierung verwendet zu werden.",
         uncoveredUnavailable: "Es gibt kein nicht abgedecktes Material mehr, aus dem generiert werden kann.",
         pageRangeUnavailable: "Seiteninformationen sind für diese Quelle nicht verfügbar.",
         invalidRange: "Geben Sie einen gültigen Bereich für diese Quelle ein.",
         emptySelection: "In dieser Auswahl wurde kein Inhalt gefunden.",
+        planTooLarge: "Diese Quelle ist derzeit zu groß, um ein Deck zu generieren. Versuchen Sie einen kleineren Bereich.",
       },
     },
     unavailable: {

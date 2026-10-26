@@ -1113,6 +1113,9 @@ const en = {
     generateButton: "Generate deck",
     generatingTitle: "Generating your deck",
     generatingBody: "Reading the selected source material and generating your cards.",
+    generatingBatchBody: "Generating cards — step {{current}} of {{total}}.",
+    generatingCombiningBody: "Combining cards…",
+    canceling: "Canceling…",
     retryButton: "Try again",
     backToSourceButton: "Back to source",
     entry: {
@@ -1148,7 +1151,7 @@ const en = {
       uncoveredLabel: "Uncovered material",
       uncoveredDescription: "Only sections that don't currently have a saved study card.",
       entireSourceLabel: "Entire source",
-      entireSourceDescription: "Use the whole source — only available when it fits in one generation.",
+      entireSourceDescription: "Use the whole source — may take several generation steps for a large source.",
       pageRangeLabel: "Page range",
       pageRangeDescription: "Choose which pages of this source to use.",
       sectionRangeLabel: "Section range",
@@ -1168,13 +1171,17 @@ const en = {
       summaryUncovered: "Using sections that don't currently have saved study cards.",
       summaryPageRange: "Pages {{start}}–{{end}}.",
       summarySectionRange: "Sections {{start}}–{{end}}.",
-      partialContextNote: "This selection is larger than one generation can use — only part of it will be included.",
+      multiBatchNotice: {
+        one: "This will take {{count}} AI generation step.",
+        other: "This will take {{count}} AI generation steps.",
+      },
       error: {
         entireSourceTooLarge: "This source is too large to use in full for one generation.",
         uncoveredUnavailable: "There's no uncovered material left to generate from.",
         pageRangeUnavailable: "Page information isn't available for this source.",
         invalidRange: "Enter a valid range for this source.",
         emptySelection: "No content was found in that selection.",
+        planTooLarge: "This source is too large to generate in one deck right now. Try a smaller range.",
       },
     },
     unavailable: {

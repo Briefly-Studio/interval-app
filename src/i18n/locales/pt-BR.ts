@@ -1098,6 +1098,9 @@ const ptBR = {
     generateButton: "Gerar baralho",
     generatingTitle: "Gerando seu baralho",
     generatingBody: "Lendo o material de origem selecionado e gerando seus cartões.",
+    generatingBatchBody: "Gerando cartões — etapa {{current}} de {{total}}.",
+    generatingCombiningBody: "Combinando cartões…",
+    canceling: "Cancelando…",
     retryButton: "Tentar de novo",
     backToSourceButton: "Voltar à fonte",
     entry: {
@@ -1133,7 +1136,7 @@ const ptBR = {
       uncoveredLabel: "Material não coberto",
       uncoveredDescription: "Apenas seções que ainda não têm um cartão de estudo salvo.",
       entireSourceLabel: "Fonte completa",
-      entireSourceDescription: "Usar a fonte completa — disponível apenas quando ela cabe em uma geração.",
+      entireSourceDescription: "Usar a fonte completa — pode levar várias etapas de geração para uma fonte grande.",
       pageRangeLabel: "Intervalo de páginas",
       pageRangeDescription: "Escolha quais páginas desta fonte usar.",
       sectionRangeLabel: "Intervalo de seções",
@@ -1153,13 +1156,17 @@ const ptBR = {
       summaryUncovered: "Usando seções que ainda não têm cartões de estudo salvos.",
       summaryPageRange: "Páginas {{start}}–{{end}}.",
       summarySectionRange: "Seções {{start}}–{{end}}.",
-      partialContextNote: "Esta seleção é maior do que uma geração pode usar — apenas parte dela será incluída.",
+      multiBatchNotice: {
+        one: "Isso levará {{count}} etapa de geração de IA.",
+        other: "Isso levará {{count}} etapas de geração de IA.",
+      },
       error: {
         entireSourceTooLarge: "Esta fonte é grande demais para ser usada por completo em uma geração.",
         uncoveredUnavailable: "Não há mais material não coberto para gerar.",
         pageRangeUnavailable: "As informações de página não estão disponíveis para esta fonte.",
         invalidRange: "Insira um intervalo válido para esta fonte.",
         emptySelection: "Nenhum conteúdo foi encontrado nessa seleção.",
+        planTooLarge: "Esta fonte é grande demais para gerar um baralho agora. Tente um intervalo menor.",
       },
     },
     unavailable: {

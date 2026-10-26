@@ -351,8 +351,14 @@ localized message. No raw error, stack trace, or internal code is ever shown.
   (budgeted) source is used" behavior) remains the default. A partial-context generation is still
   disclosed BEFORE generation on the options screen, and again with chunk-scope detail on the
   review screen (see "Source coverage disclosure"), regardless of which scope was selected.
-  Whole-document generation for a source larger than one context budget (true multi-pass/
-  RAG-style coverage) remains future, founder-gated work — nothing in either batch attempts it.
+- **Update (Whole-Source Multi-Batch Generation batch):** "whole-document generation for a
+  source larger than one context budget remains future, founder-gated work" (this bullet's
+  original claim) is now implemented for Entire source/Uncovered material/Page range/Section
+  range — see `docs/whole-source-generation.md`. Not true RAG/multi-pass retrieval — a selected
+  scope larger than one context is split into several sequential, bounded `generateStudyDeck`
+  calls and the results combined into one review draft, with a truthful pre-flight step-count
+  disclosure and real per-batch progress on the generating screen. Automatic still never does
+  this — it remains the unchanged, single-request, no-user-opt-in default described above.
 - No regenerate / "generate more cards" action, and no "add card" flow — a fully-emptied draft
   must be discarded and regenerated.
 - Draft is in-memory only and does not survive an app restart.
