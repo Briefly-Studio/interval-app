@@ -5,10 +5,12 @@ import type { NormalizationResult, NormalizedChunk } from "../normalization/type
 import { normalizeSource } from "../normalization/normalizeSource";
 import { generateStudyDeck } from "./aiService";
 import { planGenerationBatches, type BatchPlanErrorCode } from "./batchPlanning";
+import { summarizeGenerationPlan, type GenerationPlanSummary } from "./generationPresentation";
 import { prepareGenerationContext } from "./contextPreparation";
 import { deriveGenerationAvailability, type GenerationAvailabilityState } from "./generationAvailability";
 import { type GenerationCoverage, summarizeGenerationCoverage } from "./generationCoverage";
 import {
+  clearGenerateDeckSession,
   startGenerateDeckSession,
   type DraftProvenanceEntry,
 } from "./generateDeckSession";
@@ -29,7 +31,7 @@ import type { GeneratedDeckDraft, GenerationErrorCode, GenerationOptions } from 
 export type GenerateDeckFlowOutcome =
   | { status: "ready" }
   | { status: "unavailable"; state: Exclude<GenerationAvailabilityState, "ready"> }
-  | { status: "error"; code: GenerationErrorCode }
+  | { status: "error"; code: GenerationErrorCode; multiBatch?: { completed: number; total: number } }
   // Scope resolution failed BEFORE any provider was ever called — distinct from GenerationError,
   // which only ever covers provider/validation failures. The options screen's own inline
   // validation (built from the same resolveSourceGenerationScope call) should normally prevent
@@ -46,6 +48,8 @@ export type GenerateDeckFlowOutcome =
   | { status: "canceled" };
 
 export type GenerateDeckFlowCallbacks = {
+  /** Approve the freshly resolved plan, before any quota-consuming request. */
+  onPlanReady?: (plan: GenerationPlanSummary) => Promise<boolean>;
   onProgress?: (progress: MultiBatchProgress) => void;
   isCanceled?: () => boolean;
 };
@@ -137,12 +141,14 @@ export async function runGenerateDeckFlow(
   /** Which part of the source to draw from — defaults to Automatic (today's unchanged behavior)
    * when omitted, so this stays source-compatible with any other future caller. */
   scope: SourceGenerationScope = { type: "automatic" },
-  /** Progress/cancellation hooks for a multi-batch run — ignored entirely by the single-call
-   * path (Automatic, or any scope small enough to need only one batch), which completes too
-   * quickly for either to matter. See multiBatchGeneration.ts. */
+  /** Approval/cancellation guards apply to both paths. Step progress is emitted only for
+   * multi-batch work; ordinary one-request generation keeps its lightweight loading UI. */
   callbacks?: GenerateDeckFlowCallbacks
 ): Promise<GenerateDeckFlowOutcome> {
+  clearGenerateDeckSession();
+  if (callbacks?.isCanceled?.()) return { status: "canceled" };
   const normalization = await normalizeSource(source);
+  if (callbacks?.isCanceled?.()) return { status: "canceled" };
   const availability = deriveGenerationAvailability(normalization);
   if (!availability.canGenerate) {
     return { status: "unavailable", state: availability.state as Exclude<GenerationAvailabilityState, "ready"> };
@@ -153,6 +159,7 @@ export async function runGenerateDeckFlow(
   // it's about to restrict, exactly like `normalization` itself being re-derived fresh above.
   const coverage = scope.type === "uncovered" ? await loadSourceCoverage(sourceScope, source) : undefined;
 
+  if (callbacks?.isCanceled?.()) return { status: "canceled" };
   const resolvedScope = resolveSourceGenerationScope({
     chunks: normalization.content.chunks,
     scope,
@@ -174,6 +181,8 @@ export async function runGenerateDeckFlow(
       return { status: "plan-error", code: plan.code };
     }
 
+    if (callbacks?.onPlanReady && !await callbacks.onPlanReady(summarizeGenerationPlan(candidateChunks, plan))) return { status: "canceled" };
+    if (callbacks?.isCanceled?.()) return { status: "canceled" };
     if (plan.batches.length > 1) {
       const multiOutcome = await runMultiBatchGeneration({
         provider: selectModelProvider(),
@@ -186,13 +195,20 @@ export async function runGenerateDeckFlow(
         isCanceled: callbacks?.isCanceled,
       });
       if (multiOutcome.status === "canceled") return { status: "canceled" };
-      if (multiOutcome.status === "error") return { status: "error", code: multiOutcome.error.code };
+      if (callbacks?.isCanceled?.()) return { status: "canceled" };
+      if (multiOutcome.status === "error") return { status: "error", code: multiOutcome.error.code,
+        multiBatch: { completed: multiOutcome.completedBatchCount, total: plan.batches.length } };
       return finalizeReadyOutcome(source, sourceScope, multiOutcome.draft, normalization, options);
     }
     // Exactly one batch — identical cost/behavior to the single-call path below, just reusing
     // the already-computed, already-validated batch chunk list instead of the raw resolved set.
   }
 
+  if (resolvedScope.chunkIds === undefined && callbacks?.onPlanReady) {
+    const context = prepareGenerationContext(normalization.content);
+    if (!await callbacks.onPlanReady(summarizeGenerationPlan(context.chunks))) return { status: "canceled" };
+  }
+  if (callbacks?.isCanceled?.()) return { status: "canceled" };
   const outcome = await generateStudyDeck(selectModelProvider(), {
     sourceTitle: source.displayTitle,
     normalizedContent: normalization.content,
@@ -201,6 +217,7 @@ export async function runGenerateDeckFlow(
     selectedChunkIds: resolvedScope.chunkIds,
   });
 
+  if (callbacks?.isCanceled?.()) return { status: "canceled" };
   if (outcome.status === "error") {
     return { status: "error", code: outcome.error.code };
   }

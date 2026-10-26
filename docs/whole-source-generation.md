@@ -135,6 +135,11 @@ the EXACT shape a single-call generation already produces. `startGenerateDeckSes
 cared about a flat `cards: DraftCard[]` and a handful of scalar metadata fields, never how many
 calls produced them.
 
+Every successful step's submitted chunk IDs are checked against its planned IDs. If context
+preparation excluded material, orchestration fails rather than claiming that the whole plan was
+processed. Invalid/duplicate/unknown/empty plans fail before provider calls. This is orchestration
+validation; the greedy planner and card allocator are unchanged.
+
 The aggregate scalars:
 
 - `fullSourceIncluded`/`excludedChunkCount` — relative to the TRUE full normalized source, unioned
@@ -163,64 +168,81 @@ room for a shorter card list.
 
 ### Failure policy
 
-**The simplest trustworthy option, as instructed:** if ANY batch fails (provider error,
-validation failure, quota/concurrency rejection), the WHOLE orchestration fails — no partial
-drafts are ever combined or presented as success, and `startGenerateDeckSession` is never called
-(the existing "only populate the session on `status: ready`" invariant in `generateDeckFlow.ts`
-already does this for free — no new guard was needed). The surfaced error is the FIRST failing
-batch's own, ordinary `GenerationErrorCode` — reusing 100% of the existing error-copy pipeline; the
-user is never shown "batch" terminology (e.g. a mid-sequence `daily-limit-reached` shows the exact
-same copy a single-call hit of that limit would). **Retry means starting over from batch 1** — see
-"Known limitations" for why safe resume isn't implemented yet.
+Any failed step aborts the run: no partial draft, automatic save or whole-selection success.
+The flow preserves completed/total-step context for recovery copy, including first/middle/final
+failures. Provider exceptions are reduced to safe error categories. A daily-limit failure says
+the full selection was not processed and no deck was saved, with guidance to wait for reset.
+Other failures retain the existing reason plus the same incomplete/no-save disclosure.
 
-### Cancellation
+Retry is explicit and restarts at step 1; real-AI copy says daily requests may be used again.
+There is no automatic retry, refund, resume, persisted partial result, or idempotency change.
+Cancellation wins over simultaneous provider/network errors, so intentional cancellation is
+not presented as a failure. Starting an attempt clears any previous in-memory draft; only an
+uncanceled successful run publishes a new session.
 
-Checked via an `isCanceled()` callback **BETWEEN batches only, never mid-batch** — an
-already-dispatched request to the backend cannot be interrupted from the client (no
-`AbortSignal` is wired through `src/cloud/ai/http.ts`'s `fetch` call; this was a deliberate scope
-decision, not an oversight — see "Known limitations"). Scheduling simply stops; nothing already
-completed is combined, saved, or presented as a partial success. The options screen's "Generate"
-state renders a Cancel button during any multi-batch run (never during a single-call generation,
-which finishes too fast for it to matter) that sets a ref the orchestrator reads before starting
-the next batch. **A request already in flight when Cancel is tapped may still complete
-server-side and consume its quota unit** — this is disclosed in code comments, not hidden, exactly
-as instructed; it is not shown as a dedicated user-facing warning in this first implementation
-(the Cancel action itself already implies "stop as soon as possible," and the quota consequence is
-a backend-invisible detail most users have no action to take about anyway).
+### Cancellation and lifecycle
 
-## Progress UX
+A one-tap Cancel is shown only for multi-step generation. It immediately invalidates the run
+and shows “Stopping after the current step…”. Checks before dispatch, after every request, and
+during combination/review preparation prevent subsequent calls and discard even the final
+request's result if cancellation won. Repeated taps are harmless. Once the in-flight request
+settles the screen shows a canceled/no-save state; dismissing consent or confirmation returns
+to setup without a generation request.
 
-Real, truthful batch progress (`MultiBatchProgress`: `"preparing" | "batch" | "combining"`) —
-never a fabricated percentage. "Generating cards — step N of M" is real, completed-batch-counted
-progress; nothing here estimates latency or extrapolates a percentage from elapsed time. The
-single-call path (Automatic, or any scope that resolves to one batch) never shows this — its
-existing generic loading copy is unchanged.
+An in-flight request cannot be aborted and may still consume one daily request. This is
+disclosed on canceled real-AI runs. The UI run lease remains held until that request settles,
+preventing a new attempt from overlapping it. A user can navigate back while waiting; returning
+does not restart work. The lease also covers asynchronous consent and confirmation, blocking
+rapid Generate taps and concurrent route instances before any dialog or provider call.
 
-## Pre-flight disclosure (options screen)
+Header back, Android hardware back, route blur/unmount, and workspace changes invalidate the
+run. Multi-step work is also canceled when AppState enters background (not merely inactive,
+which can happen around native dialogs). There is no background execution or automatic resume.
+Foregrounding does not reset cancellation. A killed app loses its in-memory run/draft; a server
+request already dispatched may finish. Actual HTTP completion timing and native lifecycle
+behavior still require device QA; no client transport timeout was added.
 
-When the user's current selection would need more than one batch, a plain-language notice
-appears before Generate is ever tapped: *"This will take {{count}} AI generation steps."* —
-deliberately avoiding "Bedrock calls"/"requests" jargon. This is a LIVE dry-run of the exact same
-`resolveSourceGenerationScope` + `planGenerationBatches` pair the real request will use (shared
-with the Generate button's own disabled-state check), so the disclosure and the actual behavior
-can never disagree. This REPLACES the prior "only part of it will be included" warning that scope
-used to show for an oversized restrictive selection — that warning is now false (multi-batch
-processes the WHOLE selection, just across several steps), so it was retired rather than left to
-coexist confusingly with the new, accurate disclosure.
+## Progress UX and accessibility
+
+The real phases are preparing → generating step N of M → combining → preparing review, with
+canceling, canceled and failed presentation states. No estimated percentage or time is shown.
+Ordinary one-step generation retains generic loading with no multi-step summary/Cancel.
+
+Status text uses Android's polite live region and one iOS accessibility announcement per changed
+status, deduplicated across rerenders. Native alerts supply logical confirmation actions/focus.
+Plan and progress text follow existing RTL helpers; numeric step order is not manually reversed.
+Stacked summary rows and scrollable progress allow large type without color-only information.
+VoiceOver/TalkBack, native dialogs and largest text sizes remain pending device QA.
+
+## Pre-generation summary and confirmation
+
+Multi-step setup shows chosen scope, normalized section count, real pages-with-text count when
+every selected chunk supplies a page number, number of steps, and the final Small/Medium/Large
+card ceiling. Page counts are extracted-text pages, not inferred chapters or invented page
+coverage. “Entire source selected” describes a plan, not completed work. Per-step card allocation
+is never shown; Medium still means up to 15 cards TOTAL, not per step.
+
+The setup dry-run is checked again after fresh normalization/scope resolution. The exact plan
+is passed through an approval callback before the first provider call. First-use consent comes
+first, then an explicit native confirmation for **3 or more steps**, then generation. One/two
+steps do not confirm. Three is a deliberate threshold for a noticeable multi-request operation
+without adding friction to small runs. Rejecting either dialog consumes no AI request.
+
+The old partial-source warning is now restricted to Automatic. Explicit entire/range/uncovered
+plans do not display that contradictory warning. Plan-too-large copy suggests a smaller page or
+section range, with distinct wording for too much uncovered material; it does not expose the
+internal eight-step cap.
 
 ## Quota implications
 
-**Each batch is a separate backend Lambda invocation and consumes one unit of the user's 20/day
-quota** — confirmed from the backend rate limiter's own design
-(`docs/ai-generation-foundation.md`'s "Rate limits and cost controls"): there is no
-multi-request/batch concept in the quota or concurrency-lease scheme at all. This is never hidden:
-the pre-flight disclosure above states the real step count before anything starts, and
-`MAX_BATCHES_PER_GENERATION = 8` was deliberately chosen to bound any single generation to at most
-40% of a user's daily allowance. **No backend/quota configuration was changed** — the existing
-20/day limit and single-concurrency lease are enforced exactly as before; this batch only ensures
-the client-side planning step never exceeds what the product considers a safe single-generation
-footprint, and fails honestly (never silently retries or bypasses) if the server's quota still
-runs out mid-sequence regardless.
+Real-AI plans show “Planned daily AI requests: up to N.” Every admitted generation step consumes
+one quota unit under the existing server limiter, including provider failures after admission;
+a rejection before admission consumes none. Early failure/cancel can stop before all N requests.
+No remaining allowance is inferred, tracked, or reserved by the client. Mock runs show steps but
+no quota-consumption claim. There is no pricing copy or provider/backend jargon in the UI.
+
+The existing 20/day policy and concurrency lease are unchanged. Calls remain sequential. A
+second UI run is blocked locally; backend concurrency still protects other devices/callers.
 
 ## Provenance / coverage interaction
 
@@ -263,9 +285,9 @@ across several of them instead of one.
   pre-existing, already-documented single-call "no request-level idempotency key" gap
   (`docs/ai-generation-foundation.md`), just compounded across however many batches already ran.
   A future batch could add a resumable plan with per-batch completion tracking; not attempted here.
-- **Cancellation cannot interrupt an in-flight batch.** No `AbortSignal` is wired through the HTTP
-  layer; Cancel only ever stops the NEXT batch from starting. A request in flight when canceled
-  may still complete and consume quota server-side.
+- **Cancellation cannot interrupt an in-flight request.** Its result is discarded and no later
+  step/session is published, but the server request may finish and consume quota. The local
+  lease remains occupied until it settles; network/lifecycle timing is not guaranteed.
 - **A single chunk whose own size exceeds the context budget** still gets planned into its own
   batch (never dropped from the plan) but will then fail that one batch's own `generateStudyDeck`
   call with `source-empty` (since a lone oversized chunk is excluded by the UNCHANGED, existing
@@ -286,7 +308,40 @@ logic, only the orchestrator's own failure-handling branch.
 
 ## Founder QA
 
-See the delivery report for this batch's proposed device QA checklist.
+Use existing Staging mock generation to check planning, native confirmation, localization and
+review cheaply; do not enable real Staging AI or change provider configuration for this work.
+No established screen-level slow/failure override exists, so no hidden debug UI or new runtime
+flag was added. `npm run test:generation-ux` exercises deferred fake requests, late cancellation,
+network errors and daily-limit failures without any real AI requests. It uses Node module mocks
+only for native boundaries; pure presentation/orchestration tests also run under `test:ai`.
+
+For a native multi-step fixture, import a plain-text source around 30–45k characters (two steps)
+or 100–115k characters (roughly five), select Entire source, and verify the ACTUAL displayed
+plan: paragraph/chunk boundaries determine the exact count. Repeat distinct factual paragraphs
+for layout/progress QA; mock results are not evidence of real-model quality. Mock steps may be
+too fast to manually cancel mid-request; use the deterministic deferred tests for those races
+and a limited Development real-provider pass for final device/network/lease verification.
+
+Device checklist:
+
+1. Small one-step source: no multi-step summary, confirmation or Cancel. Test Small/Medium/Large.
+2. Two-step source: accurate summary, final deck ceiling, no confirmation.
+3. Four/five-step source: chosen scope, sections/pages, steps and final tier match the native
+   confirmation. First real attempt shows consent before confirmation; cancel either → no calls.
+4. Real-provider planned quota appears without a remaining count; mock has no quota claim.
+5. Cancel early, mid-run and in the final request; repeated taps, back navigation and reopening
+   must not create another orchestration, partial draft, saved deck or stale review navigation.
+6. Test provider failure, quota exhaustion and network loss. Expect incomplete/no-save copy;
+   retry restarts at step 1 and can consume requests again. No resume or automatic save.
+7. Background/foreground while a step runs: no automatic restart or phantom review. Kill/reopen
+   loses the run; this is not background generation.
+8. Entire source, Uncovered, page range and section range: no contradictory Automatic warning;
+   too-large selections offer range guidance. Processing all material is not saved-card coverage.
+9. A fully processed source producing few cards retains neutral shortfall copy, including after
+   exact dedupe; no filler or claim that the source necessarily lacks useful information.
+10. Arabic RTL, VoiceOver/TalkBack, large Dynamic Type, native dialog focus and all themes.
+
+No real-device or live-provider QA is claimed by this change.
 
 ## What this batch deliberately does not change
 

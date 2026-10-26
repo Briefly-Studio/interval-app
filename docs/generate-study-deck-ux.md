@@ -20,6 +20,28 @@ remediated before founder QA. See "Save semantics", "Route / session consistency
 behavior", and "Content direction" for the fixes (audit refs CRITICAL-1/2, HIGH-1/2,
 MEDIUM-1/2/3, LOW-1/2).
 
+## Whole-source QA polish
+
+Multi-step setup now summarizes the selected scope, sections/pages with text, actual step count
+and final card tier. Real-AI plans disclose up to N daily requests, never a remaining balance.
+Fresh runtime planning is approved before provider calls: consent → confirmation for 3+ steps →
+generation. One/two steps skip confirmation; a single request keeps its lightweight flow.
+
+A shared UI run lease blocks duplicate taps/route instances, including while dialogs are open.
+Cancellation, route exit, workspace change and multi-step backgrounding invalidate later calls
+and draft publication, including final-step races. In-flight HTTP cannot be aborted; it can
+consume quota and holds the lease until completion. Canceling gets explicit status and then a
+no-save recovery state. No partial deck is saved, no resume is attempted, and retries restart
+from step 1 with the real-AI request consequence disclosed.
+
+Progress is preparing / real step N of M / combining / preparing review, with accessible status
+updates and RTL text. Scrollable/stacked layouts support large text. Partial-source setup copy
+is for Automatic only; explicit full-selection plans do not inherit its warning. Shortfall
+copy reports fewer distinct cards without inferring why. Saved-card coverage stays separate
+from processing every source section. See [Whole-source generation](./whole-source-generation.md)
+for threshold rationale, failure states, background limitations, cheap mock/test pathways and
+the device QA checklist. Native accessibility, lifecycle and provider QA remain pending.
+
 ## Product flow
 
 ```
@@ -109,8 +131,8 @@ generated" remain two different, independently-explained numbers.
   reporting zero total chunks); the caller falls back to a plain, non-numeric sentence instead of
   ever inventing a number.
 - `deriveFewerCardsExplanation()` decides which of two honest explanations applies when the
-  result has fewer cards than requested: **"full-source"** (the whole source was used; the
-  material itself didn't support more useful cards — a legitimate, non-error outcome) or
+  result has fewer cards than requested: **"full-source"** (the whole source was used; fewer distinct cards were produced, without
+  claiming why — a legitimate, non-error outcome) or
   **"partial-source"** (only part of the source was available, so incomplete coverage is an
   additional, honest explanation). A zero-card result and a result that met/exceeded the request
   are both `"none"` — handled by the pre-existing "no cards" / no-message paths instead.
@@ -124,7 +146,7 @@ make, with the same default budget — not a duplicate size computation) so the 
 up front, before the user ever taps Generate, whether the source will fit:
 
 - **Full source fits:** no extra warning box — the normal, low-friction experience is unchanged.
-- **Source will be partial:** a prominent disclosure box (`generateDeck.coverage.setupPartialTitle`
+- **Automatic will use part of the source:** a prominent disclosure box (`generateDeck.coverage.setupPartialTitle`
   / `setupPartialBody`, plus `scopeSummary` — e.g. "Using 12 of 143 sections of this source" —
   when `hasTrustworthyChunkScope`) explains this BEFORE the user chooses a card count.
 - Under the card-count picker, a caption always clarifies that counts are maximum targets, not

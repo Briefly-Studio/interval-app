@@ -1,8 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AccessibilityInfo, ActivityIndicator, AppState, BackHandler, Platform, StyleSheet, Text, View } from "react-native";
 
+import { onWorkspaceChanged } from "../../../../src/auth/authSignal";
+import { sameScope, type WorkspaceScope } from "../../../../src/storage/workspaceScope";
+import { generationRunGuard, type GenerationRun } from "../../../../src/domain/ai/generationRunGuard";
+import { approveGenerationPlan, generationProgressCopy, multiBatchFailureCopy, plannedDailyRequests, planTooLargeCopy, summarizeGenerationPlan, type GenerationPlanSummary } from "../../../../src/domain/ai/generationPresentation";
+import { confirmGenerationPlan } from "../../../../src/ui/generationPlanDialog";
 import { AuthService } from "../../../../src/auth/AuthService";
 import { buildAiConsentRecord, needsAiConsent } from "../../../../src/domain/ai/aiConsent";
 import { AVAILABILITY_COPY_KEYS, type GenerationAvailabilityState } from "../../../../src/domain/ai/generationAvailability";
@@ -51,11 +56,11 @@ type ScreenState =
   | { phase: "loading" }
   | { phase: "unavailable"; state: Exclude<GenerationAvailabilityState, "ready"> }
   | { phase: "options" }
-  // `progress` is present only once a multi-batch run has actually started (see
-  // multiBatchGeneration.ts) — the fast single-call path (Automatic, or any scope that fits one
-  // batch) never populates it, so this screen's loading UI for that case is unchanged.
+  // `progress` is present while preparing/running a multi-step plan. The fast single-call path
+  // (Automatic, or any scope that fits one step) retains its ordinary generic loading UI.
   | { phase: "generating"; progress?: MultiBatchProgress }
-  | { phase: "error"; code: GenerationErrorCode }
+  | { phase: "error"; code: GenerationErrorCode; multiBatch?: { completed: number; total: number } }
+  | { phase: "canceled" }
   // Defensive backstop only — the options screen's own inline scope validation (built from the
   // same resolver) should normally prevent Generate from ever being tappable in an invalid
   // state. See generateDeckFlow.ts's GenerateDeckFlowOutcome "scope-error" case.
@@ -100,11 +105,12 @@ export default function GenerateStudyDeckScreen() {
   const [difficulty, setDifficulty] = useState<DifficultyOption>(DEFAULT_GENERATION_OPTIONS.difficulty);
   const [cardStyle, setCardStyle] = useState<CardStyleOption>(DEFAULT_GENERATION_OPTIONS.cardStyle);
 
-  // Checked by the multi-batch orchestrator BETWEEN batches (never mid-batch — an already
-  // in-flight request can't be interrupted; see multiBatchGeneration.ts's "Cancellation" doc
-  // comment). A ref (not state) so it's readable synchronously from the isCanceled() callback
-  // without waiting for a re-render.
-  const canceledRef = useRef(false);
+  const runRef = useRef<GenerationRun | null>(null);
+  const focusedRef = useRef(false);
+  const availabilityIdRef = useRef(0);
+  const sourceScopeRef = useRef<WorkspaceScope | null>(null);
+  const runPlanRef = useRef<GenerationPlanSummary | null>(null);
+  const announcementRef = useRef("");
   const [cancelRequested, setCancelRequested] = useState(false);
 
   // Derived scope state — cheap, pure, recomputed every render from already-loaded data. Shared
@@ -151,6 +157,7 @@ export default function GenerateStudyDeckScreen() {
   const scopeIsValid = scopeResolution?.status === "ok" && (!batchPlan || batchPlan.status === "ok");
 
   const goBack = useCallback(() => {
+    runRef.current?.cancel();
     if (router.canGoBack()) {
       router.back();
       return;
@@ -159,6 +166,7 @@ export default function GenerateStudyDeckScreen() {
   }, [id, router]);
 
   const checkAvailability = useCallback(async () => {
+    const requestId = ++availabilityIdRef.current;
     if (!id) {
       setScreenState({ phase: "unavailable", state: "failed" });
       return;
@@ -167,31 +175,38 @@ export default function GenerateStudyDeckScreen() {
       setScreenState({ phase: "unavailable", state: "unsupported" });
       return;
     }
-    setScreenState({ phase: "loading" });
-    const scope = await AuthService.getActiveScope();
-    const all = await getLibrarySources(scope);
-    const found = all.find((s) => s.id === id) ?? null;
-    setSource(found);
-    if (!found) {
-      setScreenState({ phase: "unavailable", state: "failed" });
-      return;
-    }
-    // loadSourceCoverage is independent of availability.canGenerate — Source Coverage's own
-    // normalization is never trusted to agree, so it's loaded unconditionally alongside, never
-    // sequenced behind it (see sourceCoverageService.ts's own "never throws for no-content"
-    // contract — a non-ready source just yields a zero-valued coverage, harmlessly).
-    const [availability, coverageResult] = await Promise.all([
-      checkGenerationAvailability(found),
-      loadSourceCoverage(scope, found),
-    ]);
-    setCoverage(availability.coverage);
-    setScopeChunks(availability.scopeChunks);
-    setPageCount(availability.pageCount);
-    setSourceCoverage(coverageResult);
-    if (availability.canGenerate) {
-      setScreenState({ phase: "options" });
-    } else {
-      setScreenState({ phase: "unavailable", state: availability.state as Exclude<GenerationAvailabilityState, "ready"> });
+    try {
+      setScreenState({ phase: "loading" });
+      const scope = await AuthService.getActiveScope();
+      const all = await getLibrarySources(scope);
+      if (!focusedRef.current || availabilityIdRef.current !== requestId) return;
+      sourceScopeRef.current = scope;
+      const found = all.find((s) => s.id === id) ?? null;
+      setSource(found);
+      if (!found) {
+        setScreenState({ phase: "unavailable", state: "failed" });
+        return;
+      }
+      // loadSourceCoverage is independent of availability.canGenerate — Source Coverage's own
+      // normalization is never trusted to agree, so it's loaded unconditionally alongside, never
+      // sequenced behind it (see sourceCoverageService.ts's own "never throws for no-content"
+      // contract — a non-ready source just yields a zero-valued coverage, harmlessly).
+      const [availability, coverageResult] = await Promise.all([
+        checkGenerationAvailability(found),
+        loadSourceCoverage(scope, found),
+      ]);
+      if (!focusedRef.current || availabilityIdRef.current !== requestId) return;
+      setCoverage(availability.coverage);
+      setScopeChunks(availability.scopeChunks);
+      setPageCount(availability.pageCount);
+      setSourceCoverage(coverageResult);
+      if (availability.canGenerate) {
+        setScreenState({ phase: "options" });
+      } else {
+        setScreenState({ phase: "unavailable", state: availability.state as Exclude<GenerationAvailabilityState, "ready"> });
+      }
+    } catch {
+      if (focusedRef.current && availabilityIdRef.current === requestId) setScreenState({ phase: "unavailable", state: "failed" });
     }
   }, [id]);
 
@@ -199,90 +214,136 @@ export default function GenerateStudyDeckScreen() {
   useFocusEffect(
     useCallback(() => {
       let alive = true;
+      focusedRef.current = true;
       (async () => {
         try {
-          await checkAvailability();
+          if (!runRef.current) await checkAvailability();
         } catch {
           if (alive) setScreenState({ phase: "unavailable", state: "failed" });
         }
       })();
       return () => {
         alive = false;
+        focusedRef.current = false;
+        availabilityIdRef.current++;
+        runRef.current?.cancel();
       };
     }, [checkAvailability])
   );
 
-  const startGeneration = async () => {
-    if (!source) return;
-    canceledRef.current = false;
-    setCancelRequested(false);
-    setScreenState({ phase: "generating" });
-    try {
-      // Capture the active workspace/account scope at generation time — it is bound onto the
-      // draft session and is the sole scope Save will use (audit CRITICAL-1).
-      const scope = await AuthService.getActiveScope();
-      const outcome = await runGenerateDeckFlow(source, { cardCount, difficulty, cardStyle }, scope, selectedScope, {
-        onProgress: (progress) => setScreenState({ phase: "generating", progress }),
-        isCanceled: () => canceledRef.current,
-      });
-      if (outcome.status === "ready") {
-        router.replace({ pathname: "/library/[id]/generate/review" as any, params: { id } });
-        return;
-      }
-      if (outcome.status === "unavailable") {
-        setScreenState({ phase: "unavailable", state: outcome.state });
-        return;
-      }
-      if (outcome.status === "scope-error") {
-        setScreenState({ phase: "scope-error", code: outcome.code });
-        return;
-      }
-      if (outcome.status === "plan-error") {
-        setScreenState({ phase: "plan-error", code: outcome.code });
-        return;
-      }
-      if (outcome.status === "canceled") {
-        // Quiet return — no cards were generated or saved, nothing further to disclose. The user
-        // asked to stop; landing them back where they can immediately retry is enough feedback.
-        setScreenState({ phase: "options" });
-        return;
-      }
-      setScreenState({ phase: "error", code: outcome.code });
-    } catch {
-      setScreenState({ phase: "error", code: "provider-unavailable" });
-    }
-  };
+  function scopeLabel(): string {
+    return selectedScope.type === "pageRange"
+      ? t("generateDeck.scope.summaryPageRange", { start: selectedScope.startPage, end: selectedScope.endPage })
+      : selectedScope.type === "sectionRange"
+        ? t("generateDeck.scope.summarySectionRange", { start: selectedScope.startSection, end: selectedScope.endSection })
+        : t(SCOPE_SUMMARY_KEY[selectedScope.type] as any);
+  }
 
-  const requestCancel = () => {
-    canceledRef.current = true;
+  function planLines(plan: GenerationPlanSummary): string[] {
+    const tier = CARD_COUNT_CHOICES.find((choice) => choice.value === cardCount)!;
+    return [scopeLabel(), plural("generateDeck.multi.sections", plan.sectionCount),
+      ...(plan.pagesWithText ? [plural("generateDeck.multi.pages", plan.pagesWithText)] : []),
+      plural("generateDeck.multi.steps", plan.stepCount),
+      `${t(tier.labelKey as any)} · ${t(tier.descriptionKey as any)}`,
+      ...(plannedDailyRequests(plan, isRealProviderActive()) !== null ? [plural("generateDeck.multi.quota", plan.stepCount)] : []),
+    ];
+  }
+
+  const requestCancel = useCallback(() => {
+    if (!runRef.current || runRef.current.isCanceled()) return;
+    runRef.current.cancel();
     setCancelRequested(true);
-  };
+  }, []);
 
-  // First-use AI consent gate — only ever relevant when this attempt would actually reach the
-  // real backend provider (isRealProviderActive() mirrors providerSelection.ts's own mock/real
-  // decision exactly, so this tracks it automatically if Staging/Production are ever flipped to
-  // real AI later). Mock generation (Staging/Production today) never shows this. Cancel is
-  // passive — no callback at all — so nothing here runs; the user simply stays on this screen
-  // with no generation started, no quota consumed, no backend request made.
+  useEffect(() => {
+    const back = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (!runRef.current) return false;
+      goBack();
+      return true;
+    });
+    const background = AppState.addEventListener("change", (state) => {
+      if (state === "background" && (runPlanRef.current?.stepCount ?? 1) > 1) requestCancel();
+    });
+    const unsubscribe = onWorkspaceChanged(() => { runRef.current?.cancel(); });
+    return () => { back.remove(); background.remove(); unsubscribe(); };
+  }, [goBack, requestCancel]);
+
+  const progressCopy = screenState.phase === "generating" ? generationProgressCopy(screenState.progress, cancelRequested) : null;
+  const progressText = progressCopy ? t(progressCopy.key, progressCopy.params) : "";
+  useEffect(() => {
+    // Android uses the text's polite live region; iOS gets one announcement per changed status.
+    if (screenState.phase !== "generating" || !screenState.progress || announcementRef.current === progressText) return;
+    announcementRef.current = progressText;
+    if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(progressText);
+  }, [progressText, screenState]);
+
   const onGenerate = async () => {
-    if (!source) return;
-
-    if (isRealProviderActive()) {
+    if (!source || !scopeIsValid || runRef.current) return;
+    const run = generationRunGuard.start();
+    if (!run) { setScreenState({ phase: "error", code: "generation-in-progress" }); return; }
+    runRef.current = run;
+    availabilityIdRef.current++;
+    runPlanRef.current = batchPlan?.status === "ok" ? summarizeGenerationPlan(scopeChunks ?? [], batchPlan) : null;
+    setCancelRequested(false);
+    announcementRef.current = "";
+    setScreenState({ phase: "generating", ...(runPlanRef.current && runPlanRef.current.stepCount > 1 ? { progress: { phase: "preparing" as const } } : {}) });
+    let approved = false;
+    try {
       const scope = await AuthService.getActiveScope();
-      const consent = await getAiConsent(scope);
-      if (needsAiConsent(true, consent)) {
-        showAiConsentDialog({
-          t,
-          onContinue: async () => {
-            await setAiConsent(scope, buildAiConsentRecord(new Date()));
-            await startGeneration();
-          },
-        });
+      if (run.isCanceled() || !sourceScopeRef.current || !sameScope(scope, sourceScopeRef.current)) {
+        if (focusedRef.current) setScreenState({ phase: "unavailable", state: "failed" });
         return;
       }
+      const outcome = await runGenerateDeckFlow(source, { cardCount, difficulty, cardStyle }, scope, selectedScope, {
+        isCanceled: () => run.isCanceled() || !focusedRef.current,
+        onPlanReady: async (plan) => {
+          runPlanRef.current = plan;
+          if (!run.isCanceled()) setScreenState({ phase: "generating", ...(plan.stepCount > 1 ? { progress: { phase: "preparing" as const } } : {}) });
+          const realProvider = isRealProviderActive();
+          const consent = realProvider ? await getAiConsent(scope) : null;
+          const allowed = await approveGenerationPlan({
+            needsConsent: needsAiConsent(realProvider, consent), stepCount: plan.stepCount,
+            isCanceled: () => run.isCanceled() || !focusedRef.current,
+            consent: async () => {
+              const accepted = await new Promise<boolean>((resolve) => showAiConsentDialog({ t,
+                onContinue: () => resolve(true), onCancel: () => resolve(false) }));
+              if (!accepted || run.isCanceled()) return false;
+              await setAiConsent(scope, buildAiConsentRecord(new Date()));
+              return true;
+            },
+            confirm: () => confirmGenerationPlan(t, planLines(plan).join("\n")),
+          });
+          approved = allowed && sameScope(scope, await AuthService.getActiveScope()) && !run.isCanceled();
+          return approved;
+        },
+        onProgress: (progress) => {
+          if (focusedRef.current && !run.isCanceled()) setScreenState({ phase: "generating", progress });
+        },
+      });
+      if (!focusedRef.current) return;
+      if (run.isCanceled() || outcome.status === "canceled") {
+        setScreenState({ phase: approved ? "canceled" : "options" });
+      } else if (outcome.status === "ready") {
+        router.replace({ pathname: "/library/[id]/generate/review" as any, params: { id } });
+      } else if (outcome.status === "unavailable") {
+        setScreenState({ phase: "unavailable", state: outcome.state });
+      } else if (outcome.status === "scope-error") {
+        setScreenState({ phase: "scope-error", code: outcome.code });
+      } else if (outcome.status === "plan-error") {
+        setScreenState({ phase: "plan-error", code: outcome.code });
+      } else {
+        setScreenState({ phase: "error", code: outcome.code, multiBatch: outcome.multiBatch });
+      }
+    } catch {
+      if (focusedRef.current) {
+        setScreenState(run.isCanceled() ? { phase: approved ? "canceled" : "options" }
+          : { phase: "error", code: "provider-unavailable", ...(runPlanRef.current && runPlanRef.current.stepCount > 1
+            ? { multiBatch: { completed: 0, total: runPlanRef.current.stepCount } } : {}) });
+      }
+    } finally {
+      run.finish();
+      if (runRef.current === run) runRef.current = null;
     }
-
-    await startGeneration();
   };
 
   const header = (
@@ -308,21 +369,14 @@ export default function GenerateStudyDeckScreen() {
 
   if (screenState.phase === "generating") {
     const progress = screenState.progress;
-    const bodyText =
-      !progress || progress.phase === "preparing"
-        ? t("generateDeck.generatingBody")
-        : progress.phase === "batch"
-          ? t("generateDeck.generatingBatchBody", { current: progress.batchIndex, total: progress.batchCount })
-          : t("generateDeck.generatingCombiningBody");
-    // Real, truthful batch progress only — never a fabricated percentage (section 16). `progress`
-    // is only ever present for a multi-batch run; the fast single-call path never shows this.
+    const bodyText = progressText;
     return (
-      <Screen>
+      <Screen scroll>
         {header}
-        <View style={[styles.centered, { gap: spacing.md }]} accessibilityLiveRegion="polite">
+        <View style={[styles.centered, { gap: spacing.md }]}>
           <ActivityIndicator color={colors.accent} size="large" />
           <Text style={[typography.subheading, text, { color: colors.textPrimary }]}>{t("generateDeck.generatingTitle")}</Text>
-          <Text style={[typography.secondary, styles.centeredText, { color: colors.textSecondary }]}>{bodyText}</Text>
+          <Text accessibilityLiveRegion="polite" style={[typography.secondary, styles.centeredText, { color: colors.textSecondary }]}>{bodyText}</Text>
           {progress ? (
             <Button
               label={cancelRequested ? t("generateDeck.canceling") : t("common.cancel")}
@@ -351,16 +405,25 @@ export default function GenerateStudyDeckScreen() {
     );
   }
 
+  if (screenState.phase === "canceled") {
+    return <Screen scroll>{header}<EmptyState icon="close-circle-outline" title={t("generateDeck.multi.canceledTitle")}
+      description={t("generateDeck.multi.canceledBody")}>
+      {isRealProviderActive() ? <Text style={[typography.caption, text, { color: colors.textSecondary }]}>{t("generateDeck.multi.cancelRequestNote")}</Text> : null}
+      <Button label={t("generateDeck.retryButton")} variant="primary" fullWidth onPress={() => setScreenState({ phase: "options" })} />
+      <Button label={t("generateDeck.backToSourceButton")} variant="ghost" fullWidth onPress={goBack} />
+    </EmptyState></Screen>;
+  }
+
   if (screenState.phase === "error") {
+    const multi = !!screenState.multiBatch;
+    const description = multi ? t(multiBatchFailureCopy(screenState.code)) : t(GENERATION_ERROR_COPY_KEYS[screenState.code] as any);
     return (
       <Screen scroll>
         {header}
-        <EmptyState
-          icon="alert-circle-outline"
-          title={t("generateDeck.error.title")}
-          description={t(GENERATION_ERROR_COPY_KEYS[screenState.code] as any)}
-        >
-          <Button label={t("generateDeck.retryButton")} variant="primary" fullWidth onPress={() => setScreenState({ phase: "options" })} />
+        <EmptyState icon="alert-circle-outline" title={t("generateDeck.error.title")} description={description}>
+          {multi && screenState.code !== "daily-limit-reached" ? <Text style={[typography.secondary, text, { color: colors.textSecondary }]}>{t(GENERATION_ERROR_COPY_KEYS[screenState.code] as any)}</Text> : null}
+          {multi ? <Text style={[typography.caption, text, { color: colors.textSecondary }]}>{t(isRealProviderActive() ? "generateDeck.multi.retry" : "generateDeck.multi.retryMock")}</Text> : null}
+          {screenState.code !== "daily-limit-reached" ? <Button label={t("generateDeck.retryButton")} variant="primary" fullWidth onPress={() => setScreenState({ phase: "options" })} /> : null}
           <Button label={t("generateDeck.backToSourceButton")} variant="ghost" fullWidth onPress={goBack} />
         </EmptyState>
       </Screen>
@@ -390,7 +453,7 @@ export default function GenerateStudyDeckScreen() {
         <EmptyState
           icon="alert-circle-outline"
           title={t("generateDeck.error.title")}
-          description={t(BATCH_PLAN_ERROR_COPY_KEYS[screenState.code] as any)}
+          description={t(screenState.code === "plan-too-large" ? planTooLargeCopy(scopeKind) : BATCH_PLAN_ERROR_COPY_KEYS[screenState.code] as any)}
         >
           <Button label={t("generateDeck.retryButton")} variant="primary" fullWidth onPress={() => setScreenState({ phase: "options" })} />
           <Button label={t("generateDeck.backToSourceButton")} variant="ghost" fullWidth onPress={goBack} />
@@ -400,9 +463,9 @@ export default function GenerateStudyDeckScreen() {
   }
 
   // phase === "options"
-  const sourceWillBePartial = coverage !== null && !coverage.fullSourceIncluded;
+  const sourceWillBePartial = scopeKind === "automatic" && coverage !== null && !coverage.fullSourceIncluded;
   const trustworthyScope = coverage !== null && hasTrustworthyChunkScope(coverage);
-  const cardCountHintKind = deriveCardCountHintKind(coverage?.fullSourceIncluded ?? true);
+  const cardCountHintKind = deriveCardCountHintKind(scopeKind === "automatic" ? coverage?.fullSourceIncluded ?? true : true);
   const resolvedCardCount = resolveRequestedCardCount(cardCount);
 
   return (
@@ -507,7 +570,7 @@ export default function GenerateStudyDeckScreen() {
             </Text>
           ) : batchPlan?.status === "error" ? (
             <Text style={[typography.caption, text, { color: colors.danger }]} accessibilityRole="text">
-              {t(BATCH_PLAN_ERROR_COPY_KEYS[batchPlan.code] as any)}
+              {t(batchPlan.code === "plan-too-large" ? planTooLargeCopy(scopeKind) : BATCH_PLAN_ERROR_COPY_KEYS[batchPlan.code] as any)}
             </Text>
           ) : (
             <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
@@ -519,15 +582,7 @@ export default function GenerateStudyDeckScreen() {
             </Text>
           )}
 
-          {/* Truthful pre-flight disclosure (section 18) — shown whenever this selection will
-              actually take more than one sequential AI generation step, replacing the old
-              "only part will be included" warning this scope used to show: multi-batch now
-              processes the WHOLE selection, just across several bounded steps instead of one. */}
-          {batchPlan?.status === "ok" && batchPlan.batches.length > 1 ? (
-            <Text style={[typography.caption, text, { color: colors.textSecondary }]} accessibilityRole="text">
-              {plural("generateDeck.scope.multiBatchNotice", batchPlan.batches.length, { count: batchPlan.batches.length })}
-            </Text>
-          ) : null}
+
         </View>
 
         <View style={{ gap: spacing.xs }}>
@@ -566,6 +621,14 @@ export default function GenerateStudyDeckScreen() {
         </View>
       </Card>
 
+      {batchPlan?.status === "ok" && batchPlan.batches.length > 1 ? (
+        <Card style={{ gap: spacing.sm }}>
+          <Text accessibilityRole="header" style={[typography.subheading, text, { color: colors.textPrimary }]}>{t("generateDeck.multi.planTitle")}</Text>
+          {planLines(summarizeGenerationPlan(scopeChunks ?? [], batchPlan)).map((line, index) => (
+            <Text key={index} style={[typography.secondary, text, { color: colors.textSecondary }]}>{line}</Text>
+          ))}
+        </Card>
+      ) : null}
       <Button label={t("generateDeck.generateButton")} variant="primary" fullWidth disabled={!scopeIsValid} onPress={onGenerate} />
     </Screen>
   );
