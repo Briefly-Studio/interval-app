@@ -345,11 +345,14 @@ localized message. No raw error, stack trace, or internal code is ever shown.
   blocked for this batch (same doc's "Image / OCR" and "Audio / transcription" sections explain
   why), and pptx was out of scope entirely. Scanned/image-only PDFs and image-only DOCX pages
   correctly show "no usable text" (no OCR).
-- No page-range or chunk selection UI — the whole (budgeted) source is used; a partial-context
-  generation is now disclosed BEFORE generation on the options screen, and again with chunk-scope
-  detail on the review screen (see "Source coverage disclosure"). Whole-document generation for a
-  source larger than one context budget (true multi-pass/RAG-style coverage) remains future,
-  founder-gated work — nothing in this batch attempts it.
+- **Update (Source Generation Scope batch):** a page range (PDF) / generic section range
+  (TXT/DOCX/XLSX) / "Uncovered material" / "Entire source" picker now exists on the options
+  screen — see `docs/source-generation-scope.md`. Automatic (this bullet's original "whole
+  (budgeted) source is used" behavior) remains the default. A partial-context generation is still
+  disclosed BEFORE generation on the options screen, and again with chunk-scope detail on the
+  review screen (see "Source coverage disclosure"), regardless of which scope was selected.
+  Whole-document generation for a source larger than one context budget (true multi-pass/
+  RAG-style coverage) remains future, founder-gated work — nothing in either batch attempts it.
 - No regenerate / "generate more cards" action, and no "add card" flow — a fully-emptied draft
   must be discarded and regenerated.
 - Draft is in-memory only and does not survive an app restart.

@@ -7,12 +7,29 @@ import { AuthService } from "../../../../src/auth/AuthService";
 import { buildAiConsentRecord, needsAiConsent } from "../../../../src/domain/ai/aiConsent";
 import { AVAILABILITY_COPY_KEYS, type GenerationAvailabilityState } from "../../../../src/domain/ai/generationAvailability";
 import { isGenerateStudyDeckEnabled } from "../../../../src/domain/ai/generateStudyDeckCapability";
-import { checkGenerationAvailability, GENERATION_ERROR_COPY_KEYS, runGenerateDeckFlow } from "../../../../src/domain/ai/generateDeckFlow";
+import {
+  checkGenerationAvailability,
+  GENERATION_ERROR_COPY_KEYS,
+  runGenerateDeckFlow,
+  SOURCE_SCOPE_ERROR_COPY_KEYS,
+} from "../../../../src/domain/ai/generateDeckFlow";
 import { deriveCardCountHintKind, hasTrustworthyChunkScope, type GenerationCoverage } from "../../../../src/domain/ai/generationCoverage";
 import { CARD_COUNT_CHOICES, CARD_STYLE_CHOICES, DIFFICULTY_CHOICES } from "../../../../src/domain/ai/generationOptionsUi";
 import { DEFAULT_GENERATION_OPTIONS, resolveRequestedCardCount } from "../../../../src/domain/ai/generationOptions";
 import { isRealProviderActive } from "../../../../src/domain/ai/providerSelection";
+import {
+  fitsContextBudget,
+  getSectionCount,
+  resolveSourceGenerationScope,
+  type SourceGenerationScope,
+  type SourceGenerationScopeKind,
+  type SourceScopeResolutionErrorCode,
+} from "../../../../src/domain/ai/sourceGenerationScope";
+import { buildSourceScopeChoices, SCOPE_SUMMARY_KEY } from "../../../../src/domain/ai/sourceGenerationScopeUi";
 import type { CardCountOption, CardStyleOption, DifficultyOption, GenerationErrorCode } from "../../../../src/domain/ai/types";
+import type { NormalizedChunk } from "../../../../src/domain/normalization/types";
+import { loadSourceCoverage } from "../../../../src/domain/sourceCoverageService";
+import type { SourceCoverage } from "../../../../src/domain/sourceCoverage";
 import { useTranslation } from "../../../../src/i18n";
 import { useLayoutDirection } from "../../../../src/i18n/direction";
 import type { LibrarySourceRecord } from "../../../../src/models/librarySource";
@@ -26,17 +43,22 @@ import { EmptyState } from "../../../../src/ui/EmptyState";
 import { IconButton } from "../../../../src/ui/IconButton";
 import { OptionRadioGroup } from "../../../../src/ui/OptionRadioGroup";
 import { Screen } from "../../../../src/ui/Screen";
+import { TextField } from "../../../../src/ui/TextField";
 
 type ScreenState =
   | { phase: "loading" }
   | { phase: "unavailable"; state: Exclude<GenerationAvailabilityState, "ready"> }
   | { phase: "options" }
   | { phase: "generating" }
-  | { phase: "error"; code: GenerationErrorCode };
+  | { phase: "error"; code: GenerationErrorCode }
+  // Defensive backstop only — the options screen's own inline scope validation (built from the
+  // same resolver) should normally prevent Generate from ever being tappable in an invalid
+  // state. See generateDeckFlow.ts's GenerateDeckFlowOutcome "scope-error" case.
+  | { phase: "scope-error"; code: SourceScopeResolutionErrorCode };
 
 export default function GenerateStudyDeckScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, plural } = useTranslation();
   const { colors, spacing, typography } = useTheme();
   const { row, text } = useLayoutDirection();
 
@@ -50,12 +72,64 @@ export default function GenerateStudyDeckScreen() {
   // checkGenerationAvailability's "coverage" doc comment) so the disclosure below is accurate
   // BEFORE the user ever taps Generate, not just after. null while unknown/unavailable.
   const [coverage, setCoverage] = useState<GenerationCoverage | null>(null);
+  // Raw ingredients for source scope selection — see sourceGenerationScope.ts. null while
+  // unknown/unavailable, same posture as `coverage` above.
+  const [scopeChunks, setScopeChunks] = useState<NormalizedChunk[] | null>(null);
+  const [pageCount, setPageCount] = useState<number | undefined>(undefined);
+  const [sourceCoverage, setSourceCoverage] = useState<SourceCoverage | null>(null);
+
+  // Source scope selection (Automatic/Entire source/Uncovered/Page range/Section range) — never
+  // persisted, defaults to Automatic for every fresh generation session (section 16), same
+  // posture as cardCount/difficulty/cardStyle below.
+  const [scopeKind, setScopeKind] = useState<SourceGenerationScopeKind>("automatic");
+  const [pageRangeStart, setPageRangeStart] = useState("");
+  const [pageRangeEnd, setPageRangeEnd] = useState("");
+  const [sectionRangeStart, setSectionRangeStart] = useState("");
+  const [sectionRangeEnd, setSectionRangeEnd] = useState("");
 
   const [cardCount, setCardCount] = useState<CardCountOption>(
     typeof DEFAULT_GENERATION_OPTIONS.cardCount === "number" ? "medium" : DEFAULT_GENERATION_OPTIONS.cardCount
   );
   const [difficulty, setDifficulty] = useState<DifficultyOption>(DEFAULT_GENERATION_OPTIONS.difficulty);
   const [cardStyle, setCardStyle] = useState<CardStyleOption>(DEFAULT_GENERATION_OPTIONS.cardStyle);
+
+  // Derived scope state — cheap, pure, recomputed every render from already-loaded data. Shared
+  // between the render body (live validation/summary) and startGeneration (the actual request),
+  // so both always agree on exactly the same resolution for the current selection.
+  const totalSectionCount = getSectionCount(scopeChunks ?? []);
+  const hasUncoveredMaterial = (sourceCoverage?.uncoveredChunkCount ?? 0) > 0;
+  const entireSourceFits = fitsContextBudget(scopeChunks ?? []);
+  const scopeChoices = buildSourceScopeChoices({ totalSectionCount, pageCount, hasUncoveredMaterial, entireSourceFits });
+
+  function parseRangeInput(raw: string): number {
+    const trimmed = raw.trim();
+    if (!/^\d+$/.test(trimmed)) return NaN;
+    return Number(trimmed);
+  }
+
+  const selectedScope: SourceGenerationScope =
+    scopeKind === "pageRange"
+      ? { type: "pageRange", startPage: parseRangeInput(pageRangeStart), endPage: parseRangeInput(pageRangeEnd) }
+      : scopeKind === "sectionRange"
+        ? { type: "sectionRange", startSection: parseRangeInput(sectionRangeStart), endSection: parseRangeInput(sectionRangeEnd) }
+        : { type: scopeKind };
+
+  const scopeResolution = scopeChunks
+    ? resolveSourceGenerationScope({ chunks: scopeChunks, scope: selectedScope, coverage: sourceCoverage ?? undefined, pageCount })
+    : null;
+  const scopeIsValid = scopeResolution?.status === "ok";
+
+  // True only for a RESTRICTIVE scope (uncovered/page/section range) whose own candidate chunks
+  // still exceed one generation's context budget — Automatic/Entire source are deliberately never
+  // flagged here: Automatic's existing partial-source banner below already covers that case, and
+  // a successfully-resolved Entire source can never exceed budget by construction (see
+  // sourceGenerationScope.ts's own fitsContextBudget check inside the "entireSource" branch).
+  const scopeExceedsContext = (() => {
+    if (!scopeChunks || scopeResolution?.status !== "ok" || !scopeResolution.chunkIds) return false;
+    const candidateIds = new Set(scopeResolution.chunkIds);
+    const candidateChunks = scopeChunks.filter((chunk) => candidateIds.has(chunk.id));
+    return !fitsContextBudget(candidateChunks);
+  })();
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -83,8 +157,18 @@ export default function GenerateStudyDeckScreen() {
       setScreenState({ phase: "unavailable", state: "failed" });
       return;
     }
-    const availability = await checkGenerationAvailability(found);
+    // loadSourceCoverage is independent of availability.canGenerate — Source Coverage's own
+    // normalization is never trusted to agree, so it's loaded unconditionally alongside, never
+    // sequenced behind it (see sourceCoverageService.ts's own "never throws for no-content"
+    // contract — a non-ready source just yields a zero-valued coverage, harmlessly).
+    const [availability, coverageResult] = await Promise.all([
+      checkGenerationAvailability(found),
+      loadSourceCoverage(scope, found),
+    ]);
     setCoverage(availability.coverage);
+    setScopeChunks(availability.scopeChunks);
+    setPageCount(availability.pageCount);
+    setSourceCoverage(coverageResult);
     if (availability.canGenerate) {
       setScreenState({ phase: "options" });
     } else {
@@ -116,13 +200,17 @@ export default function GenerateStudyDeckScreen() {
       // Capture the active workspace/account scope at generation time — it is bound onto the
       // draft session and is the sole scope Save will use (audit CRITICAL-1).
       const scope = await AuthService.getActiveScope();
-      const outcome = await runGenerateDeckFlow(source, { cardCount, difficulty, cardStyle }, scope);
+      const outcome = await runGenerateDeckFlow(source, { cardCount, difficulty, cardStyle }, scope, selectedScope);
       if (outcome.status === "ready") {
         router.replace({ pathname: "/library/[id]/generate/review" as any, params: { id } });
         return;
       }
       if (outcome.status === "unavailable") {
         setScreenState({ phase: "unavailable", state: outcome.state });
+        return;
+      }
+      if (outcome.status === "scope-error") {
+        setScreenState({ phase: "scope-error", code: outcome.code });
         return;
       }
       setScreenState({ phase: "error", code: outcome.code });
@@ -225,6 +313,22 @@ export default function GenerateStudyDeckScreen() {
     );
   }
 
+  if (screenState.phase === "scope-error") {
+    return (
+      <Screen scroll>
+        {header}
+        <EmptyState
+          icon="alert-circle-outline"
+          title={t("generateDeck.error.title")}
+          description={t(SOURCE_SCOPE_ERROR_COPY_KEYS[screenState.code] as any)}
+        >
+          <Button label={t("generateDeck.retryButton")} variant="primary" fullWidth onPress={() => setScreenState({ phase: "options" })} />
+          <Button label={t("generateDeck.backToSourceButton")} variant="ghost" fullWidth onPress={goBack} />
+        </EmptyState>
+      </Screen>
+    );
+  }
+
   // phase === "options"
   const sourceWillBePartial = coverage !== null && !coverage.fullSourceIncluded;
   const trustworthyScope = coverage !== null && hasTrustworthyChunkScope(coverage);
@@ -265,6 +369,90 @@ export default function GenerateStudyDeckScreen() {
 
       <Card style={{ gap: spacing.lg }}>
         <View style={{ gap: spacing.xs }}>
+          <Text style={[typography.label, text, { color: colors.textPrimary }]}>{t("generateDeck.scope.label")}</Text>
+          <OptionRadioGroup
+            groupLabel={t("generateDeck.scope.label")}
+            value={scopeKind}
+            onChange={setScopeKind}
+            items={scopeChoices.map((c) => ({ value: c.value, label: t(c.labelKey as any), description: t(c.descriptionKey as any) }))}
+          />
+
+          {scopeKind === "pageRange" ? (
+            <View style={{ gap: spacing.xs }}>
+              {typeof pageCount === "number" ? (
+                <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+                  {plural("generateDeck.scope.pageRangeTotal", pageCount, { count: pageCount })}
+                </Text>
+              ) : null}
+              <View style={[row, { gap: spacing.sm }]}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label={t("generateDeck.scope.rangeFromLabel")}
+                    value={pageRangeStart}
+                    onChangeText={setPageRangeStart}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label={t("generateDeck.scope.rangeToLabel")}
+                    value={pageRangeEnd}
+                    onChangeText={setPageRangeEnd}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {scopeKind === "sectionRange" ? (
+            <View style={{ gap: spacing.xs }}>
+              <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+                {plural("generateDeck.scope.sectionRangeTotal", totalSectionCount, { count: totalSectionCount })}
+              </Text>
+              <View style={[row, { gap: spacing.sm }]}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label={t("generateDeck.scope.rangeFromLabel")}
+                    value={sectionRangeStart}
+                    onChangeText={setSectionRangeStart}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label={t("generateDeck.scope.rangeToLabel")}
+                    value={sectionRangeEnd}
+                    onChangeText={setSectionRangeEnd}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {scopeResolution?.status === "error" ? (
+            <Text style={[typography.caption, text, { color: colors.danger }]} accessibilityRole="text">
+              {t(SOURCE_SCOPE_ERROR_COPY_KEYS[scopeResolution.code] as any)}
+            </Text>
+          ) : (
+            <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+              {selectedScope.type === "pageRange"
+                ? t("generateDeck.scope.summaryPageRange", { start: selectedScope.startPage, end: selectedScope.endPage })
+                : selectedScope.type === "sectionRange"
+                  ? t("generateDeck.scope.summarySectionRange", { start: selectedScope.startSection, end: selectedScope.endSection })
+                  : t(SCOPE_SUMMARY_KEY[selectedScope.type] as any)}
+            </Text>
+          )}
+
+          {scopeExceedsContext ? (
+            <Text style={[typography.caption, text, { color: colors.warning }]} accessibilityRole="text">
+              {t("generateDeck.scope.partialContextNote")}
+            </Text>
+          ) : null}
+        </View>
+
+        <View style={{ gap: spacing.xs }}>
           <Text style={[typography.label, text, { color: colors.textPrimary }]}>{t("generateDeck.options.cardCountLabel")}</Text>
           <OptionRadioGroup
             groupLabel={t("generateDeck.options.cardCountLabel")}
@@ -300,7 +488,7 @@ export default function GenerateStudyDeckScreen() {
         </View>
       </Card>
 
-      <Button label={t("generateDeck.generateButton")} variant="primary" fullWidth onPress={onGenerate} />
+      <Button label={t("generateDeck.generateButton")} variant="primary" fullWidth disabled={!scopeIsValid} onPress={onGenerate} />
     </Screen>
   );
 }

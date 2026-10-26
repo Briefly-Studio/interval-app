@@ -283,6 +283,29 @@ For anything not covered directly in this file, these are the authoritative docu
     `isGenerateStudyDeckEnabled()` gate (Development/Staging) rather than introducing a second
     one — see that doc's "Known limitations" section. No Discover UI, no stale-card detection, no
     source versioning, no backend/AWS/CDK/EAS/Staging/Production change.
+32. `docs/source-generation-scope.md` — lets the user choose WHAT PART of a Library source
+    Generate Study Deck draws from before generation starts (Automatic/Entire source/Uncovered
+    material/Page range (PDF)/Section range (TXT/DOCX/XLSX)), via a format-neutral
+    `SourceGenerationScope` type and a single pure resolver,
+    `resolveSourceGenerationScope` (`src/domain/ai/sourceGenerationScope.ts`). **Implemented,
+    merged into `v3.3-dev`; not yet founder-QA verified.** Automatic (unchanged prior behavior)
+    remains the default for every new generation session — nothing persisted. "Uncovered
+    material" reuses Source Coverage's existing `uncoveredChunkIds` with no duplicated math; "Entire
+    source" is only ever offered/resolved when the whole source already fits one generation's
+    context budget (never silently truncated); PDF page ranges rely on the PDF adapter's existing
+    guarantee that a chunk never spans a page boundary; the generic section range (TXT/DOCX/XLSX)
+    reuses the same "N of M sections" vocabulary the existing coverage disclosure already shows
+    the user, never a raw chunk id. Scope selection and the existing bounded `GenerationContext`
+    budget remain two separate concerns — a selected scope whose candidates still exceed one
+    context budget is truthfully disclosed by the SAME pre-existing
+    `fullSourceIncluded`/`excludedChunkCount` machinery, not a new mechanism. **Never implements**
+    chapter/heading-based selection (DOCX's adapter already carries a real, non-heuristic
+    `heading` field per chunk — found during this batch's preflight, deliberately not turned into
+    a UI without its own founder-approved design), XLSX worksheet selection (no structured
+    sheet-identity provenance field exists yet), or multi-batch whole-source generation — see
+    that doc's "Future work" section. No backend/AWS/CDK/EAS/Staging/Production change, no change
+    to the count-quality contract, no change to Source Coverage's own calculations, no new npm
+    dependency.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -834,6 +857,11 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   `NORMALIZATION_VERSION` bump invalidates all existing provenance for every source (chunk ids are
   content-addressed and include the version), with no migration step — a one-time, intentional
   consequence of a deliberate algorithm change, not a defect introduced by this feature.
+- **Source Generation Scope (item 32 above) is implemented but not yet founder-QA verified on a
+  real device** — only real device testing (PDF page range against an actual multi-page PDF,
+  Uncovered material against real saved cards, the live validation/disabled-Generate behavior)
+  can confirm the resolver's logic, which is unit-tested, actually behaves correctly against real
+  normalized sources end to end. See `docs/source-generation-scope.md`'s "Founder QA" section.
 
 ## Accessibility Guardrails
 

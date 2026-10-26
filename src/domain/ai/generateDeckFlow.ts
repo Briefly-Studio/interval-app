@@ -1,5 +1,7 @@
 import type { LibrarySourceRecord } from "../../models/librarySource";
+import { loadSourceCoverage } from "../sourceCoverageService";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
+import type { NormalizedChunk } from "../normalization/types";
 import { normalizeSource } from "../normalization/normalizeSource";
 import { generateStudyDeck } from "./aiService";
 import { prepareGenerationContext } from "./contextPreparation";
@@ -10,6 +12,7 @@ import {
   type DraftProvenanceEntry,
 } from "./generateDeckSession";
 import { selectModelProvider } from "./providerSelection";
+import { resolveSourceGenerationScope, type SourceGenerationScope, type SourceScopeResolutionErrorCode } from "./sourceGenerationScope";
 import type { GenerationErrorCode, GenerationOptions } from "./types";
 
 // Orchestrates one end-to-end generation attempt for the UX shell:
@@ -24,7 +27,13 @@ import type { GenerationErrorCode, GenerationOptions } from "./types";
 export type GenerateDeckFlowOutcome =
   | { status: "ready" }
   | { status: "unavailable"; state: Exclude<GenerationAvailabilityState, "ready"> }
-  | { status: "error"; code: GenerationErrorCode };
+  | { status: "error"; code: GenerationErrorCode }
+  // Scope resolution failed BEFORE any provider was ever called — distinct from GenerationError,
+  // which only ever covers provider/validation failures. The options screen's own inline
+  // validation (built from the same resolveSourceGenerationScope call) should normally prevent
+  // this from ever being reached; this is a defensive backstop for source content changing
+  // between screen-load and the Generate tap.
+  | { status: "scope-error"; code: SourceScopeResolutionErrorCode };
 
 /**
  * Pre-flight readiness check for the options screen — normalizes the source and maps the result
@@ -38,19 +47,31 @@ export type GenerateDeckFlowOutcome =
  * default budget — it is not a second, independent size computation, and it does not depend on
  * `options` (card count/difficulty/style never affect context selection). This lets the options
  * screen disclose up front whether the source will fit before the user taps Generate.
+ *
+ * `scopeChunks`/`pageCount` (also only present when `canGenerate`) are the raw ingredients the
+ * options screen needs to offer/validate a source scope choice (Automatic/Entire source/
+ * Uncovered/Page range/Section range) — see sourceGenerationScope.ts. Exposing the already-
+ * computed chunk list here is strictly cheaper than having the screen normalize a second time.
  */
 export async function checkGenerationAvailability(source: LibrarySourceRecord): Promise<{
   state: GenerationAvailabilityState;
   canGenerate: boolean;
   coverage: GenerationCoverage | null;
+  scopeChunks: NormalizedChunk[] | null;
+  pageCount?: number;
 }> {
   const normalization = await normalizeSource(source);
   const availability = deriveGenerationAvailability(normalization);
   if (!availability.canGenerate) {
-    return { ...availability, coverage: null };
+    return { ...availability, coverage: null, scopeChunks: null };
   }
   const context = prepareGenerationContext(normalization.content);
-  return { ...availability, coverage: summarizeGenerationCoverage(context) };
+  return {
+    ...availability,
+    coverage: summarizeGenerationCoverage(context),
+    scopeChunks: normalization.content.chunks,
+    pageCount: normalization.content.metadata.pageCount,
+  };
 }
 
 function buildProvenanceMap(chunks: { id: string; provenance: DraftProvenanceEntry }[]): Record<string, DraftProvenanceEntry> {
@@ -71,7 +92,10 @@ export async function runGenerateDeckFlow(
   options: GenerationOptions,
   /** The active workspace scope at generation time — bound onto the draft session and used as the
    * sole source of truth at save time (audit CRITICAL-1). */
-  sourceScope: WorkspaceScope
+  sourceScope: WorkspaceScope,
+  /** Which part of the source to draw from — defaults to Automatic (today's unchanged behavior)
+   * when omitted, so this stays source-compatible with any other future caller. */
+  scope: SourceGenerationScope = { type: "automatic" }
 ): Promise<GenerateDeckFlowOutcome> {
   const normalization = await normalizeSource(source);
   const availability = deriveGenerationAvailability(normalization);
@@ -79,11 +103,27 @@ export async function runGenerateDeckFlow(
     return { status: "unavailable", state: availability.state as Exclude<GenerationAvailabilityState, "ready"> };
   }
 
+  // Coverage is only ever needed for the "uncovered" scope — loaded fresh here (never trusting
+  // whatever the options screen computed earlier) so the resolver always sees the SAME chunk set
+  // it's about to restrict, exactly like `normalization` itself being re-derived fresh above.
+  const coverage = scope.type === "uncovered" ? await loadSourceCoverage(sourceScope, source) : undefined;
+
+  const resolvedScope = resolveSourceGenerationScope({
+    chunks: normalization.content.chunks,
+    scope,
+    coverage,
+    pageCount: normalization.content.metadata.pageCount,
+  });
+  if (resolvedScope.status === "error") {
+    return { status: "scope-error", code: resolvedScope.code };
+  }
+
   const outcome = await generateStudyDeck(selectModelProvider(), {
     sourceTitle: source.displayTitle,
     normalizedContent: normalization.content,
     options,
     language: source.sourceLanguage,
+    selectedChunkIds: resolvedScope.chunkIds,
   });
 
   if (outcome.status === "error") {
@@ -124,4 +164,15 @@ export const GENERATION_ERROR_COPY_KEYS: Record<GenerationErrorCode, string> = {
   "malformed-model-output": "generateDeck.error.badOutput",
   "unsafe-output": "generateDeck.error.badOutput",
   "validation-failed": "generateDeck.error.badOutput",
+};
+
+// Same purpose as GENERATION_ERROR_COPY_KEYS above, for source-scope resolution failures — kept
+// as its own table since SourceScopeResolutionErrorCode is a disjoint error family (resolved
+// before any provider is ever called; see sourceGenerationScope.ts).
+export const SOURCE_SCOPE_ERROR_COPY_KEYS: Record<SourceScopeResolutionErrorCode, string> = {
+  "entire-source-too-large": "generateDeck.scope.error.entireSourceTooLarge",
+  "uncovered-unavailable": "generateDeck.scope.error.uncoveredUnavailable",
+  "page-range-unavailable": "generateDeck.scope.error.pageRangeUnavailable",
+  "invalid-range": "generateDeck.scope.error.invalidRange",
+  "empty-selection": "generateDeck.scope.error.emptySelection",
 };
