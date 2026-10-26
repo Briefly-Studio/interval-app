@@ -99,13 +99,15 @@ automatically from CloudShell's own authenticated session; nothing here needs to
 
 ## Development resource names
 
-Fourteen application resources, per `docs/environment-separation-plan.md` §4's naming standard for
+Fifteen application resources, per `docs/environment-separation-plan.md` §4's naming standard for
 the original eight, plus three Library-source-storage resources added by the Library Organization
 + Private Source Storage batch (see "Library source storage" below), plus three AI Generate Study
 Deck resources added by Phase B of the Bedrock integration and its later rate-limiting batch (see
 "AI Generate Study Deck Lambda" below — **implemented in CDK; whether `cdk deploy` has actually
 been run against a live account is not confirmable from source alone**, unlike every other row in
-this table, which is **deployed and founder-QA verified**):
+this table, which is **deployed and founder-QA verified**), plus one table added by the
+sync-cursor-hardening batch (`interval-dev-change-stream` — **implemented in CDK, not yet
+deployed to any environment**; see `docs/sync-cursor-semantics.md`):
 
 | Resource | Name |
 |---|---|
@@ -114,6 +116,7 @@ this table, which is **deployed and founder-QA verified**):
 | Lambda (pull) | `interval-dev-sync-pull` |
 | DynamoDB (records) | `interval-dev-records` |
 | DynamoDB (changes) | `interval-dev-changes` |
+| DynamoDB (change stream — ordered seq-keyed pull source) | `interval-dev-change-stream` |
 | Cognito user pool | `interval-dev-user-pool` |
 | Cognito app client | `interval-dev-mobile` |
 | IAM role (shared, both sync Lambdas) | `interval-dev-sync-lambda-role` |
@@ -350,7 +353,9 @@ no-idempotency-key limitation).
 Same eleven resource types as Development (the original eight plus the three Library-source-storage
 resources — see "Library source storage" above), `interval-staging-*` names, a fully independent
 set of AWS resources from Development's — no table, pool, function, role, or bucket is shared
-between the two stacks. **All eleven are deployed and founder-QA verified:**
+between the two stacks. **All eleven are deployed and founder-QA verified**, plus one twelfth
+table added by the sync-cursor-hardening batch (`interval-staging-change-stream` —
+**implemented in CDK, not yet deployed**; same caveat as Development's own row):
 
 | Resource | Name |
 |---|---|
@@ -359,6 +364,7 @@ between the two stacks. **All eleven are deployed and founder-QA verified:**
 | Lambda (pull) | `interval-staging-sync-pull` |
 | DynamoDB (records) | `interval-staging-records` |
 | DynamoDB (changes) | `interval-staging-changes` |
+| DynamoDB (change stream — ordered seq-keyed pull source) | `interval-staging-change-stream` |
 | Cognito user pool | `interval-staging-user-pool` |
 | Cognito app client | `interval-staging-mobile` |
 | IAM role (shared, both sync Lambdas) | `interval-staging-sync-lambda-role` |
@@ -387,18 +393,24 @@ for, or accidentally become, a Production change.
 
 `interval-dev-records` / `interval-dev-changes` — key schema (`PK` hash, `SK` range, both string)
 copied exactly from `backend/lambdas/sync-push/index.mjs`'s actual `PutCommand`/`UpdateCommand`
-calls and `sync-pull/index.mjs`'s `QueryCommand`, not assumed. `PAY_PER_REQUEST` billing,
-AWS-managed encryption at rest, streams and TTL both off — matching the live-confirmed Production
-shape (`docs/aws-current-state-audit.md`), since nothing in the current backend source needs
-streams or TTL for either environment.
+calls, not assumed. `PAY_PER_REQUEST` billing, AWS-managed encryption at rest, streams and TTL
+both off — matching the live-confirmed Production shape (`docs/aws-current-state-audit.md`),
+since nothing in the current backend source needs streams or TTL for either environment.
 
-**Removal policy: `DESTROY` for Development, `RETAIN` for Staging.** Not the same decision copied
-across environments — see "Staging removal/deletion policy" below for the full reasoning. Neither
-policy is ever applied to Production, which isn't managed by this project at all.
+`interval-dev-change-stream` (sync-cursor-hardening batch, see "DynamoDB — Interval_ChangeStream
+table" below) — key schema `PK` hash (String, same shape as every other table here), `seq` range
+(**Number**, not String — this is this table's OWN primary key, not a secondary index, so it
+sorts natively by numeric value with no zero-padding needed). Same `PAY_PER_REQUEST`/encryption/
+streams-off/TTL-off/removal-policy conventions as every other table in this stack.
 
-`interval-staging-records` / `interval-staging-changes` — identical schema, billing mode,
-encryption, streams-off, and TTL-off to Development. Same infrastructure shape; different data
-sensitivity, hence the different removal policy below.
+**Removal policy: `DESTROY` for Development, `RETAIN` for Staging** (all three tables, including
+`change-stream`). Not the same decision copied across environments — see "Staging removal/
+deletion policy" below for the full reasoning. Neither policy is ever applied to Production,
+which isn't managed by this project at all.
+
+`interval-staging-records` / `interval-staging-changes` / `interval-staging-change-stream` —
+identical schema, billing mode, encryption, streams-off, and TTL-off to Development. Same
+infrastructure shape; different data sensitivity, hence the different removal policy below.
 
 ## Staging removal/deletion policy
 
@@ -477,12 +489,32 @@ calls (verified by direct source inspection, not assumed):
 | Statement | Actions | Resource |
 |---|---|---|
 | `RecordsTableUpdateOnly` | `dynamodb:UpdateItem` | `interval-dev-records` ARN only |
-| `ChangesTablePutAndQuery` | `dynamodb:PutItem`, `dynamodb:Query` | `interval-dev-changes` ARN only |
+| `ChangesTableReadWriteAndQuery` | `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:Query`, `dynamodb:TransactWriteItems` | `interval-dev-changes` ARN only |
+| `ChangeStreamTableWriteAndQuery` | `dynamodb:PutItem`, `dynamodb:TransactWriteItems`, `dynamodb:Query` | `interval-dev-change-stream` ARN only |
 
-No statement uses `Resource: "*"` for DynamoDB, and neither statement grants any action against
-the *other* Development table (`sync-pull` never touches Records; neither Lambda ever needs
-`GetItem`/`Scan`/`DeleteItem`/`BatchWrite*` on either table, so none of those actions are granted).
-Zero access to any Production table — Production ARNs never appear anywhere in this project.
+**Update (sync-cursor-hardening batch, see `docs/sync-cursor-semantics.md`):** REWORKED twice —
+first after a pre-founder-QA review found the originally-proposed `BySeq` GSI design unsound (a
+GSI can never serve a `ConsistentRead: true` query, which left a real eventual-consistency gap),
+then again after a deployability audit found both Lambdas needed to become DUAL-MODE
+(`SYNC_CURSOR_MODE legacy|v2`, see "Lambda packaging" below) because `Interval_ChangeStream`, its
+IAM, and the Lambda code all deploy together in one stack update. `GetItem` on the Changes table
+is `sync-push`'s (v2 mode) pre-transaction read of its per-user sequence counter;
+`PutItem`/`UpdateItem`/`TransactWriteItems` there cover that same transaction's two Changes-table
+actions (the idempotency row and the counter advance), AND (`PutItem` alone) legacy mode's plain
+change-log append — same resource, one statement for both modes. `Query` is RESTORED here —
+`sync-pull`'s LEGACY read path still queries `Interval_Changes` directly (plain `SK`-ordered, no
+`ConsistentRead`) until a given environment's `SYNC_CURSOR_MODE` actually flips to `"v2"`.
+`Interval_ChangeStream` is a dedicated table (never a secondary index) whose own primary sort key
+is `seq` — `sync-push`'s v2-mode `TransactWriteItems` writes the ordered-stream row there as the
+THIRD action of that same atomic transaction, and `sync-pull`'s v2-mode read queries it directly
+with `ConsistentRead: true`, which is only possible because it is a base table, not an index. No
+`/index/*` resource appears anywhere in this role — there is no secondary index on the
+authoritative path left to query.
+
+No statement uses `Resource: "*"` for DynamoDB, and no statement grants any action against the
+Records table beyond the one listed (neither Lambda ever needs `Scan`/`DeleteItem`/
+`BatchWrite*` on any table, so none of those actions are granted anywhere). Zero access to any
+Production table — Production ARNs never appear anywhere in this project.
 Plus the standard `AWSLambdaBasicExecutionRole` AWS-managed policy (CloudWatch Logs only — every
 Lambda needs this to run at all; not a DynamoDB grant). No human IAM user is created anywhere in
 this project.
@@ -491,6 +523,32 @@ this project.
 `interval-staging-records`/`interval-staging-changes` only — it has no access to Development's
 tables, Production's tables, or any other resource. Each environment's shared role can only ever
 reach that same environment's own two tables.
+
+## DynamoDB — Interval_ChangeStream table
+
+**New (sync-cursor-hardening batch, see `docs/sync-cursor-semantics.md`):** a dedicated table,
+`Interval_ChangeStream` (both Development and Staging, via CDK) — partition key `PK` (String,
+same shape as every other table here), sort key `seq` (Number). **Not a Global Secondary Index**:
+an earlier revision of this fix added a `BySeq` GSI to `Interval_Changes` instead, and a
+pre-founder-QA review found that unsound — GSI `Query` operations can never request
+`ConsistentRead: true` (strong consistency is only available against a table's own primary key),
+and GSI propagation from the base table is asynchronous with no documented guarantee that two
+different items' propagation preserves their relative write order. That could let a cursor
+receive a higher `seq` before a lower one had even become visible, permanently skipping it once
+it finally did. A dedicated table has no such propagation step to lag behind: `sync-pull` queries
+it directly against its own primary key with `ConsistentRead: true`, which is fully supported for
+a base table. `seq` is written there by `sync-push`'s `TransactWriteItems` call (the SAME atomic
+transaction that advances the per-user counter in `Interval_Changes`), so the counter can never
+reflect a `seq` value whose row in this table isn't already durably committed — see that
+document's "Correctness invariant" section for the full analysis.
+
+**Rows already in `Interval_Changes` before this fix have no corresponding row here at all** and
+therefore will not appear in any `v2`-mode pull until the one-time backfill script
+(`backend/scripts/backfill-change-sequence.mjs`) runs — see that document's "Migration" and
+"Rollout" sections for the required deployment order: deploy infra + dual-mode code (inert by
+default) → freeze (`SYNC_PUSH_MAINTENANCE=true`) → backfill with convergence verification →
+cutover (`SYNC_CURSOR_MODE=v2`, still frozen) → unfreeze. Not yet deployed to any environment as
+of this writing.
 
 `interval-dev-ai-generate-study-deck-role` (Development only, **implemented, not yet deployed**)
 is a separate, dedicated role with Bedrock permissions only — see "AI Generate Study Deck Lambda"
@@ -510,11 +568,19 @@ the original 128 MB / 3 s — which matched Production's live config — after a
 Development incident: see "Sync Lambda sizing incident (2026-08)" below. The presigned-URL
 Lambda (`interval-*-library-source-storage`) is unaffected and stays at 128 MB / 3 s.
 
-Environment variables:
-- `interval-dev-sync-push`: `RECORDS_TABLE=interval-dev-records`, `CHANGES_TABLE=interval-dev-changes`
-- `interval-dev-sync-pull`: `CHANGES_TABLE=interval-dev-changes`
-- `interval-staging-sync-push`: `RECORDS_TABLE=interval-staging-records`, `CHANGES_TABLE=interval-staging-changes`
-- `interval-staging-sync-pull`: `CHANGES_TABLE=interval-staging-changes`
+Environment variables — both Lambdas are DUAL-MODE (`SYNC_CURSOR_MODE`, `sync-push` also
+`SYNC_PUSH_MAINTENANCE`; see docs/sync-cursor-semantics.md's "Rollout architecture" section for
+why), sourced from per-environment CDK context keys with safe (`"legacy"`/`"false"`) defaults
+committed in `infra/cdk.json`:
+- `interval-dev-sync-push`: `RECORDS_TABLE=interval-dev-records`, `CHANGES_TABLE=interval-dev-changes`, `CHANGE_STREAM_TABLE=interval-dev-change-stream`, `SYNC_CURSOR_MODE` (from context key `developmentSyncCursorMode`), `SYNC_PUSH_MAINTENANCE` (from `developmentSyncPushMaintenance`)
+- `interval-dev-sync-pull`: `CHANGES_TABLE=interval-dev-changes` (restored — needed for the legacy read path), `CHANGE_STREAM_TABLE=interval-dev-change-stream`, `SYNC_CURSOR_MODE` (same context key as push)
+- `interval-staging-sync-push`: `RECORDS_TABLE=interval-staging-records`, `CHANGES_TABLE=interval-staging-changes`, `CHANGE_STREAM_TABLE=interval-staging-change-stream`, `SYNC_CURSOR_MODE` (from `stagingSyncCursorMode`), `SYNC_PUSH_MAINTENANCE` (from `stagingSyncPushMaintenance`)
+- `interval-staging-sync-pull`: `CHANGES_TABLE=interval-staging-changes`, `CHANGE_STREAM_TABLE=interval-staging-change-stream`, `SYNC_CURSOR_MODE`
+
+To change either environment's live mode: `npx cdk deploy <StackName> -c <contextKey>=<value>`
+(see `docs/sync-cursor-semantics.md`'s "Rollout: exact command-level sequence" for the full
+sequence), then promote the confirmed-good value into `infra/cdk.json` and commit, so a future
+plain `cdk deploy` with no `-c` flags preserves it.
 
 `interval-staging-sync-push`/`interval-staging-sync-pull` package the exact same
 `backend/lambdas/sync-push`/`sync-pull` source, same runtime/architecture/memory/timeout — the

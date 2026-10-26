@@ -93,13 +93,24 @@ complexity.
     retried on the next sync.
 11. **Cursors never move backward, and a pull always makes forward progress.** The client
     only ever persists a cursor value taken directly from a successful pull response, and
-    only when non-empty; there is no client-side cursor construction. The backend derives
-    the next cursor from the last keyable row's `SK` (`C#<changeKey>`), which the DynamoDB
-    key schema guarantees is present — so a legacy row missing only the `changeKey`
-    *attribute* can no longer wedge a pull on the same page forever (audit finding 3). A row
-    that cannot be keyed at all is walked past (it was already returned in that page's
-    `changes`), never skipped ahead of. Query is `ScanIndexForward: true` against a
-    monotonically-increasing `SK`.
+    only when non-empty; there is no client-side cursor construction. **Update
+    (sync-cursor-hardening batch, see `docs/sync-cursor-semantics.md`):** the backend now
+    derives the next cursor from the last row's own server-assigned `seq` attribute, queried
+    with `ConsistentRead: true` against a DEDICATED BASE TABLE (`Interval_ChangeStream`,
+    `seq` as its own primary sort key) — **never a secondary index**. An earlier revision of
+    this fix queried `seq` via a GSI; that was reworked after review found GSIs can never
+    serve a strongly-consistent query, which left a real gap (a higher-seq row's index
+    projection could become visible before a lower-seq row's, letting a cursor skip past a
+    position that may still be invisible). `seq` is now this table's own key, so every row it
+    can possibly return carries one unconditionally — there is no "unkeyable row" case left to
+    walk past at all. The counter can only ever advance to reflect `seq=N` once `seq=N`'s own
+    stream row is already durably committed (same `TransactWriteItems` call, serializable), so
+    a strongly-consistent query against the base table always observes a complete, gap-free
+    prefix — see that document's "Correctness invariant" and "Why not a GSI" sections for the
+    full analysis. A legacy client cursor (the old `ts|deviceId|entity|id|op` shape, or any
+    other non-numeric value) is detected and triggers exactly one full replay rather than being
+    used in a query. Query is `ScanIndexForward: true` against the monotonically-increasing
+    `seq`.
 12. **Failed or partial syncs do not discard unsent local changes.** Rejected and
     not-yet-pushed records are never marked clean; a thrown error anywhere in `runSync`
     leaves all dirty flags exactly as they were. With sequential push chunking, a batch
@@ -133,35 +144,47 @@ complexity.
     deadlocking on the cap (audit finding 1). The 413 remains a defensive boundary for a
     malformed/old/external client; nothing is ever dropped.
 
-## Known limitation: same-millisecond changeKey ordering
+## FIXED: changeKey/ts-based cursor ordering (was "same-millisecond changeKey ordering")
 
-Discovered while building this batch's multi-device test harness (a deterministic fake
-clock was required to eliminate real-time flakiness in the tests themselves — see the
-test file's `installFakeClock` for why).
+**Update (sync-cursor-hardening batch):** this limitation is fixed — see
+`docs/sync-cursor-semantics.md` for the full design. Kept here, in its original form below, as
+the historical record of the bug this fixed; do not re-introduce a cursor scheme ordered by
+client-supplied `ts`/`changeKey` without re-reading that document first.
 
-Both `backend/lambdas/sync-push/index.mjs` and this document's mock-remote test double
-build each change's identifier (`changeKey`/SK) as
-`${change.ts}|${deviceId}|${entity}|${id}|${op}`, where `ts` is the client-supplied
-`record.updatedAt`. When two changes share the **exact same millisecond** timestamp —
-plausible if two records are edited in the same JS event-loop tick, or if two devices
-happen to push at the same instant — the tie-break is a plain alphabetical comparison
-of `entity` (`"card" < "deck"`). A cursor computed from the last item in a
-same-millisecond batch can therefore sort *ahead of* a different same-millisecond
-change that has not yet been delivered to a given device, and a subsequent pull using
-that cursor will silently and permanently skip it.
+Re-auditing the actual pull query while designing the fix found this limitation's own framing
+understated the real severity: it is not a same-millisecond tie-break ambiguity at all. Because
+ISO-8601 timestamps sort lexicographically in the same order they sort chronologically, ANY
+change whose own `ts` was older than a cursor a device had already advanced past was permanently
+outside that query's DynamoDB key range (`SK > :cursor`) — not "might lose a tie," but
+categorically excluded, with no millisecond collision required. A record created offline and
+uploaded days later (the single most basic offline-first scenario this app exists to support)
+reliably triggered this. The fix replaces the client-timestamp-derived cursor with a
+server-assigned monotonic `seq`, generated at push time, completely independent of any client
+clock — closing both the originally-described tie-break case and the much more common
+backdated-upload case in one change.
 
-This is a real, proven limitation (see the dedicated "KNOWN LIMITATION" test in the
-automated suite), not a hypothetical one. It was **not** structurally fixed in this
-batch: a correct fix requires a server-assigned monotonic sequence number (or
-equivalent), which changes the Records/Changes table SK format and needs a carefully
-tested, deployed migration this batch is not authorized to perform (no AWS changes,
-no deployment). Classify this as **requires future deployment** — see the batch
-report's Live Backend Parity Status and future deployment checklist.
+Original description, preserved for context:
 
-In practice, ordinary user-driven edits (separated by real human interaction time)
-essentially never collide at millisecond precision, so this is a low-probability edge
-case rather than a routine failure mode — but it is a real gap, and is documented here
-rather than silently accepted.
+> Both `backend/lambdas/sync-push/index.mjs` and this document's mock-remote test double build
+> each change's identifier (`changeKey`/SK) as `${change.ts}|${deviceId}|${entity}|${id}|${op}`,
+> where `ts` is the client-supplied `record.updatedAt`. When two changes share the **exact same
+> millisecond** timestamp — plausible if two records are edited in the same JS event-loop tick,
+> or if two devices happen to push at the same instant — the tie-break is a plain alphabetical
+> comparison of `entity` (`"card" < "deck"`). A cursor computed from the last item in a
+> same-millisecond batch can therefore sort *ahead of* a different same-millisecond change that
+> has not yet been delivered to a given device, and a subsequent pull using that cursor will
+> silently and permanently skip it. ... In practice, ordinary user-driven edits (separated by
+> real human interaction time) essentially never collide at millisecond precision, so this is a
+> low-probability edge case rather than a routine failure mode — but it is a real gap.
+
+A correct fix did require a server-assigned monotonic sequence number, as this section's
+original text anticipated — see `docs/sync-cursor-semantics.md` for the full implementation,
+migration, and rollout plan. That document's own first implementation attempt (a GSI-backed
+design) was itself found unsound by a pre-founder-QA review and reworked into a dedicated,
+strongly-consistently-queryable base table before any deployment occurred — see its "Why not a
+GSI" section. **Not yet deployed to any environment** — the fix exists in code, reviewed and
+tested, pending the documented deployment order (a write freeze → infra-only deployment →
+one-time backfill with convergence verification → new Lambda code → unfreeze).
 
 ## Known limitation: no conflict UI for concurrent multi-device edits
 

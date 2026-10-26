@@ -350,11 +350,79 @@ For anything not covered directly in this file, these are the authoritative docu
     `GeneratedCardProvenance` (a different branch's territory), no model/provider change, no new
     npm dependency.
 
-33. `docs/sync-generated-card-provenance.md` — separate metadata sync entity for generated-card
+34. `docs/sync-generated-card-provenance.md` — separate metadata sync entity for generated-card
     provenance, gated to Development/Staging. Covers stable card identity, revisioned conflict
     repairs, retained provenance plus card/deck liveness, lazy migration, scoped serialized
-    storage, payload bounds and inherited cursor/replay limitations. No source text, card schema
-    changes, provider changes, Production enablement or AWS deployment. Device QA remains pending.
+    storage, payload bounds, and what this document's own "Rollout limitations" section
+    originally called an inherited cursor/replay limitation. **Update (sync-cursor-hardening
+    batch, item 35 below): that cursor/replay limitation is now fixed** — see that item's own
+    entry. No source text, card schema changes, provider changes, Production enablement or AWS
+    deployment. Device QA remains pending. (Renumbered from a duplicate "33" — this item and
+    item 33 above were each written on a branch cut before the other had merged; fixed here
+    rather than left as two same-numbered entries.)
+35. `docs/sync-cursor-semantics.md` — fixes a foundational offline-sync correctness bug: the
+    incremental pull cursor was derived from a CLIENT/domain timestamp
+    (`${ts}|${deviceId}|${entity}|${id}|${op}`, used directly as the `Interval_Changes` row's
+    `SK`), so a record created offline and pushed "late" — after another device's cursor had
+    already advanced past that old `ts` — was permanently excluded from that device's future
+    incremental pulls by DynamoDB's own key-range semantics; not a rare tie-break edge case
+    (as items 14/34 above originally, and now incorrectly, described it) but the primary
+    failure mode for the single most basic offline-first scenario this app exists to support.
+    **Implemented, merged into `v3.3-dev`; infra/Lambda code changed but NOT deployed to any
+    environment, and the required one-time backfill has not been run anywhere.** This item's
+    FIRST implementation (a server-assigned `seq` queried via an additive `BySeq` GSI) was
+    itself found unsound by a pre-founder-QA review and completely reworked before any
+    deployment — GSI `Query` operations can never request `ConsistentRead: true`, and GSI
+    propagation from the base table is asynchronous with no guarantee that two different items'
+    propagation preserves their relative write order, which could let a cursor receive a higher
+    `seq` before a lower one had even become visible and permanently skip it once it finally
+    was. **Final fix:** `seq` is the own primary sort key (Number) of a NEW, DEDICATED base
+    table, `Interval_ChangeStream` — never a secondary index — so `sync-pull` can query it with
+    `ConsistentRead: true`. `sync-push`'s `assignSequenceAndAppendChangeLog`
+    (`backend/lambdas/sync-push/lib.mjs`) reads the per-user counter (co-located in
+    `Interval_Changes`, same idiom `ai-generate-study-deck/rateLimiter.mjs` uses for its own
+    daily-quota counter), then commits the counter advance AND the new `Interval_ChangeStream`
+    row in ONE `TransactWriteItems` transaction, atomically with the existing idempotency row —
+    DynamoDB transactions are serializable, so the counter can never reflect a `seq` whose
+    stream row isn't already durably committed, closing the GSI gap AND an independent
+    write-order race (assigning a "ticket" and durably writing the row under it were
+    previously two separate, non-atomic steps). Bounded optimistic-concurrency retry (no sleep)
+    handles genuine counter contention; a retried push's duplicate wastes zero sequence numbers
+    (an improvement over the first implementation). A legacy (old pipe-delimited, or any other
+    non-numeric) client cursor is detected (`parseCursor`, unchanged) and resolved to exactly
+    one full replay, after which the client receives a fresh valid cursor and self-heals
+    permanently with **zero mobile code change**. A **one-time backfill script**
+    (`backend/scripts/backfill-change-sequence.mjs`, rewritten for the new table, provided, not
+    run) must populate `Interval_ChangeStream` for every pre-existing change row, with a
+    built-in bounded convergence-verification loop that exits non-zero rather than ever
+    reporting false success. **A deployability audit then found the infra→backfill→Lambda-code
+    sequencing itself wasn't executable**: `Interval_ChangeStream`, its IAM, and the Lambda code
+    all live in one CDK stack deployed by one `cdk deploy`, so "infra only" isn't a real option.
+    Fix: both Lambdas are now DUAL-MODE, gated by `SYNC_CURSOR_MODE` (legacy|v2) and (push only)
+    `SYNC_PUSH_MAINTENANCE` (true|false) — plain CDK context, fail-closed defaults
+    (`"legacy"`/`"false"`) persisted in `infra/cdk.json`, overridable per-deploy via `-c`. This
+    makes "deploy infra + code without activating new behavior" and "freeze writes" both real,
+    code-enforced, independently-triggerable events (not operational promises) — see
+    `docs/sync-cursor-semantics.md`'s "Rollout architecture" and its exact command-level
+    sequence for the full design and the IAM/env-var union both modes now require. Conflict
+    resolution
+    (`incomingWins`/`mergeIncomingReviewEvents`/tombstone handling) is completely untouched —
+    delivery order and conflict resolution were already, and remain, two separate concerns.
+    Entity-agnostic by construction: cards, decks, `reviewEvent`, `generatedCardProvenance`, and
+    any future entity type all flow through the identical transactional seq-assignment/
+    strongly-consistent-query path, proven by a backend integration test suite
+    (`backend/lambdas/sync-pull/cursorHardening.test.mjs`) that reproduces the original bug and
+    the fix across all three, plus dedicated unit-level proofs of the transactional design
+    itself (concurrent-writer retry, sustained-contention exhaustion, first-ever counter
+    initialization, zero-seq-wasted duplicates — `backend/lambdas/sync-push/lib.test.mjs`), of
+    the rewritten backfill script's own convergence/non-convergence behavior
+    (`backend/scripts/backfill-change-sequence.test.mjs`), and of the dual-mode rollout itself
+    (legacy mode byte-for-byte matches the pre-fix write/read shape, maintenance mode rejects
+    every push with a safe 503 while leaving pull unaffected, an unrecognized mode/maintenance
+    value always fails closed, and a client's stale legacy cursor survives a simulated live
+    cutover — same integration file). No change to Source Coverage math, the AI generation
+    pipeline, or any entity's own conflict rules. No Production deployment or enablement of any
+    kind — `SYNC_CURSOR_MODE`/`SYNC_PUSH_MAINTENANCE` have no meaning there at all.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -919,6 +987,34 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   limitations, not pending fixes: no safe resume/idempotency after a mid-sequence failure (retry
   restarts from batch 1, re-consuming quota for already-succeeded batches), and cancellation
   cannot interrupt an already-in-flight batch request (only stops the NEXT one from starting).
+- **Sync cursor hardening (item 35 above) is implemented — infra + Lambda code changed and
+  locally tested — but NOT deployed to any environment, including Development.** This item's
+  FIRST implementation (a `BySeq` GSI) was reworked after a pre-founder-QA review found it
+  unsound (GSIs can never serve a strongly-consistent query — see item 35's own entry); the
+  current design is a dedicated `Interval_ChangeStream` base table instead. **A SECOND review
+  then found the resulting "deploy infra only, then later deploy Lambda code" rollout plan
+  wasn't actually executable** — `Interval_ChangeStream`, its IAM, and the Lambda code all
+  deploy together in one CDK stack update, with no supported way to update only some of a
+  stack's resources. Fix: both Lambdas are now DUAL-MODE, selected by CDK context
+  (`SYNC_CURSOR_MODE legacy|v2`, push-only `SYNC_PUSH_MAINTENANCE true|false`), fail-closed
+  defaults (`"legacy"`/`"false"`) persisted in `infra/cdk.json`. The exact, now-executable
+  command-level rollout (see `docs/sync-cursor-semantics.md`'s "Rollout: exact command-level
+  sequence" for the literal commands): (1) `cdk deploy` the new infra + dual-mode code with NO
+  extra flags — inert by construction, behaves exactly like pre-fix code; (2) `cdk deploy -c
+  ...SyncPushMaintenance=true` — freezes `sync-push` with a real, code-enforced `503`
+  rejection (`sync-pull` is explicitly unaffected); (3) run the one-time backfill script
+  (`backend/scripts/backfill-change-sequence.mjs --execute`), whose own built-in convergence
+  loop and integrity check exit non-zero rather than ever claiming false success; (4) `cdk
+  deploy -c ...SyncCursorMode=v2 -c ...SyncPushMaintenance=true` — cuts over the cursor mode
+  WHILE STILL FROZEN, so a smoke-test pull can confirm it before any new write is affected; (5)
+  `cdk deploy -c ...SyncCursorMode=v2 -c ...SyncPushMaintenance=false` — unfreezes; (6) promote
+  the confirmed values into `infra/cdk.json` and commit, so a future plain `cdk deploy` can
+  never silently revert or skip the cutover; (7) founder QA of ordinary incremental sync. Until
+  this sequence runs against a given environment, that environment's live sync behavior is
+  UNCHANGED (still subject to the original bug) — this fix exists only in this repository's
+  source until deployed. No AWS mutation of any kind was performed by this batch; `npx cdk
+  synth` was run (clean, with and without `-c` overrides) for both
+  Development and Staging, never `cdk deploy`.
 
 ## Accessibility Guardrails
 

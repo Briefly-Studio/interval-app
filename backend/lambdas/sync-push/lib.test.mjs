@@ -8,12 +8,20 @@ import test from "node:test";
 
 import {
   MAX_CHANGES_PER_PUSH,
+  MAX_SEQUENCE_ASSIGNMENT_ATTEMPTS,
   PUSH_CONCURRENCY,
+  SEQUENCE_COUNTER_SK,
+  appendChangeLogLegacy,
+  assignSequenceAndAppendChangeLog,
+  buildSequenceTransactItems,
   chunk,
   classifyChange,
+  classifySequenceTransactionCancellation,
   decidePushOutcome,
   getUserSub,
   makeChangeKey,
+  resolveMaintenanceMode,
+  resolveSyncCursorMode,
   validatePushRequest,
 } from "./lib.mjs";
 import {
@@ -166,6 +174,342 @@ test("getUserSub reads v2 JWT claims, v1 claims, loose sub, else null", () => {
   assert.equal(getUserSub({ requestContext: { authorizer: { sub: "s0" } } }), "s0");
   assert.equal(getUserSub({}), null);
   assert.equal(getUserSub({ requestContext: { authorizer: { jwt: { claims: { sub: "" } } } } }), null);
+});
+
+// ---------------------------------------------------------------------------
+// Sequence assignment — the sync-cursor-hardening root fix (docs/sync-cursor-semantics.md),
+// REWORKED to a transactional (TransactWriteItems) design after a pre-founder-QA review found
+// the original plain-counter-increment design unsound (see lib.mjs's own header comment for the
+// full two-part analysis: GSI eventual consistency AND an independent write-order race).
+//
+// FakeTransactDdbClient models exactly the atomic-all-or-nothing conditional-write semantics
+// DynamoDB actually provides for TransactWriteItems (every item's condition is checked BEFORE any
+// write is applied; if any fails, NONE are applied) — not a general DynamoDB emulator, just this
+// file's exact usage, same scoping discipline as rateLimiter.test.mjs's own FakeDdbClient.
+// ---------------------------------------------------------------------------
+
+class FakeGetCommandCtor {
+  constructor(input) {
+    this.kind = "get";
+    this.input = input;
+  }
+}
+class FakeTransactWriteCommandCtor {
+  constructor(input) {
+    this.kind = "transact";
+    this.input = input;
+  }
+}
+
+function resolveAttrName(token, names) {
+  return token.startsWith("#") ? names?.[token] : token;
+}
+
+function evalConditionClause(clause, existing, names, values) {
+  const trimmed = clause.trim();
+  const notExists = /^attribute_not_exists\((#?\w+)\)$/.exec(trimmed);
+  if (notExists) {
+    const attr = resolveAttrName(notExists[1], names);
+    return existing === undefined || existing[attr] === undefined;
+  }
+  const eq = /^(#?\w+)\s*=\s*(:\w+)$/.exec(trimmed);
+  if (eq) {
+    const attr = resolveAttrName(eq[1], names);
+    return existing !== undefined && existing[attr] === values?.[eq[2]];
+  }
+  throw new Error(`fake: unsupported condition clause: ${clause}`);
+}
+
+function evalCondition(expr, existing, names, values) {
+  if (!expr) return true;
+  if (expr.includes(" OR ")) return expr.split(" OR ").some((p) => evalCondition(p, existing, names, values));
+  if (expr.includes(" AND ")) return expr.split(" AND ").every((p) => evalCondition(p, existing, names, values));
+  return evalConditionClause(expr, existing, names, values);
+}
+
+class FakeTransactDdbClient {
+  constructor() {
+    this.tables = new Map();
+  }
+  table(name) {
+    if (!this.tables.has(name)) this.tables.set(name, new Map());
+    return this.tables.get(name);
+  }
+  key(k) {
+    return k.SK !== undefined ? `${k.PK}|${k.SK}` : `${k.PK}|seq#${k.seq}`;
+  }
+  async send(command) {
+    const { kind, input } = command;
+    if (kind === "get") {
+      return { Item: this.table(input.TableName).get(this.key(input.Key)) };
+    }
+    if (kind === "transact") {
+      const checks = input.TransactItems.map((item) => {
+        const op = item.Put ? "Put" : "Update";
+        const spec = item.Put ?? item.Update;
+        const table = this.table(spec.TableName);
+        const k = op === "Put" ? this.key(spec.Item) : this.key(spec.Key);
+        const existing = table.get(k);
+        const passes = evalCondition(spec.ConditionExpression, existing, spec.ExpressionAttributeNames, spec.ExpressionAttributeValues);
+        return { op, spec, table, key: k, passes };
+      });
+      if (checks.some((c) => !c.passes)) {
+        const err = new Error("The conditional request failed");
+        err.name = "TransactionCanceledException";
+        err.CancellationReasons = checks.map((c) => ({ Code: c.passes ? "None" : "ConditionalCheckFailed" }));
+        throw err;
+      }
+      // Atomicity: every condition already passed above — apply all writes now, none individually.
+      for (const c of checks) {
+        if (c.op === "Put") {
+          c.table.set(c.key, { ...c.spec.Item });
+        } else {
+          const existing = c.table.get(c.key) ?? {};
+          const [, placeholder] = /^SET\s+(#\w+)\s*=/.exec(c.spec.UpdateExpression) ?? [];
+          const attrName = c.spec.ExpressionAttributeNames?.[placeholder];
+          const valuePlaceholder = c.spec.UpdateExpression.split("=")[1].trim();
+          const value = c.spec.ExpressionAttributeValues?.[valuePlaceholder];
+          c.table.set(c.key, { ...existing, ...c.spec.Key, [attrName]: value });
+        }
+      }
+      return {};
+    }
+    throw new Error(`unrecognized fake command kind: ${kind}`);
+  }
+}
+
+function changeFor(id, over = {}) {
+  return { id, entity: "card", op: "upsert", ts: "2026-08-31T00:00:00.000Z", record: { id, rev: 1 }, ...over };
+}
+
+async function assign(client, { ownerPk = "U#alice", id = "x", deviceId = "dev-A", maxAttempts } = {}) {
+  const c = changeFor(id);
+  const changeKey = makeChangeKey({ ...c }, deviceId);
+  return assignSequenceAndAppendChangeLog({
+    client,
+    GetCommandCtor: FakeGetCommandCtor,
+    TransactWriteCommandCtor: FakeTransactWriteCommandCtor,
+    changesTable: "Changes",
+    changeStreamTable: "ChangeStream",
+    ownerPk,
+    changeKey,
+    deviceId,
+    c,
+    ...(maxAttempts !== undefined ? { maxAttempts } : {}),
+  });
+}
+
+test("buildSequenceTransactItems: exact three-action shape, atomic by construction", () => {
+  const items = buildSequenceTransactItems({
+    changesTable: "Changes",
+    changeStreamTable: "ChangeStream",
+    ownerPk: "U#alice",
+    changeKey: "k1",
+    deviceId: "dev-A",
+    c: { id: "x", entity: "card", op: "upsert", ts: "2026-01-01T00:00:00.000Z", record: { id: "x", rev: 1 } },
+    currentSeqValue: 4,
+    nextSeq: 5,
+  });
+  assert.equal(items.length, 3);
+  assert.equal(items[0].Put.TableName, "Changes");
+  assert.equal(items[0].Put.Item.SK, "C#k1");
+  assert.equal(items[0].Put.Item.seq, 5);
+  assert.equal(items[0].Put.ConditionExpression, "attribute_not_exists(PK) AND attribute_not_exists(SK)");
+  assert.equal(items[1].Update.TableName, "Changes");
+  assert.equal(items[1].Update.Key.SK, SEQUENCE_COUNTER_SK);
+  assert.deepEqual(items[1].Update.ExpressionAttributeValues, { ":next": 5, ":current": 4 });
+  assert.equal(items[2].Put.TableName, "ChangeStream");
+  assert.deepEqual(items[2].Put.Item, { PK: "U#alice", seq: 5, id: "x", entity: "card", op: "upsert", ts: "2026-01-01T00:00:00.000Z", record: { id: "x", rev: 1 } });
+});
+
+test("classifySequenceTransactionCancellation: distinguishes idempotency duplicate, counter contention, and neither", () => {
+  assert.deepEqual(
+    classifySequenceTransactionCancellation([{ Code: "ConditionalCheckFailed" }, { Code: "None" }, { Code: "None" }]),
+    { idempotencyDuplicate: true, counterContention: false }
+  );
+  assert.deepEqual(
+    classifySequenceTransactionCancellation([{ Code: "None" }, { Code: "ConditionalCheckFailed" }, { Code: "None" }]),
+    { idempotencyDuplicate: false, counterContention: true }
+  );
+  assert.deepEqual(
+    classifySequenceTransactionCancellation([{ Code: "None" }, { Code: "None" }, { Code: "ConditionalCheckFailed" }]),
+    { idempotencyDuplicate: false, counterContention: false }
+  );
+  assert.deepEqual(classifySequenceTransactionCancellation(undefined), { idempotencyDuplicate: false, counterContention: false });
+});
+
+test("assignSequenceAndAppendChangeLog: first-ever counter initialization for a user assigns seq=1", async () => {
+  const client = new FakeTransactDdbClient();
+  const result = await assign(client);
+  assert.deepEqual(result, { seq: 1, duplicate: false });
+});
+
+test("assignSequenceAndAppendChangeLog: strictly increasing across repeated calls for the SAME user", async () => {
+  const client = new FakeTransactDdbClient();
+  const seqs = [];
+  for (let i = 0; i < 5; i++) seqs.push((await assign(client, { id: `c${i}` })).seq);
+  assert.deepEqual(seqs, [1, 2, 3, 4, 5]);
+});
+
+test("assignSequenceAndAppendChangeLog: independent, non-interfering counters per user", async () => {
+  const client = new FakeTransactDdbClient();
+  const a1 = await assign(client, { ownerPk: "U#alice", id: "a1" });
+  const b1 = await assign(client, { ownerPk: "U#bob", id: "b1" });
+  const a2 = await assign(client, { ownerPk: "U#alice", id: "a2" });
+  assert.deepEqual([a1.seq, b1.seq, a2.seq], [1, 1, 2]);
+});
+
+test("assignSequenceAndAppendChangeLog: no seq is ever claimed without its stream row having also committed", async () => {
+  const client = new FakeTransactDdbClient();
+  const result = await assign(client, { id: "x" });
+  assert.equal(result.seq, 1);
+  const counter = client.table("Changes").get(`U#alice|${SEQUENCE_COUNTER_SK}`);
+  const streamRow = client.table("ChangeStream").get("U#alice|seq#1");
+  assert.equal(counter.seqValue, 1);
+  assert.ok(streamRow, "the stream row must exist the instant the counter reflects its seq");
+  assert.equal(streamRow.id, "x");
+});
+
+test("assignSequenceAndAppendChangeLog: an unexpected cancellation (not idempotency, not counter contention) throws without advancing anything", async () => {
+  const client = new FakeTransactDdbClient();
+  // Pre-populate a conflicting stream row at the seq this call is about to claim, forcing item 2's
+  // own defensive condition to fail while items 0/1 would otherwise have passed.
+  client.table("ChangeStream").set("U#alice|seq#1", { PK: "U#alice", seq: 1, id: "already-there" });
+  await assert.rejects(assign(client, { id: "x" }), /conditional request failed/i);
+  assert.equal(client.table("Changes").get(`U#alice|${SEQUENCE_COUNTER_SK}`), undefined, "counter must not advance when the transaction overall failed");
+});
+
+test("assignSequenceAndAppendChangeLog: a benign duplicate (retried push, same changeKey) wastes ZERO sequence numbers", async () => {
+  const client = new FakeTransactDdbClient();
+  const first = await assign(client, { id: "retry-me" });
+  assert.deepEqual(first, { seq: 1, duplicate: false });
+
+  const retry = await assign(client, { id: "retry-me" }); // identical id/deviceId/ts -> identical changeKey
+  assert.deepEqual(retry, { seq: null, duplicate: true });
+
+  const counter = client.table("Changes").get(`U#alice|${SEQUENCE_COUNTER_SK}`);
+  assert.equal(counter.seqValue, 1, "the duplicate attempt must not have advanced the counter at all");
+  assert.equal(client.table("ChangeStream").size, 1, "the duplicate attempt must not have written a second stream row");
+});
+
+test("assignSequenceAndAppendChangeLog: concurrent writers racing for the next seq — the loser retries and receives the NEXT seq, never colliding", async () => {
+  class RaceOnceClient extends FakeTransactDdbClient {
+    constructor() {
+      super();
+      this.raced = false;
+    }
+    async send(command) {
+      if (command.kind === "get" && !this.raced) {
+        this.raced = true;
+        const result = await super.send(command);
+        // Simulate a DIFFERENT device's push winning the race for seq=1 between our read and our
+        // own transaction attempt.
+        this.table("Changes").set(`U#alice|${SEQUENCE_COUNTER_SK}`, { PK: "U#alice", SK: SEQUENCE_COUNTER_SK, seqValue: 1 });
+        return result;
+      }
+      return super.send(command);
+    }
+  }
+  const client = new RaceOnceClient();
+  const result = await assign(client, { id: "loser" });
+  assert.deepEqual(result, { seq: 2, duplicate: false }, "the retried attempt must land on seq 2, never seq 1 (already taken) and never skip to 3");
+  assert.ok(client.table("ChangeStream").get("U#alice|seq#2"));
+});
+
+test("assignSequenceAndAppendChangeLog: exhausts bounded retries under SUSTAINED contention and throws, never fabricating or skipping a seq", async () => {
+  class AlwaysRacingClient extends FakeTransactDdbClient {
+    async send(command) {
+      if (command.kind === "get") {
+        const result = await super.send(command);
+        // Every single read is immediately followed by "someone else" advancing the counter
+        // again, so this attempt's own transaction can never win — sustained contention.
+        const existing = this.table("Changes").get(`U#alice|${SEQUENCE_COUNTER_SK}`);
+        const bumped = (existing?.seqValue ?? 0) + 1;
+        this.table("Changes").set(`U#alice|${SEQUENCE_COUNTER_SK}`, { PK: "U#alice", SK: SEQUENCE_COUNTER_SK, seqValue: bumped });
+        return result;
+      }
+      return super.send(command);
+    }
+  }
+  const client = new AlwaysRacingClient();
+  await assert.rejects(
+    assign(client, { id: "x", maxAttempts: 3 }),
+    (e) => e.name === "SequenceAssignmentContentionExhausted"
+  );
+});
+
+test("assignSequenceAndAppendChangeLog: a storage error propagates (never silently returns a fabricated seq)", async () => {
+  const throwingClient = { send: async () => { throw new Error("simulated DynamoDB outage"); } };
+  await assert.rejects(assign(throwingClient, { id: "x" }), /simulated DynamoDB outage/);
+});
+
+test("MAX_SEQUENCE_ASSIGNMENT_ATTEMPTS is a small, bounded, no-sleep retry count", () => {
+  assert.ok(Number.isInteger(MAX_SEQUENCE_ASSIGNMENT_ATTEMPTS) && MAX_SEQUENCE_ASSIGNMENT_ATTEMPTS > 0 && MAX_SEQUENCE_ASSIGNMENT_ATTEMPTS <= 20);
+});
+
+// ---------------------------------------------------------------------------
+// Dual-mode rollout flags (post-deployability audit) — resolveSyncCursorMode/
+// resolveMaintenanceMode must fail closed, and appendChangeLogLegacy must reproduce the exact
+// pre-this-fix write shape. See lib.mjs's own header comment's "Dual-mode rollout" section.
+// ---------------------------------------------------------------------------
+
+test("resolveSyncCursorMode: only the exact literal 'v2' activates v2 — everything else, including near-misses, resolves to legacy", () => {
+  assert.equal(resolveSyncCursorMode("v2"), "v2");
+  for (const bad of [undefined, null, "", "V2", "v3", " v2", "v2 ", "legacy", "true"]) {
+    assert.equal(resolveSyncCursorMode(bad), "legacy", `expected legacy for ${JSON.stringify(bad)}`);
+  }
+});
+
+test("resolveMaintenanceMode: only the exact literal 'true' activates maintenance — everything else, including near-misses, resolves to false", () => {
+  assert.equal(resolveMaintenanceMode("true"), true);
+  for (const bad of [undefined, null, "", "TRUE", "True", " true", "true ", "1", "yes", "false"]) {
+    assert.equal(resolveMaintenanceMode(bad), false, `expected false for ${JSON.stringify(bad)}`);
+  }
+});
+
+class FakeLegacyPutCommandCtor {
+  constructor(input) {
+    this.input = input;
+  }
+}
+class FakeLegacyDdbClient {
+  constructor() {
+    this.items = new Map();
+  }
+  key(k) {
+    return `${k.PK}|${k.SK}`;
+  }
+  async send(command) {
+    const { input } = command;
+    const k = this.key(input.Item);
+    if (input.ConditionExpression && this.items.has(k)) {
+      const err = new Error("The conditional request failed");
+      err.name = "ConditionalCheckFailedException";
+      throw err;
+    }
+    this.items.set(k, { ...input.Item });
+    return {};
+  }
+}
+
+test("appendChangeLogLegacy: writes the exact pre-this-fix shape — no seq attribute, no transaction", async () => {
+  const client = new FakeLegacyDdbClient();
+  const c = { id: "x", entity: "card", op: "upsert", ts: "2026-01-01T00:00:00.000Z", record: { id: "x", rev: 1 } };
+  await appendChangeLogLegacy({ client, PutCommandCtor: FakeLegacyPutCommandCtor, changesTable: "Changes", ownerPk: "U#alice", changeKey: "k1", deviceId: "dev-A", c });
+  const stored = client.items.get("U#alice|C#k1");
+  assert.ok(stored);
+  assert.equal(stored.seq, undefined, "legacy writes must never carry a seq attribute");
+  assert.deepEqual(stored, { PK: "U#alice", SK: "C#k1", changeKey: "k1", deviceId: "dev-A", id: "x", entity: "card", op: "upsert", ts: c.ts, record: c.record });
+});
+
+test("appendChangeLogLegacy: a retried push (same changeKey) throws ConditionalCheckFailedException — the caller treats this as a benign duplicate", async () => {
+  const client = new FakeLegacyDdbClient();
+  const c = { id: "x", entity: "card", op: "upsert", ts: "2026-01-01T00:00:00.000Z", record: { id: "x", rev: 1 } };
+  await appendChangeLogLegacy({ client, PutCommandCtor: FakeLegacyPutCommandCtor, changesTable: "Changes", ownerPk: "U#alice", changeKey: "k1", deviceId: "dev-A", c });
+  await assert.rejects(
+    appendChangeLogLegacy({ client, PutCommandCtor: FakeLegacyPutCommandCtor, changesTable: "Changes", ownerPk: "U#alice", changeKey: "k1", deviceId: "dev-A", c }),
+    (e) => e.name === "ConditionalCheckFailedException"
+  );
 });
 
 // ---------------------------------------------------------------------------

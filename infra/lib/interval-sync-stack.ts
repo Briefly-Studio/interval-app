@@ -15,6 +15,27 @@ import { resourceNamesFor } from "./environment-config";
 
 export interface IntervalSyncStackProps extends cdk.StackProps {
   environmentName: IntervalEnvironmentName;
+  // Sync-cursor-hardening rollout flags (docs/sync-cursor-semantics.md's "Rollout" section) —
+  // plain strings as received from CDK context (bin/interval-infra.ts), deliberately untyped
+  // here: this constructor re-validates and fails closed on anything other than the exact
+  // expected literal, so an absent/malformed/unexpected value NEVER activates the new ("v2")
+  // behavior or an unintended write freeze. See `resolveSyncCursorMode`/`resolveMaintenanceMode`
+  // below for the same fail-closed resolution, independently re-applied inside the Lambda code
+  // itself (defense in depth — this stack is not the only place that could get it wrong).
+  syncCursorMode?: string;
+  syncPushMaintenance?: string;
+}
+
+// Fail-closed exactly like the Lambda code's own resolveSyncCursorMode/resolveMaintenanceMode
+// (backend/lambdas/sync-push/lib.mjs, sync-pull/lib.mjs) — duplicated deliberately rather than
+// imported, so this infrastructure-level default can never silently drift out of sync with a
+// change to either Lambda's own resolution, and vice versa; each must independently refuse to
+// activate the new behavior on anything but the exact expected literal.
+function resolveSyncCursorModeContext(raw: string | undefined): "legacy" | "v2" {
+  return raw === "v2" ? "v2" : "legacy";
+}
+function resolveSyncPushMaintenanceContext(raw: string | undefined): "true" | "false" {
+  return raw === "true" ? "true" : "false";
 }
 
 // Reusable across development/staging/production in principle — see environment-config.ts's
@@ -29,6 +50,8 @@ export class IntervalSyncStack extends cdk.Stack {
 
     const { environmentName } = props;
     const names = resourceNamesFor(environmentName);
+    const syncCursorMode = resolveSyncCursorModeContext(props.syncCursorMode);
+    const syncPushMaintenance = resolveSyncPushMaintenanceContext(props.syncPushMaintenance);
 
     // Removal/deletion policy is a deliberate, per-environment decision — not inherited blindly.
     // Development data/identities are genuinely disposable (founder-only, destructive testing is
@@ -88,6 +111,56 @@ export class IntervalSyncStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
+    // ChangeStreamTable — the sync-cursor correctness fix (docs/sync-cursor-semantics.md),
+    // REWORKED from an earlier `BySeq` GSI design after a critical pre-founder-QA review found
+    // that design unsound. A GSI can NEVER serve a `ConsistentRead: true` query — DynamoDB
+    // documents GSI reads as eventually consistent only, with no option to request strong
+    // consistency, and propagation from the base table to a GSI is asynchronous with no
+    // documented guarantee that two different items' propagation preserves their relative write
+    // order. Concretely: a cursor could receive seq=42 (already propagated to the index) while
+    // seq=41 (committed to the base table strictly BEFORE 42) had not yet propagated, advance
+    // past 41's position, and then permanently miss it once 41 finally became visible — the exact
+    // failure this whole fix exists to prevent, just moved one layer down.
+    //
+    // The correction: `seq` is the PRIMARY sort key of this dedicated base table, never a
+    // secondary index on `changes`. sync-pull queries it with `ConsistentRead: true` — fully
+    // supported for a base-table Query against its own primary key (unlike a GSI) — so every pull
+    // always sees the true, fully committed state with no propagation lag of any kind. sync-push
+    // writes this table's row atomically, in the SAME `TransactWriteItems` call that advances the
+    // per-user sequence counter and writes the `changes`-table idempotency row (see
+    // sync-push/lib.mjs's `assignSequenceAndAppendChangeLog`) — DynamoDB transactions are
+    // serializable, so the counter can only ever advance to N once seq=N's row in THIS table is
+    // already durably committed, closing the second, independent race the same review found (a
+    // "claim a ticket" step and a "write the row" step were two separate, non-atomic calls in the
+    // original design, which could let seq=42 commit before seq=41 even on a strongly-consistent
+    // read — a GSI was never the only problem).
+    //
+    // A separate table, not a second attribute shape within `changes`, because `changes`'s own SK
+    // is already declared type STRING (table key-schema types are immutable), so a `seq`-ordered
+    // row co-located there would need a lexicographically-sortable zero-padded string key with an
+    // explicit sentinel to exclude the counter row from any range query — strictly more fragile
+    // than giving `seq` its own table with a native Number sort key. The counter sentinel row
+    // (PK=U#<sub>, SK="SEQ#COUNTER") stays in `changes`, since it has no key-type conflict with
+    // this table it's not part of.
+    //
+    // IMPORTANT DEPLOYMENT ORDERING (see docs/sync-cursor-semantics.md's "Rollout" section): this
+    // table must be deployed BEFORE the one-time backfill runs, and the backfill must run to a
+    // verified-clean (zero-straggler) completion BEFORE the updated sync-push/sync-pull Lambda
+    // code is deployed — and the backfill itself must run with sync-push writes frozen, not just
+    // ordered correctly, or a straggler row written mid-scan can be permanently stranded outside
+    // this table. See backend/scripts/backfill-change-sequence.mjs's own header comment.
+    // ---------------------------------------------------------------------
+    const changeStreamTable = new dynamodb.Table(this, "ChangeStreamTable", {
+      tableName: names.changeStream,
+      partitionKey: { name: "PK", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "seq", type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: false,
+      removalPolicy,
+    });
+
+    // ---------------------------------------------------------------------
     // Cognito — fully separate pool/client from Production. No OAuth/Hosted-UI configuration:
     // src/auth/AuthService.ts authenticates via direct Cognito API calls
     // (USER_PASSWORD_AUTH/USER_SRP_AUTH/REFRESH_TOKEN_AUTH against cognito-idp directly), never
@@ -135,10 +208,18 @@ export class IntervalSyncStack extends cdk.Stack {
     // ---------------------------------------------------------------------
     // IAM — one shared execution role for both Lambdas, matching Production's shared-role
     // pattern (docs/aws-current-state-audit.md). Least privilege, derived from exactly what the
-    // Lambda source actually calls (verified by direct source inspection):
-    //   - sync-push: PutCommand against Changes, UpdateCommand against Records
-    //   - sync-pull: QueryCommand against Changes only (never touches Records)
-    // No table ARN is ever "*" — every statement is scoped to one specific Development table.
+    // Lambda source actually calls (verified by direct source inspection). Both Lambdas are now
+    // DUAL-MODE (SYNC_CURSOR_MODE legacy|v2, see "Rollout flags" below) — this role grants the
+    // UNION of what either mode's code path can do, since the SAME deployed code must be ABLE to
+    // run either path even though only one is active at runtime per the env var:
+    //   - sync-push: UpdateItem against Records (both modes). Against Changes: PutItem alone
+    //     (legacy mode's plain change-log append) OR GetItem+PutItem+UpdateItem+TransactWriteItems
+    //     (v2 mode's transactional seq assignment). Against ChangeStream: PutItem+
+    //     TransactWriteItems (v2 mode's third transaction action; untouched in legacy mode).
+    //   - sync-pull: Query against Changes (legacy mode's plain SK-ordered read) OR Query
+    //     (ConsistentRead) against ChangeStream (v2 mode's strongly-consistent read).
+    // No table ARN is ever "*", and no `/index/*` grant exists anywhere in this role — there is
+    // no secondary index left on the authoritative path to query.
     // ---------------------------------------------------------------------
     const syncLambdaRole = new iam.Role(this, "SyncLambdaRole", {
       roleName: names.syncLambdaRole,
@@ -160,9 +241,33 @@ export class IntervalSyncStack extends cdk.Stack {
 
     syncLambdaRole.addToPolicy(
       new iam.PolicyStatement({
-        sid: "ChangesTablePutAndQuery",
-        actions: ["dynamodb:PutItem", "dynamodb:Query"],
+        // GetItem: sync-push's (v2 mode) pre-read of the per-user sequence counter before each
+        // transaction attempt (an optimistic-concurrency hint only — the transaction's own
+        // conditional check, not this read's consistency level, is what makes seq assignment
+        // correct; see lib.mjs's assignSequenceAndAppendChangeLog). PutItem/UpdateItem: v2 mode's
+        // two Changes-table actions (the idempotency row, the counter) inside that same
+        // TransactWriteItems call, AND (PutItem alone) legacy mode's plain change-log append —
+        // same action, same resource, one statement covers both modes. TransactWriteItems itself
+        // must also be granted — DynamoDB checks it as its own action in addition to the
+        // per-item action types it contains. Query: sync-pull's LEGACY-mode plain SK-ordered read
+        // against this table's base key — restored because dual-mode sync-pull must still be able
+        // to serve legacy reads until a given environment's cutover (SYNC_CURSOR_MODE=v2)
+        // actually happens; v2-mode pull never touches this table (see ChangeStream below).
+        sid: "ChangesTableReadWriteAndQuery",
+        actions: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:TransactWriteItems"],
         resources: [changesTable.tableArn],
+      })
+    );
+
+    syncLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        // PutItem + TransactWriteItems: sync-push's third transaction action (the new stream
+        // row). Query: sync-pull's strongly-consistent read — a BASE TABLE query against this
+        // table's own primary key, so (unlike the removed BySeq GSI) no `/index/*` resource is
+        // needed at all; `ConsistentRead: true` is a request parameter, not a separate IAM grant.
+        sid: "ChangeStreamTableWriteAndQuery",
+        actions: ["dynamodb:PutItem", "dynamodb:TransactWriteItems", "dynamodb:Query"],
+        resources: [changeStreamTable.tableArn],
       })
     );
 
@@ -219,6 +324,16 @@ export class IntervalSyncStack extends cdk.Stack {
       environment: {
         RECORDS_TABLE: recordsTable.tableName,
         CHANGES_TABLE: changesTable.tableName,
+        CHANGE_STREAM_TABLE: changeStreamTable.tableName,
+        // Rollout flags (docs/sync-cursor-semantics.md's "Rollout" section) — dual-mode switch.
+        // SYNC_CURSOR_MODE: "legacy" (default/fail-closed) keeps writing Changes in the original
+        // plain-PutItem shape with no `seq`; "v2" switches to the transactional
+        // assignSequenceAndAppendChangeLog path. SYNC_PUSH_MAINTENANCE: "true" makes this
+        // function reject every push with a safe, retryable 503 BEFORE touching any table —
+        // the write freeze the backfill's correctness depends on, enforced in code rather than
+        // left as an unenforceable operational promise.
+        SYNC_CURSOR_MODE: syncCursorMode,
+        SYNC_PUSH_MAINTENANCE: syncPushMaintenance,
       },
     });
 
@@ -231,7 +346,15 @@ export class IntervalSyncStack extends cdk.Stack {
         exclude: syncAssetExclude,
       }),
       environment: {
+        // Restored: dual-mode sync-pull needs Changes for its LEGACY read path (plain SK-ordered
+        // query) in addition to ChangeStream for its v2 read path (ConsistentRead query) — see
+        // "ChangesTableReadWriteAndQuery" IAM statement comment above for why this isn't a
+        // regression of the single-mode design's own "pull never touches Changes" claim.
         CHANGES_TABLE: changesTable.tableName,
+        CHANGE_STREAM_TABLE: changeStreamTable.tableName,
+        // sync-pull has no maintenance mode of its own — reads are never blocked by the write
+        // freeze (see docs/sync-cursor-semantics.md's "Maintenance mode" section for why).
+        SYNC_CURSOR_MODE: syncCursorMode,
       },
     });
 
@@ -562,6 +685,7 @@ export class IntervalSyncStack extends cdk.Stack {
     new cdk.CfnOutput(this, "UserPoolClientId", { value: userPoolClient.userPoolClientId });
     new cdk.CfnOutput(this, "RecordsTableName", { value: recordsTable.tableName });
     new cdk.CfnOutput(this, "ChangesTableName", { value: changesTable.tableName });
+    new cdk.CfnOutput(this, "ChangeStreamTableName", { value: changeStreamTable.tableName });
   }
 }
 
