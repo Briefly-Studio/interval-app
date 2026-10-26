@@ -2,7 +2,7 @@ import type { NormalizedSourceContent, ExtractionStatus } from "../normalization
 import { prepareGenerationContext } from "./contextPreparation";
 import type { PrepareContextOptions } from "./contextPreparation";
 import { validateGeneratedDeckResponse } from "./responseValidation";
-import { resolveRequestedCardCount } from "./generationOptions";
+import { resolveRequestedCardCount, resolveTargetMinimumCardCount } from "./generationOptions";
 import { GENERATION_CONTRACT_VERSION } from "./types";
 import type {
   GenerateStudyDeckOutcome,
@@ -115,6 +115,7 @@ function buildRequest(
     generationContractVersion: GENERATION_CONTRACT_VERSION,
     selectedChunkIds,
     requestedCardCount: resolveRequestedCardCount(input.options.cardCount),
+    targetMinimumCardCount: resolveTargetMinimumCardCount(input.options.cardCount),
     options: input.options,
     language: input.language,
   };

@@ -1048,7 +1048,7 @@ const ko = {
     },
     generateButton: "덱 생성",
     generatingTitle: "덱을 생성하는 중",
-    generatingBody: "소스를 읽고 카드를 작성하고 있습니다. 이 작업은 기기에서 처리됩니다.",
+    generatingBody: "선택한 소스 내용을 읽고 카드를 생성하고 있습니다.",
     retryButton: "다시 시도",
     backToSourceButton: "소스로 돌아가기",
     entry: {
@@ -1129,6 +1129,13 @@ const ko = {
         other: "카드 {{count}}장",
       },
       fromSource: "'{{title}}'에서",
+      insufficientContent: {
+        title: "{{target}}개의 카드를 만들기에 고유한 콘텐츠가 충분하지 않습니다",
+        body: {
+          other: "Interval이 이번 생성에 사용된 소스 섹션에서 유용한 카드 {{count}}개를 만들 만큼 충분한 고유 자료를 찾았습니다.",
+        },
+        hint: "이 카드를 그대로 사용하거나, 나중에 더 많은 소스 자료로 다시 생성해 볼 수 있습니다.",
+      },
       cardsHeading: "카드",
       noCardsBody: "모든 카드를 삭제했습니다. 이 초안을 버리고 처음부터 다시 시작하세요.",
       editCardButton: "편집",

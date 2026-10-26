@@ -1100,7 +1100,7 @@ const fr = {
     },
     generateButton: "Générer le paquet",
     generatingTitle: "Génération de votre paquet",
-    generatingBody: "Lecture de la source et rédaction des cartes. Tout reste sur votre appareil.",
+    generatingBody: "Lecture du contenu source sélectionné et génération de vos cartes.",
     retryButton: "Réessayer",
     backToSourceButton: "Retour à la source",
     entry: {
@@ -1182,6 +1182,14 @@ const fr = {
         other: "{{count}} cartes",
       },
       fromSource: "de « {{title}} »",
+      insufficientContent: {
+        title: "Pas assez de contenu distinct pour {{target}} cartes",
+        body: {
+          one: "Interval a trouvé assez de contenu distinct pour 1 carte utile dans les sections de la source utilisées pour cette génération.",
+          other: "Interval a trouvé assez de contenu distinct pour {{count}} cartes utiles dans les sections de la source utilisées pour cette génération.",
+        },
+        hint: "Vous pouvez conserver ces cartes ou réessayer plus tard avec davantage de contenu source.",
+      },
       cardsHeading: "Cartes",
       noCardsBody: "Vous avez supprimé toutes les cartes. Abandonnez ce brouillon pour recommencer.",
       editCardButton: "Modifier",

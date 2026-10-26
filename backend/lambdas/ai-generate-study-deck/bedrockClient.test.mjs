@@ -22,6 +22,7 @@ function baseRequest(overrides = {}) {
     generationContractVersion: 1,
     selectedChunkIds: ["a", "b"],
     requestedCardCount: 5,
+    targetMinimumCardCount: 3,
     options: { cardCount: "medium", difficulty: "balanced", cardStyle: "question-answer" },
     ...overrides,
   };
@@ -65,6 +66,25 @@ test("buildGenerationPrompt: untrusted-source framing, real chunk ids, and optio
   assert.match(system, /question-answer/);
   assert.match(user, /Photosynthesis/);
   assert.match(user, /\[chunk id: a\]/);
+});
+
+test("buildGenerationPrompt: states the target range (minimum and maximum), never just a ceiling", () => {
+  const { system } = buildGenerationPrompt(baseRequest({ requestedCardCount: 15, targetMinimumCardCount: 10 }), baseContext());
+  assert.match(system, /between 10 and 15/);
+  assert.match(system, /real target range, not merely a ceiling/);
+  assert.match(system, /Never exceed 15/);
+});
+
+test("buildGenerationPrompt: requires the generationStatus field in the response shape, and explains when to use the escape hatch", () => {
+  const { system } = buildGenerationPrompt(baseRequest(), baseContext());
+  assert.match(system, /"generationStatus": "complete" \| "insufficient-distinct-content"/);
+  assert.match(system, /insufficient-distinct-content/);
+  assert.match(system, /unsupported facts, substantial.*duplication.*fragmentation.*filler/s);
+});
+
+test("buildGenerationPrompt: the zero-usable-material fallback also reports insufficient-distinct-content, not a silent empty complete", () => {
+  const { system } = buildGenerationPrompt(baseRequest(), baseContext());
+  assert.match(system, /"generationStatus": "insufficient-distinct-content", "cards": \[\]/);
 });
 
 test("buildGenerationPrompt: includes a language instruction only when request.language is set", () => {

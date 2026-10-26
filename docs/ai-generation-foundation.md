@@ -126,7 +126,8 @@ type GenerateStudyDeckRequest = {
   normalizationVersion: number;
   generationContractVersion: number;
   selectedChunkIds: string[];
-  requestedCardCount: number;
+  requestedCardCount: number;        // the ceiling — "up to this many"
+  targetMinimumCardCount: number;    // the quality floor — see "Count contract" below
   options: GenerationOptions;   // { cardCount, difficulty, cardStyle }
   language?: string;
 };
@@ -142,13 +143,130 @@ Kept deliberately small — a user picks a size/difficulty/style, never a prompt
 
 | Option | Values |
 | --- | --- |
-| `cardCount` | `"small"` (≈8) / `"medium"` (≈15) / `"large"` (≈25), or an explicit number |
+| `cardCount` | `"small"` / `"medium"` / `"large"`, or an explicit number — see "Count contract" below for the exact target range each tier maps to |
 | `difficulty` | `"basic"` / `"balanced"` / `"advanced"` |
 | `cardStyle` | `"question-answer"` / `"concept-definition"` |
 
 `resolveRequestedCardCount()` (`generationOptions.ts`) always clamps to
 `[MIN_CARDS_PER_DECK, ABSOLUTE_MAX_CARDS_PER_DECK]` (`1`–`40`) regardless of whether the input was
-a preset or a caller-supplied number.
+a preset or a caller-supplied number. `resolveTargetMinimumCardCount()` is its companion,
+resolving the same input to the tier's quality floor.
+
+## Count contract and insufficient-distinct-content
+
+Each named tier is a **range**, not a single number (`CARD_COUNT_PRESETS`, `generationOptions.ts`):
+
+| Tier | User-facing ceiling ("Up to N cards") | Internal target minimum |
+| --- | --- | --- |
+| Small | 8 | 5 |
+| Medium | 15 | 10 |
+| Large | 25 | 18 |
+
+The ceiling is unchanged from before this contract existed — it is still the exact number sent as
+`requestedCardCount` and still the exact copy shown in the options screen ("Up to 8/15/25
+cards"). The **target minimum** is new: a genuine quality floor the tier should normally satisfy
+when the supplied material has enough distinct content — never exposed in the selector UI (the
+user's expectation is enforced by generation *behavior*, not by showing them an internal range),
+and never permission for the app itself to fabricate, duplicate, or locally split cards to reach
+it. The one explicit exception for an unnamed numeric override (no preset tier, so no range
+exists): the target minimum equals the requested number itself — a caller bypassing the presets
+gets no implicit slack.
+
+**Why this exists.** Before this contract, the ONLY instruction the model received about count was
+"produce up to N — fewer if the source doesn't support that many," with no stated floor, no
+target framing, and no requirement to explain an undershoot. A low-temperature extraction model
+given that instruction has every incentive to stop at a small, safely-non-duplicate number —
+founder QA observed Medium (15) returning 7 cards from source material that could have supported
+far more, with literally no explanation anywhere in the app for why. "Produce up to N" was a
+ceiling-only instruction masquerading as a quality bar.
+
+**`GenerationStatus` — `"complete" | "insufficient-distinct-content"`.** The model is asked to
+self-report, as a structured field on its own JSON response (`generationStatus`), whether it
+judges the supplied material sufficient to meet the tier's target minimum. This is a genuine
+machine-readable signal, not prose — never "Sorry, there wasn't enough information…" parsed out
+of free text. But it is **advisory only**: `deriveGenerationStatus()` (`responseValidation.ts`,
+restated independently in the backend Lambda's `index.mjs` — no shared module between Lambdas/
+mobile, same convention as every other validation rule here) computes the AUTHORITATIVE status
+purely from the actual accepted card count vs. `targetMinimumCardCount`, and that always wins:
+
+- A model claiming `"complete"` while under-delivering (e.g. 7 of a 10-minimum Medium request) is
+  never silently trusted — the authoritative status is overridden to
+  `"insufficient-distinct-content"`, and the cards are still kept (see "User experience" below);
+  this is never a whole-deck rejection by itself.
+- A model claiming `"insufficient-distinct-content"` despite actually meeting the floor (e.g. 12
+  of 10) is overridden to `"complete"` — the numbers already disprove the claim.
+- A missing, unrecognized, or otherwise malformed `generationStatus` value is treated exactly like
+  an absent one; it is never a structural rejection reason by itself (`coerceGenerationStatus`
+  returns `undefined` rather than failing the whole response).
+
+Why trust the count over the model's own claim? Because the alternative — trusting
+self-reported metadata as the gate for user-facing behavior — is exactly the kind of inconsistent-
+metadata risk a fail-safe validator must not accept (see "Invalid semantics" examples: a model
+could return 7 cards and still claim `"complete"`, or claim insufficiency despite having met the
+target). The self-report still matters as a **prompting mechanism**: it gives the model an
+explicit, disciplined way to decide to stop early, with instructions on exactly when that's
+legitimate (see the prompt text below) — it just never becomes the sole arbiter of what the app
+does with the result.
+
+**Preventing the escape hatch from becoming a new excuse to under-generate.** The system prompt
+(`bedrockClient.mjs`'s `buildGenerationPrompt`) states the range as a real target, not merely a
+ceiling, and is explicit that `"insufficient-distinct-content"` is for a genuine content shortfall
+only — never for "reaching the minimum would take extra effort":
+
+> "Produce between {targetMinimumCardCount} and {requestedCardCount} distinct, source-grounded
+> cards. Treat this as a real target range, not merely a ceiling: make a serious, genuine effort
+> to identify at least {targetMinimumCardCount} distinct, study-worthy concepts in the supplied
+> material before concluding there are not enough. Do not pad the count by splitting one fact into
+> multiple trivial cards, duplicating a concept under different wording, or inventing content not
+> present in the supplied chunks — quality always comes before hitting the number. Only when the
+> supplied material genuinely cannot support {targetMinimumCardCount} distinct, non-duplicate,
+> well-supported cards without resorting to those shortcuts, produce as many good cards as the
+> material actually supports and set "generationStatus" to "insufficient-distinct-content" —
+> otherwise set it to "complete". Never use "insufficient-distinct-content" merely because
+> reaching {targetMinimumCardCount} would take extra effort; use it only when doing so would
+> require unsupported facts, substantial duplication, meaningless fragmentation, or low-value
+> filler. Never exceed {requestedCardCount} cards under any circumstance."
+
+The zero-usable-material fallback (previously `{"title": "...", "cards": []}`) now also sets
+`"generationStatus": "insufficient-distinct-content"` — a genuinely empty result is always,
+definitionally, the insufficient case, never a silent empty "complete."
+
+**A new structural rejection: `exceeds-requested-max`.** Distinct from the existing
+`too-many-cards` (which guards the GLOBAL `ABSOLUTE_MAX_CARDS_PER_DECK` safety ceiling, 40,
+regardless of tier), this rejects a response whose raw card count exceeds THIS request's own
+`requestedCardCount` — e.g. 20 cards for a Small request whose ceiling is 8. Checked before any
+per-card work, same whole-deck-rejection design as every other structural check in this file.
+Rejected outright, never silently truncated — truncating would mean the app itself edits which
+cards survive, an editorial decision this validator deliberately never makes.
+
+**User experience when below target.** The review screen (`app/library/[id]/generate/review.tsx`)
+shows a distinct, non-blocking informational banner — never an intrusive alert — specifically when
+the AUTHORITATIVE status is `"insufficient-distinct-content"`, positioned near the existing
+"Created X cards using Y of Z sections" coverage note (which it replaces when both would otherwise
+apply, to avoid explaining the same shortfall twice). Copy deliberately avoids implying the whole
+*source* lacks material when only the bounded `GenerationContext` was ever supplied — "the source
+sections used for this generation," never "this book only supports 7 cards." The user can still
+keep, edit, or save every card; nothing about this status blocks or alters the existing
+generation → review → explicit Save workflow.
+
+**A merely-below-maximum result is never flagged.** 13 cards for a Medium (10–15) request is an
+ordinary, unremarked success — the authoritative status is `"complete"` because 13 ≥ 10. Only
+falling below the target MINIMUM triggers the new banner; falling below the ceiling never did and
+still doesn't need to.
+
+**What this batch deliberately does not change.** Bounded `GenerationContext` sizing
+(`contextPreparation.ts`, `DEFAULT_CONTEXT_CHAR_BUDGET`/`MAX_CONTEXT_CHAR_BUDGET`) is completely
+untouched — "19 of 193 sections used" and "7 cards generated" are two different concepts, and this
+batch only fixes the second. **Generation today still does not guarantee coverage of an entire
+large source** — only of whatever bounded context fit the existing budget; a future chapter/page-
+range/source-section picker and multi-batch whole-source generation (neither implemented here)
+would be how a user eventually directs which material a generation draws from, and/or generates
+from more than one bounded context per deck. Nothing in this batch hard-codes an assumption that
+`GenerationContext` represents "the beginning of a source" — the count/status contract is
+agnostic to how the context was selected, so a future selection feature can plug in without a
+schema change here. No local filler/duplication/fabrication was added anywhere, and no automatic
+retry loop exists — a below-target result is reported honestly exactly once per generation
+attempt, never silently re-requested.
 
 ### `generationContractVersion`
 
@@ -212,7 +330,9 @@ type GenerationMetadata = {
   sourceId: string;
   selectedChunkIds: string[];
   requestedCardCount: number;
+  targetMinimumCardCount: number;    // echoed from the request
   resultingCardCount: number;
+  generationStatus: GenerationStatus; // AUTHORITATIVE — see "Count contract" above
   generatedAt: string;
   providerId: string;
   fullSourceIncluded: boolean;
@@ -234,18 +354,22 @@ never a random UUID.
 
 `validateGeneratedDeckResponse()` (`responseValidation.ts`) is the **only** code path allowed to
 turn a provider's raw response into a `GeneratedDeckDraft`. It never parses prose — a response must
-already be `{ title: string, cards: [{ front: string, back: string, sourceChunkIds: string[] }] }`
-or it is rejected outright as `malformed-response`.
+already be `{ title: string, generationStatus?: "complete" | "insufficient-distinct-content",
+cards: [{ front: string, back: string, sourceChunkIds: string[] }] }` or it is rejected outright as
+`malformed-response`. `generationStatus` is optional and advisory only — see "Count contract and
+insufficient-distinct-content" above for why it's never blindly trusted.
 
 **Design decision (documented, not incidental):** a structural problem — wrong shape entirely, an
-invalid/empty/overlong title, more cards than `ABSOLUTE_MAX_CARDS_PER_DECK` (40), or zero cards
-surviving per-card validation — is a **whole-response rejection**. Interval does not silently
-salvage a structurally unsafe response. An individual otherwise-well-formed card with its own
-problem (blank front/back, over `MAX_FRONT_LENGTH`/`MAX_BACK_LENGTH`, missing or unknown
-provenance, or an exact duplicate of an earlier card in the same response) is **excluded** from the
-draft and its issue recorded in `generation.issues` — an otherwise-good 14-of-15-card deck is not
-thrown away over one bad card. If exclusion would leave zero cards, that escalates to a whole-deck
-failure (`no-valid-cards`).
+invalid/empty/overlong title, more cards than `ABSOLUTE_MAX_CARDS_PER_DECK` (40), more cards than
+THIS request's own `requestedCardCount` (`exceeds-requested-max`), or zero cards surviving
+per-card validation — is a **whole-response rejection**. Interval does not silently salvage a
+structurally unsafe response. An individual otherwise-well-formed card with its own problem (blank
+front/back, over `MAX_FRONT_LENGTH`/`MAX_BACK_LENGTH`, missing or unknown provenance, or an exact
+duplicate of an earlier card in the same response) is **excluded** from the draft and its issue
+recorded in `generation.issues` — an otherwise-good 14-of-15-card deck is not thrown away over one
+bad card. If exclusion would leave zero cards, that escalates to a whole-deck failure
+(`no-valid-cards`). A below-target-minimum card COUNT, by contrast, is never a whole-deck
+rejection on its own — see "Count contract" above.
 
 ### Duplicate detection
 
@@ -261,7 +385,8 @@ mission's "do not over-engineer semantic similarity yet" instruction.
 | Deck title length | `MAX_TITLE_LENGTH = 80` |
 | Card front length | `MAX_FRONT_LENGTH = 300` |
 | Card back length | `MAX_BACK_LENGTH = 500` |
-| Cards per deck | `ABSOLUTE_MAX_CARDS_PER_DECK = 40` |
+| Cards per deck (global safety ceiling) | `ABSOLUTE_MAX_CARDS_PER_DECK = 40` |
+| Cards per deck (this request's own tier ceiling) | `requestedCardCount` — see "Count contract" above |
 
 ## Error model
 
@@ -481,6 +606,13 @@ Bedrock actually returns it — **never fabricated or estimated** when absent. N
 returned to the mobile client or persisted beyond CloudWatch's own retention; this is operational
 metering to support a future cost/quota UX, not a product analytics pipeline.
 
+A second, separate log line (`index.mjs`, right after response validation succeeds) records only
+`requestedMax`, `targetMinimum`, `generatedCount`, and the AUTHORITATIVE `generationStatus` —
+again category-level aggregate numbers only, never source text, prompts, or card content. This
+exists specifically so a future pass can measure whether Small/Medium/Large are actually behaving
+as the "Count contract" section above intends (e.g. is Medium routinely landing near 15, or still
+clustering near 7?) without needing a dedicated analytics pipeline — none was built here.
+
 ### Known limitation: no request-level idempotency
 
 There is no idempotency key in the request contract, and this batch does not add one ("do not
@@ -539,6 +671,13 @@ skeleton's size-ceiling and selected-chunk-id consistency checks.
   lives entirely server-side (`rateLimiter.mjs`), never on the mobile client.
 - No relevance ranking / smarter chunk selection — `rankChunks` is a reserved, unused seam.
 - No AWS action of any kind was taken to produce this batch.
+- **Count-contract/insufficient-content batch (see "Count contract and insufficient-distinct-
+  content" above) deliberately does NOT implement**: chapter/heading detection, a page-range or
+  source-section picker, "uncovered sections only" generation, whole-source multi-batch
+  generation, automatic iterative AI retries (no "if too few cards, ask again" loop exists
+  anywhere — a below-target result is reported exactly once, honestly), RAG, embeddings, a context-
+  window expansion, or any model/provider switch. None of these change the bounded
+  `GenerationContext` sizing this batch left untouched.
 
 ## Provider landscape (non-binding — informs, does not select)
 

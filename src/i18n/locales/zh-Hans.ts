@@ -1049,7 +1049,7 @@ const zhHans = {
     },
     generateButton: "生成卡组",
     generatingTitle: "正在生成你的卡组",
-    generatingBody: "正在读取来源并撰写卡片。这些操作都在你的设备上完成。",
+    generatingBody: "正在读取所选来源内容并生成你的卡片。",
     retryButton: "重试",
     backToSourceButton: "返回来源",
     entry: {
@@ -1130,6 +1130,13 @@ const zhHans = {
         other: "{{count}} 张卡片",
       },
       fromSource: "来自“{{title}}”",
+      insufficientContent: {
+        title: "没有足够的独立内容可生成 {{target}} 张卡片",
+        body: {
+          other: "Interval 在用于本次生成的来源部分中找到了足够制作 {{count}} 张有用卡片的独立材料。",
+        },
+        hint: "你可以保留这些卡片，或稍后使用更多来源材料重新生成。",
+      },
       cardsHeading: "卡片",
       noCardsBody: "你已移除所有卡片。放弃此草稿以重新开始。",
       editCardButton: "编辑",

@@ -30,6 +30,16 @@ export type GenerationOptions = {
   cardStyle: CardStyleOption;
 };
 
+// True when the supplied material had enough distinct, source-grounded content to reach the
+// requesting tier's quality floor (`GenerateStudyDeckRequest.targetMinimumCardCount`) without
+// duplication, fragmentation, or unsupported claims — false when it genuinely did not, in which
+// case the response legitimately falls short of that floor. Never the model's own free-form
+// reasoning string — see responseValidation.ts's `deriveGenerationStatus`, which treats a
+// model-reported value here as ADVISORY ONLY: the actual accepted card count vs. the request's
+// `targetMinimumCardCount` is always the authoritative signal, never this field alone. See
+// docs/ai-generation-foundation.md's "Count contract and insufficient-distinct-content" section.
+export type GenerationStatus = "complete" | "insufficient-distinct-content";
+
 // ---- Generate Study Deck request (safe to log in full — never carries chunk TEXT) ----
 
 export type GenerateStudyDeckRequest = {
@@ -41,7 +51,14 @@ export type GenerateStudyDeckRequest = {
    * actual text travels separately as `GenerationContext.chunks` (see contextPreparation.ts) so
    * this request record itself is always safe to log/store without exposing source content. */
   selectedChunkIds: string[];
+  /** The ceiling — "up to this many" (`resolveRequestedCardCount`). */
   requestedCardCount: number;
+  /** The companion quality floor — "should normally produce at least this many if the material
+   * supports it" (`resolveTargetMinimumCardCount`). Always `<= requestedCardCount`. Carried on
+   * the request (computed once, client-side, from the same preset `requestedCardCount` already
+   * is) rather than re-derived independently by the backend, exactly like `requestedCardCount`
+   * itself already is — see generationOptions.ts. */
+  targetMinimumCardCount: number;
   options: GenerationOptions;
   language?: string;
 };
@@ -76,6 +93,11 @@ export type ModelGeneratedCard = {
 
 export type ModelGeneratedDeckResponse = {
   title: string;
+  /** The model's own self-report of whether it judges the supplied material sufficient for the
+   * requested tier's target range — ADVISORY ONLY (see `GenerationStatus`'s own doc comment).
+   * Optional: an older/malformed response omitting this is handled gracefully (treated as
+   * unreported, never a structural rejection reason on its own) by responseValidation.ts. */
+  generationStatus?: GenerationStatus;
   cards: ModelGeneratedCard[];
 };
 
@@ -108,7 +130,16 @@ export type CardValidationIssueCode =
 
 export type CardValidationIssue = { cardIndex: number; code: CardValidationIssueCode };
 
-export type DeckValidationIssueCode = "malformed-response" | "invalid-title" | "no-valid-cards" | "too-many-cards";
+export type DeckValidationIssueCode =
+  | "malformed-response"
+  | "invalid-title"
+  | "no-valid-cards"
+  | "too-many-cards"
+  // Raw card count exceeded this specific request's own requestedCardCount ceiling — distinct
+  // from "too-many-cards" (which guards the GLOBAL ABSOLUTE_MAX_CARDS_PER_DECK safety ceiling,
+  // 40, regardless of tier). A model badly over-producing relative to what THIS tier asked for
+  // is its own structural-adherence problem, rejected the same whole-deck way.
+  | "exceeds-requested-max";
 
 export type DeckValidationIssue = { code: DeckValidationIssueCode; detail?: string };
 
@@ -118,7 +149,15 @@ export type GenerationMetadata = {
   sourceId: string;
   selectedChunkIds: string[];
   requestedCardCount: number;
+  /** Echoed from the request — see `GenerateStudyDeckRequest.targetMinimumCardCount`. */
+  targetMinimumCardCount: number;
   resultingCardCount: number;
+  /** AUTHORITATIVE — derived deterministically from `resultingCardCount` vs
+   * `targetMinimumCardCount` by `deriveGenerationStatus` (responseValidation.ts), never a blind
+   * pass-through of the model's own self-reported `ModelGeneratedDeckResponse.generationStatus`.
+   * See that function's doc comment for exactly why metadata is never trusted over the actual
+   * count. */
+  generationStatus: GenerationStatus;
   /** ISO 8601 — when validation produced this draft, not when the (as-yet-unimplemented)
    * production model call would have started. */
   generatedAt: string;

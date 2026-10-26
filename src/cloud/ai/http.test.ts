@@ -17,6 +17,7 @@ function baseRequest(overrides: Partial<GenerateStudyDeckRequest> = {}): Generat
     generationContractVersion: 1,
     selectedChunkIds: ["a"],
     requestedCardCount: 5,
+    targetMinimumCardCount: 3,
     options: { cardCount: "medium", difficulty: "balanced", cardStyle: "question-answer" },
     ...overrides,
   };

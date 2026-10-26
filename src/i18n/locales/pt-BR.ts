@@ -1097,7 +1097,7 @@ const ptBR = {
     },
     generateButton: "Gerar baralho",
     generatingTitle: "Gerando seu baralho",
-    generatingBody: "Lendo a fonte e redigindo os cartões. Isso fica no seu dispositivo.",
+    generatingBody: "Lendo o material de origem selecionado e gerando seus cartões.",
     retryButton: "Tentar de novo",
     backToSourceButton: "Voltar à fonte",
     entry: {
@@ -1179,6 +1179,14 @@ const ptBR = {
         other: "{{count}} cartões",
       },
       fromSource: "de “{{title}}”",
+      insufficientContent: {
+        title: "Conteúdo distinto insuficiente para {{target}} cartões",
+        body: {
+          one: "O Interval encontrou material distinto suficiente para 1 cartão útil nas seções da fonte usadas nesta geração.",
+          other: "O Interval encontrou material distinto suficiente para {{count}} cartões úteis nas seções da fonte usadas nesta geração.",
+        },
+        hint: "Você pode manter esses cartões ou tentar gerar novamente mais tarde com mais material de origem.",
+      },
       cardsHeading: "Cartões",
       noCardsBody: "Você removeu todos os cartões. Descarte este rascunho para começar de novo.",
       editCardButton: "Editar",

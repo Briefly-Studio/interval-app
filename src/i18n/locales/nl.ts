@@ -1093,7 +1093,7 @@ const nl = {
     },
     generateButton: "Set genereren",
     generatingTitle: "Je set wordt gegenereerd",
-    generatingBody: "De bron wordt gelezen en kaarten worden opgesteld. Dit blijft op je apparaat.",
+    generatingBody: "Het geselecteerde bronmateriaal wordt gelezen en je kaarten worden gegenereerd.",
     retryButton: "Opnieuw proberen",
     backToSourceButton: "Terug naar bron",
     entry: {
@@ -1175,6 +1175,14 @@ const nl = {
         other: "{{count}} kaarten",
       },
       fromSource: "van “{{title}}”",
+      insufficientContent: {
+        title: "Niet genoeg unieke inhoud voor {{target}} kaarten",
+        body: {
+          one: "Interval vond genoeg uniek materiaal voor 1 nuttige kaart in de brongedeelten die voor deze generatie zijn gebruikt.",
+          other: "Interval vond genoeg uniek materiaal voor {{count}} nuttige kaarten in de brongedeelten die voor deze generatie zijn gebruikt.",
+        },
+        hint: "Je kunt deze kaarten behouden of later opnieuw genereren met meer bronmateriaal.",
+      },
       cardsHeading: "Kaarten",
       noCardsBody: "Je hebt alle kaarten verwijderd. Verwijder dit concept om opnieuw te beginnen.",
       editCardButton: "Bewerken",

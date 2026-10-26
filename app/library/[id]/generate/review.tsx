@@ -203,7 +203,16 @@ export default function GenerateDeckReviewScreen() {
   // The "fewer cards, partial source" explanation already cites the chunk scope itself, so the
   // plain coverage note is only shown on its own when that combined explanation isn't — avoids
   // stating the same "12 of 143" figure twice.
-  const showPlainCoverageNote = !session.coverage.fullSourceIncluded && fewerCards !== "partial-source";
+  const hasPartialCoverage = !session.coverage.fullSourceIncluded;
+  const showPlainCoverageNote = hasPartialCoverage && fewerCards !== "partial-source";
+
+  // A genuine quality-floor shortfall (see src/domain/ai/responseValidation.ts's
+  // deriveGenerationStatus) and partial-source coverage are two INDEPENDENT facts — the source
+  // material supplied didn't support the target minimum, vs. only part of the source was supplied
+  // in the first place. Either, both, or neither can be true at once, so they're rendered as
+  // independent facts rather than one replacing the other (a prior revision incorrectly hid the
+  // coverage disclosure whenever the shortfall banner applied).
+  const isInsufficientContent = session.generationStatus === "insufficient-distinct-content";
 
   const onSave = async () => {
     // Synchronous reentrancy guard first — before any state read or await.
@@ -275,32 +284,64 @@ export default function GenerateDeckReviewScreen() {
           {plural("generateDeck.review.cardCount", cardCount, { count: cardCount })} ·{" "}
           {t("generateDeck.review.fromSource", { title: session.sourceTitle })}
         </Text>
-        {showPlainCoverageNote ? (
-          <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
-            {trustworthyScope
-              ? t("generateDeck.coverage.scopeSummary", {
-                  included: session.coverage.includedChunkCount,
-                  total: session.coverage.totalChunkCount,
-                })
-              : t("generateDeck.coverage.partialSourceNote")}
-          </Text>
-        ) : null}
-        {fewerCards === "full-source" ? (
-          <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
-            {t("generateDeck.coverage.fewerCardsFullSource")}
-          </Text>
-        ) : null}
-        {fewerCards === "partial-source" ? (
-          <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
-            {trustworthyScope
-              ? t("generateDeck.coverage.fewerCardsPartialSourceWithScope", {
-                  count: session.generatedCardCount,
-                  included: session.coverage.includedChunkCount,
-                  total: session.coverage.totalChunkCount,
-                })
-              : t("generateDeck.coverage.fewerCardsPartialSource", { count: session.generatedCardCount })}
-          </Text>
-        ) : null}
+        {isInsufficientContent ? (
+          <View
+            style={[
+              styles.insufficientBanner,
+              { borderColor: colors.warning, backgroundColor: colors.warningSurface, borderRadius: spacing.sm, gap: spacing.xs },
+            ]}
+            accessibilityRole="text"
+          >
+            <Text style={[typography.label, text, { color: colors.warning }]}>
+              {t("generateDeck.review.insufficientContent.title", { target: session.targetMinimumCardCount })}
+            </Text>
+            <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+              {plural("generateDeck.review.insufficientContent.body", session.generatedCardCount, { count: session.generatedCardCount })}
+            </Text>
+            {hasPartialCoverage ? (
+              <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+                {trustworthyScope
+                  ? t("generateDeck.coverage.scopeSummary", {
+                      included: session.coverage.includedChunkCount,
+                      total: session.coverage.totalChunkCount,
+                    })
+                  : t("generateDeck.coverage.partialSourceNote")}
+              </Text>
+            ) : null}
+            <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+              {t("generateDeck.review.insufficientContent.hint")}
+            </Text>
+          </View>
+        ) : (
+          <>
+            {showPlainCoverageNote ? (
+              <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+                {trustworthyScope
+                  ? t("generateDeck.coverage.scopeSummary", {
+                      included: session.coverage.includedChunkCount,
+                      total: session.coverage.totalChunkCount,
+                    })
+                  : t("generateDeck.coverage.partialSourceNote")}
+              </Text>
+            ) : null}
+            {fewerCards === "full-source" ? (
+              <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+                {t("generateDeck.coverage.fewerCardsFullSource")}
+              </Text>
+            ) : null}
+            {fewerCards === "partial-source" ? (
+              <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+                {trustworthyScope
+                  ? t("generateDeck.coverage.fewerCardsPartialSourceWithScope", {
+                      count: session.generatedCardCount,
+                      included: session.coverage.includedChunkCount,
+                      total: session.coverage.totalChunkCount,
+                    })
+                  : t("generateDeck.coverage.fewerCardsPartialSource", { count: session.generatedCardCount })}
+              </Text>
+            ) : null}
+          </>
+        )}
       </Card>
 
       {cardCount === 0 ? (
@@ -362,6 +403,7 @@ const styles = StyleSheet.create({
   header: { alignItems: "center" },
   headerTitle: { flex: 1 },
   noticeRow: { borderWidth: 1, padding: 12 },
+  insufficientBanner: { borderWidth: 1, padding: 12 },
   cardActions: { alignItems: "center" },
   centeredText: { textAlign: "center" },
 });

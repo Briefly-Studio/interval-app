@@ -105,6 +105,7 @@ function baseRequest(overrides = {}) {
     sourceTitle: "Test Source",
     generationContractVersion: 1,
     requestedCardCount: 5,
+    targetMinimumCardCount: 3,
     selectedChunkIds: ["a", "b"],
     options: { cardCount: "medium", difficulty: "balanced", cardStyle: "question-answer" },
     ...overrides,
@@ -182,6 +183,16 @@ test("rejects a request whose selectedChunkIds do not match the actual context c
   assert.equal(JSON.parse(res.body).error, "malformed-request");
 });
 
+// Regression test: the companion quality-floor field must be validated with the same rigor as
+// requestedCardCount — never trusted blindly, never silently defaulted.
+test("rejects a request whose targetMinimumCardCount is missing, non-numeric, or exceeds requestedCardCount", async () => {
+  for (const overrides of [{ targetMinimumCardCount: undefined }, { targetMinimumCardCount: "ten" }, { targetMinimumCardCount: 99 }]) {
+    const res = await handler(makeEvent({ request: baseRequest(overrides), context: baseContext() }, "u1"));
+    assert.equal(res.statusCode, 400);
+    assert.equal(JSON.parse(res.body).error, "invalid-requested-card-count");
+  }
+});
+
 test("accepts a well-formed request but returns provider-unavailable when BEDROCK_MODEL_ID is not configured", async () => {
   // Real, deterministic behavior of the guard clause in callModelProvider — not a stub return
   // value. No CI/local environment in this repository sets BEDROCK_MODEL_ID (that's a Phase B
@@ -198,11 +209,15 @@ test("end-to-end: a well-formed Bedrock response (injected fake client) produces
     const fakeClient = {
       send: async () =>
         converseResponseWithText(
-          JSON.stringify({ title: "Biology Basics", cards: [{ front: "What is ATP?", back: "Energy currency of the cell.", sourceChunkIds: ["a"] }] })
+          JSON.stringify({
+            title: "Biology Basics",
+            generationStatus: "complete",
+            cards: [{ front: "What is ATP?", back: "Energy currency of the cell.", sourceChunkIds: ["a"] }],
+          })
         ),
     };
     const res = await handleGenerateStudyDeck(
-      makeEvent({ request: baseRequest(), context: baseContext() }),
+      makeEvent({ request: baseRequest({ requestedCardCount: 1, targetMinimumCardCount: 1 }), context: baseContext() }),
       { client: fakeClient, CommandCtor: FakeCommand, ...rateLimitDeps() }
     );
     assert.equal(res.statusCode, 200);
@@ -210,6 +225,48 @@ test("end-to-end: a well-formed Bedrock response (injected fake client) produces
     assert.equal(json.title, "Biology Basics");
     assert.equal(json.cards.length, 1);
     assert.equal(json.generation.generationContractVersion, 1);
+    assert.equal(json.generation.targetMinimumCardCount, 1);
+    assert.equal(json.generation.generationStatus, "complete");
+  });
+});
+
+test("end-to-end: a model response below the target minimum claiming 'complete' is overridden to insufficient-distinct-content, cards still returned", async () => {
+  await withModelId(async () => {
+    const fakeClient = {
+      send: async () =>
+        converseResponseWithText(
+          JSON.stringify({
+            title: "Sparse Source",
+            generationStatus: "complete",
+            cards: [{ front: "Q1", back: "A1", sourceChunkIds: ["a"] }],
+          })
+        ),
+    };
+    const res = await handleGenerateStudyDeck(
+      makeEvent({ request: baseRequest({ requestedCardCount: 15, targetMinimumCardCount: 10 }), context: baseContext() }),
+      { client: fakeClient, CommandCtor: FakeCommand, ...rateLimitDeps() }
+    );
+    assert.equal(res.statusCode, 200, "a below-target shortfall is never rejected outright");
+    const json = JSON.parse(res.body);
+    assert.equal(json.cards.length, 1);
+    assert.equal(json.generation.generationStatus, "insufficient-distinct-content");
+  });
+});
+
+test("end-to-end: a model response exceeding this request's own requestedCardCount ceiling is rejected as exceeds-requested-max, never truncated", async () => {
+  await withModelId(async () => {
+    const manyCards = Array.from({ length: 10 }, (_, i) => ({ front: `Q${i}`, back: `A${i}`, sourceChunkIds: ["a"] }));
+    const fakeClient = {
+      send: async () => converseResponseWithText(JSON.stringify({ title: "Deck", generationStatus: "complete", cards: manyCards })),
+    };
+    const res = await handleGenerateStudyDeck(
+      makeEvent({ request: baseRequest({ requestedCardCount: 5, targetMinimumCardCount: 3 }), context: baseContext() }),
+      { client: fakeClient, CommandCtor: FakeCommand, ...rateLimitDeps() }
+    );
+    assert.equal(res.statusCode, 422);
+    const json = JSON.parse(res.body);
+    assert.equal(json.error, "validation-failed");
+    assert.equal(json.deckIssues[0].code, "exceeds-requested-max");
   });
 });
 

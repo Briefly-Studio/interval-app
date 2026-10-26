@@ -92,3 +92,38 @@ test("generateStudyDeck still reports fullSourceIncluded: true when every chunk 
     assert.equal(outcome.draft.generation.excludedChunkCount, 0);
   }
 });
+
+// Count contract end-to-end (mission: card-count quality) — the mock provider honestly produces
+// one card per available chunk and self-reports accordingly, so a Medium request (targetMinimum
+// 10) with only 3 available chunks legitimately falls short, and the draft carries that as a real
+// insufficient-distinct-content result, not a silent/unexplained shortfall.
+test("generateStudyDeck end to end: a Medium request with too few context chunks to meet the target minimum is reported as insufficient-distinct-content", async () => {
+  const content = makeContent([makeChunk("a", 0), makeChunk("b", 1), makeChunk("c", 2)]);
+  const outcome = await generateStudyDeck(createMockProvider(), {
+    sourceTitle: "Test Source",
+    normalizedContent: content,
+    options: { cardCount: "medium", difficulty: "balanced", cardStyle: "question-answer" },
+  });
+  assert.equal(outcome.status, "ready");
+  if (outcome.status === "ready") {
+    assert.equal(outcome.draft.cards.length, 3);
+    assert.equal(outcome.draft.generation.targetMinimumCardCount, 10);
+    assert.equal(outcome.draft.generation.requestedCardCount, 15);
+    assert.equal(outcome.draft.generation.generationStatus, "insufficient-distinct-content");
+  }
+});
+
+test("generateStudyDeck end to end: a Small request with enough context chunks to meet the target minimum is reported as complete", async () => {
+  const content = makeContent([makeChunk("a", 0), makeChunk("b", 1), makeChunk("c", 2), makeChunk("d", 3), makeChunk("e", 4)]);
+  const outcome = await generateStudyDeck(createMockProvider(), {
+    sourceTitle: "Test Source",
+    normalizedContent: content,
+    options: { cardCount: "small", difficulty: "balanced", cardStyle: "question-answer" },
+  });
+  assert.equal(outcome.status, "ready");
+  if (outcome.status === "ready") {
+    assert.equal(outcome.draft.cards.length, 5);
+    assert.equal(outcome.draft.generation.targetMinimumCardCount, 5);
+    assert.equal(outcome.draft.generation.generationStatus, "complete");
+  }
+});
