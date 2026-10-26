@@ -986,7 +986,8 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   `docs/whole-source-generation.md`'s "Founder QA" section. Known, accepted (not just untested)
   limitations, not pending fixes: no safe resume/idempotency after a mid-sequence failure (retry
   restarts from batch 1, re-consuming quota for already-succeeded batches), and cancellation
-  cannot interrupt an already-in-flight batch request (only stops the NEXT one from starting).
+  cannot interrupt an already-in-flight request, but now discards its result (including the
+  final step) and prevents later calls/review publication. See the whole-source doc for QA polish.
 - **Sync cursor hardening (item 35 above) is implemented — infra + Lambda code changed and
   locally tested — but NOT deployed to any environment, including Development.** This item's
   FIRST implementation (a `BySeq` GSI) was reworked after a pre-founder-QA review found it
