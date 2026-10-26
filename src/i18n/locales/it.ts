@@ -1097,6 +1097,9 @@ const it = {
     generateButton: "Genera mazzo",
     generatingTitle: "Generazione del tuo mazzo",
     generatingBody: "Lettura del materiale della fonte selezionata e generazione delle tue carte.",
+    generatingBatchBody: "Generazione delle carte — passaggio {{current}} di {{total}}.",
+    generatingCombiningBody: "Unione delle carte…",
+    canceling: "Annullamento…",
     retryButton: "Riprova",
     backToSourceButton: "Torna alla fonte",
     entry: {
@@ -1132,7 +1135,7 @@ const it = {
       uncoveredLabel: "Materiale non coperto",
       uncoveredDescription: "Solo le sezioni che non hanno ancora una carta di studio salvata.",
       entireSourceLabel: "Fonte completa",
-      entireSourceDescription: "Usa la fonte completa — disponibile solo quando rientra in una generazione.",
+      entireSourceDescription: "Usa la fonte completa — può richiedere più passaggi di generazione per una fonte grande.",
       pageRangeLabel: "Intervallo di pagine",
       pageRangeDescription: "Scegli quali pagine di questa fonte usare.",
       sectionRangeLabel: "Intervallo di sezioni",
@@ -1152,13 +1155,17 @@ const it = {
       summaryUncovered: "Utilizzo delle sezioni che non hanno ancora carte di studio salvate.",
       summaryPageRange: "Pagine {{start}}–{{end}}.",
       summarySectionRange: "Sezioni {{start}}–{{end}}.",
-      partialContextNote: "Questa selezione è più grande di quanto una generazione possa usare — verrà inclusa solo una parte.",
+      multiBatchNotice: {
+        one: "Richiederà {{count}} passaggio di generazione IA.",
+        other: "Richiederà {{count}} passaggi di generazione IA.",
+      },
       error: {
         entireSourceTooLarge: "Questa fonte è troppo grande per essere usata per intero in una generazione.",
         uncoveredUnavailable: "Non c'è più materiale non coperto da cui generare.",
         pageRangeUnavailable: "Le informazioni sulle pagine non sono disponibili per questa fonte.",
         invalidRange: "Inserisci un intervallo valido per questa fonte.",
         emptySelection: "Non è stato trovato alcun contenuto in quella selezione.",
+        planTooLarge: "Questa fonte è troppo grande per generare un mazzo ora. Prova un intervallo più piccolo.",
       },
     },
     unavailable: {

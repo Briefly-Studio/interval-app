@@ -1055,6 +1055,9 @@ const ja = {
     generateButton: "デッキを生成",
     generatingTitle: "デッキを生成しています",
     generatingBody: "選択したソース内容を読み取り、カードを生成しています。",
+    generatingBatchBody: "カードを生成中 — ステップ{{current}}/{{total}}",
+    generatingCombiningBody: "カードを統合しています…",
+    canceling: "キャンセル中…",
     retryButton: "再試行",
     backToSourceButton: "ソースに戻る",
     entry: {
@@ -1090,7 +1093,7 @@ const ja = {
       uncoveredLabel: "未カバーの内容",
       uncoveredDescription: "まだ学習カードが保存されていないセクションのみです。",
       entireSourceLabel: "ソース全体",
-      entireSourceDescription: "ソース全体を使用します — 1回の生成に収まる場合のみ利用できます。",
+      entireSourceDescription: "ソース全体を使用します — 大きなソースの場合、複数の生成ステップが必要になることがあります。",
       pageRangeLabel: "ページ範囲",
       pageRangeDescription: "このソースのどのページを使用するか選択します。",
       sectionRangeLabel: "セクション範囲",
@@ -1108,13 +1111,16 @@ const ja = {
       summaryUncovered: "まだ学習カードが保存されていないセクションを使用しています。",
       summaryPageRange: "{{start}}–{{end}}ページ。",
       summarySectionRange: "セクション{{start}}–{{end}}。",
-      partialContextNote: "この選択は1回の生成で使用できる範囲より大きいため、一部のみが含まれます。",
+      multiBatchNotice: {
+        other: "これには{{count}}回のAI生成ステップが必要です。",
+      },
       error: {
         entireSourceTooLarge: "このソースは大きすぎるため、1回の生成で全体を使用できません。",
         uncoveredUnavailable: "生成に使用できる未カバーの内容が残っていません。",
         pageRangeUnavailable: "このソースにはページ情報がありません。",
         invalidRange: "このソースに対して有効な範囲を入力してください。",
         emptySelection: "その選択範囲にはコンテンツが見つかりませんでした。",
+        planTooLarge: "このソースは現在大きすぎてデッキを生成できません。より小さい範囲を試してください。",
       },
     },
     unavailable: {

@@ -42,19 +42,22 @@ test("automatic resolves to no restriction even for an empty chunk list", () => 
 
 // ---- Entire source ----
 
-test("entireSource resolves ok (no restriction) when the full source fits the budget", () => {
+test("entireSource resolves ok with every chunk id, explicitly, when the full source fits the budget", () => {
   const chunks = [chunk(0, { approxSize: 100 }), chunk(1, { approxSize: 100 })];
   const result = resolveSourceGenerationScope({ chunks, scope: { type: "entireSource" } });
-  assert.deepEqual(result, { status: "ok" });
+  assert.deepEqual(result, { status: "ok", chunkIds: ["chunk_0", "chunk_1"] });
 });
 
-test("entireSource errors — never silently truncates — when the full source exceeds the budget", () => {
+// Multi-batch generation (batchPlanning.ts/multiBatchGeneration.ts) is what now makes "entire
+// source" truthful for a source larger than one context budget — scope resolution itself no
+// longer gates on budget at all, only on whether there's any content to select from.
+test("entireSource still resolves ok with every chunk id even when the full source exceeds one context budget", () => {
   const chunks = [
     chunk(0, { approxSize: DEFAULT_CONTEXT_CHAR_BUDGET }),
     chunk(1, { approxSize: DEFAULT_CONTEXT_CHAR_BUDGET }),
   ];
   const result = resolveSourceGenerationScope({ chunks, scope: { type: "entireSource" } });
-  assert.deepEqual(result, { status: "error", code: "entire-source-too-large" });
+  assert.deepEqual(result, { status: "ok", chunkIds: ["chunk_0", "chunk_1"] });
 });
 
 test("entireSource errors for a source with zero chunks", () => {
@@ -62,7 +65,10 @@ test("entireSource errors for a source with zero chunks", () => {
   assert.deepEqual(result, { status: "error", code: "entire-source-too-large" });
 });
 
-test("fitsContextBudget agrees with entireSource's own eligibility check", () => {
+// fitsContextBudget is no longer entireSource's own gate (multi-batch planning now handles the
+// "doesn't fit one budget" case) — it remains used by the options screen to decide whether a
+// RESTRICTIVE scope's own candidate set needs batching at all. Still exercised directly here.
+test("fitsContextBudget: true only when every chunk fits within one context budget", () => {
   const fits = [chunk(0, { approxSize: 10 }), chunk(1, { approxSize: 10 })];
   const tooBig = [chunk(0, { approxSize: DEFAULT_CONTEXT_CHAR_BUDGET + 1 })];
   assert.equal(fitsContextBudget(fits), true);

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { AuthService } from "../../../../src/auth/AuthService";
@@ -8,6 +8,7 @@ import { buildAiConsentRecord, needsAiConsent } from "../../../../src/domain/ai/
 import { AVAILABILITY_COPY_KEYS, type GenerationAvailabilityState } from "../../../../src/domain/ai/generationAvailability";
 import { isGenerateStudyDeckEnabled } from "../../../../src/domain/ai/generateStudyDeckCapability";
 import {
+  BATCH_PLAN_ERROR_COPY_KEYS,
   checkGenerationAvailability,
   GENERATION_ERROR_COPY_KEYS,
   runGenerateDeckFlow,
@@ -16,9 +17,10 @@ import {
 import { deriveCardCountHintKind, hasTrustworthyChunkScope, type GenerationCoverage } from "../../../../src/domain/ai/generationCoverage";
 import { CARD_COUNT_CHOICES, CARD_STYLE_CHOICES, DIFFICULTY_CHOICES } from "../../../../src/domain/ai/generationOptionsUi";
 import { DEFAULT_GENERATION_OPTIONS, resolveRequestedCardCount } from "../../../../src/domain/ai/generationOptions";
+import { canPlanBatchesFor, planGenerationBatches, type BatchPlan, type BatchPlanErrorCode } from "../../../../src/domain/ai/batchPlanning";
+import type { MultiBatchProgress } from "../../../../src/domain/ai/multiBatchGeneration";
 import { isRealProviderActive } from "../../../../src/domain/ai/providerSelection";
 import {
-  fitsContextBudget,
   getSectionCount,
   resolveSourceGenerationScope,
   type SourceGenerationScope,
@@ -49,12 +51,17 @@ type ScreenState =
   | { phase: "loading" }
   | { phase: "unavailable"; state: Exclude<GenerationAvailabilityState, "ready"> }
   | { phase: "options" }
-  | { phase: "generating" }
+  // `progress` is present only once a multi-batch run has actually started (see
+  // multiBatchGeneration.ts) — the fast single-call path (Automatic, or any scope that fits one
+  // batch) never populates it, so this screen's loading UI for that case is unchanged.
+  | { phase: "generating"; progress?: MultiBatchProgress }
   | { phase: "error"; code: GenerationErrorCode }
   // Defensive backstop only — the options screen's own inline scope validation (built from the
   // same resolver) should normally prevent Generate from ever being tappable in an invalid
   // state. See generateDeckFlow.ts's GenerateDeckFlowOutcome "scope-error" case.
-  | { phase: "scope-error"; code: SourceScopeResolutionErrorCode };
+  | { phase: "scope-error"; code: SourceScopeResolutionErrorCode }
+  // Same defensive posture, for a batch-plan failure (see batchPlanning.ts).
+  | { phase: "plan-error"; code: BatchPlanErrorCode };
 
 export default function GenerateStudyDeckScreen() {
   const router = useRouter();
@@ -93,13 +100,22 @@ export default function GenerateStudyDeckScreen() {
   const [difficulty, setDifficulty] = useState<DifficultyOption>(DEFAULT_GENERATION_OPTIONS.difficulty);
   const [cardStyle, setCardStyle] = useState<CardStyleOption>(DEFAULT_GENERATION_OPTIONS.cardStyle);
 
+  // Checked by the multi-batch orchestrator BETWEEN batches (never mid-batch — an already
+  // in-flight request can't be interrupted; see multiBatchGeneration.ts's "Cancellation" doc
+  // comment). A ref (not state) so it's readable synchronously from the isCanceled() callback
+  // without waiting for a re-render.
+  const canceledRef = useRef(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
+
   // Derived scope state — cheap, pure, recomputed every render from already-loaded data. Shared
   // between the render body (live validation/summary) and startGeneration (the actual request),
   // so both always agree on exactly the same resolution for the current selection.
   const totalSectionCount = getSectionCount(scopeChunks ?? []);
   const hasUncoveredMaterial = (sourceCoverage?.uncoveredChunkCount ?? 0) > 0;
-  const entireSourceFits = fitsContextBudget(scopeChunks ?? []);
-  const scopeChoices = buildSourceScopeChoices({ totalSectionCount, pageCount, hasUncoveredMaterial, entireSourceFits });
+  // "Entire source" is now offered whenever the full source can be PLANNED at all (one request
+  // or several sequential batches — see batchPlanning.ts) — no longer gated to "fits one request".
+  const entireSourceAvailable = canPlanBatchesFor(scopeChunks ?? []);
+  const scopeChoices = buildSourceScopeChoices({ totalSectionCount, pageCount, hasUncoveredMaterial, entireSourceAvailable });
 
   function parseRangeInput(raw: string): number {
     const trimmed = raw.trim();
@@ -117,19 +133,22 @@ export default function GenerateStudyDeckScreen() {
   const scopeResolution = scopeChunks
     ? resolveSourceGenerationScope({ chunks: scopeChunks, scope: selectedScope, coverage: sourceCoverage ?? undefined, pageCount })
     : null;
-  const scopeIsValid = scopeResolution?.status === "ok";
 
-  // True only for a RESTRICTIVE scope (uncovered/page/section range) whose own candidate chunks
-  // still exceed one generation's context budget — Automatic/Entire source are deliberately never
-  // flagged here: Automatic's existing partial-source banner below already covers that case, and
-  // a successfully-resolved Entire source can never exceed budget by construction (see
-  // sourceGenerationScope.ts's own fitsContextBudget check inside the "entireSource" branch).
-  const scopeExceedsContext = (() => {
-    if (!scopeChunks || scopeResolution?.status !== "ok" || !scopeResolution.chunkIds) return false;
-    const candidateIds = new Set(scopeResolution.chunkIds);
-    const candidateChunks = scopeChunks.filter((chunk) => candidateIds.has(chunk.id));
-    return !fitsContextBudget(candidateChunks);
-  })();
+  // Automatic never batches (see generateDeckFlow.ts) — a dry-run batch plan is only meaningful,
+  // and only computed, for the other four scopes, exactly mirroring what runGenerateDeckFlow will
+  // actually do at generation time. This is the SAME resolveSourceGenerationScope +
+  // planGenerationBatches pair the real request uses, so the Generate button's disabled state and
+  // the pre-flight disclosure below can never disagree with what actually happens on tap.
+  const batchPlan: BatchPlan | null =
+    scopeChunks && scopeKind !== "automatic" && scopeResolution?.status === "ok"
+      ? planGenerationBatches(
+          scopeResolution.chunkIds === undefined
+            ? scopeChunks
+            : scopeChunks.filter((chunk) => scopeResolution.chunkIds!.includes(chunk.id))
+        )
+      : null;
+
+  const scopeIsValid = scopeResolution?.status === "ok" && (!batchPlan || batchPlan.status === "ok");
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -195,12 +214,17 @@ export default function GenerateStudyDeckScreen() {
 
   const startGeneration = async () => {
     if (!source) return;
+    canceledRef.current = false;
+    setCancelRequested(false);
     setScreenState({ phase: "generating" });
     try {
       // Capture the active workspace/account scope at generation time — it is bound onto the
       // draft session and is the sole scope Save will use (audit CRITICAL-1).
       const scope = await AuthService.getActiveScope();
-      const outcome = await runGenerateDeckFlow(source, { cardCount, difficulty, cardStyle }, scope, selectedScope);
+      const outcome = await runGenerateDeckFlow(source, { cardCount, difficulty, cardStyle }, scope, selectedScope, {
+        onProgress: (progress) => setScreenState({ phase: "generating", progress }),
+        isCanceled: () => canceledRef.current,
+      });
       if (outcome.status === "ready") {
         router.replace({ pathname: "/library/[id]/generate/review" as any, params: { id } });
         return;
@@ -213,10 +237,25 @@ export default function GenerateStudyDeckScreen() {
         setScreenState({ phase: "scope-error", code: outcome.code });
         return;
       }
+      if (outcome.status === "plan-error") {
+        setScreenState({ phase: "plan-error", code: outcome.code });
+        return;
+      }
+      if (outcome.status === "canceled") {
+        // Quiet return — no cards were generated or saved, nothing further to disclose. The user
+        // asked to stop; landing them back where they can immediately retry is enough feedback.
+        setScreenState({ phase: "options" });
+        return;
+      }
       setScreenState({ phase: "error", code: outcome.code });
     } catch {
       setScreenState({ phase: "error", code: "provider-unavailable" });
     }
+  };
+
+  const requestCancel = () => {
+    canceledRef.current = true;
+    setCancelRequested(true);
   };
 
   // First-use AI consent gate — only ever relevant when this attempt would actually reach the
@@ -268,15 +307,30 @@ export default function GenerateStudyDeckScreen() {
   }
 
   if (screenState.phase === "generating") {
+    const progress = screenState.progress;
+    const bodyText =
+      !progress || progress.phase === "preparing"
+        ? t("generateDeck.generatingBody")
+        : progress.phase === "batch"
+          ? t("generateDeck.generatingBatchBody", { current: progress.batchIndex, total: progress.batchCount })
+          : t("generateDeck.generatingCombiningBody");
+    // Real, truthful batch progress only — never a fabricated percentage (section 16). `progress`
+    // is only ever present for a multi-batch run; the fast single-call path never shows this.
     return (
       <Screen>
         {header}
         <View style={[styles.centered, { gap: spacing.md }]} accessibilityLiveRegion="polite">
           <ActivityIndicator color={colors.accent} size="large" />
           <Text style={[typography.subheading, text, { color: colors.textPrimary }]}>{t("generateDeck.generatingTitle")}</Text>
-          <Text style={[typography.secondary, styles.centeredText, { color: colors.textSecondary }]}>
-            {t("generateDeck.generatingBody")}
-          </Text>
+          <Text style={[typography.secondary, styles.centeredText, { color: colors.textSecondary }]}>{bodyText}</Text>
+          {progress ? (
+            <Button
+              label={cancelRequested ? t("generateDeck.canceling") : t("common.cancel")}
+              variant="ghost"
+              disabled={cancelRequested}
+              onPress={requestCancel}
+            />
+          ) : null}
         </View>
       </Screen>
     );
@@ -321,6 +375,22 @@ export default function GenerateStudyDeckScreen() {
           icon="alert-circle-outline"
           title={t("generateDeck.error.title")}
           description={t(SOURCE_SCOPE_ERROR_COPY_KEYS[screenState.code] as any)}
+        >
+          <Button label={t("generateDeck.retryButton")} variant="primary" fullWidth onPress={() => setScreenState({ phase: "options" })} />
+          <Button label={t("generateDeck.backToSourceButton")} variant="ghost" fullWidth onPress={goBack} />
+        </EmptyState>
+      </Screen>
+    );
+  }
+
+  if (screenState.phase === "plan-error") {
+    return (
+      <Screen scroll>
+        {header}
+        <EmptyState
+          icon="alert-circle-outline"
+          title={t("generateDeck.error.title")}
+          description={t(BATCH_PLAN_ERROR_COPY_KEYS[screenState.code] as any)}
         >
           <Button label={t("generateDeck.retryButton")} variant="primary" fullWidth onPress={() => setScreenState({ phase: "options" })} />
           <Button label={t("generateDeck.backToSourceButton")} variant="ghost" fullWidth onPress={goBack} />
@@ -435,6 +505,10 @@ export default function GenerateStudyDeckScreen() {
             <Text style={[typography.caption, text, { color: colors.danger }]} accessibilityRole="text">
               {t(SOURCE_SCOPE_ERROR_COPY_KEYS[scopeResolution.code] as any)}
             </Text>
+          ) : batchPlan?.status === "error" ? (
+            <Text style={[typography.caption, text, { color: colors.danger }]} accessibilityRole="text">
+              {t(BATCH_PLAN_ERROR_COPY_KEYS[batchPlan.code] as any)}
+            </Text>
           ) : (
             <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
               {selectedScope.type === "pageRange"
@@ -445,9 +519,13 @@ export default function GenerateStudyDeckScreen() {
             </Text>
           )}
 
-          {scopeExceedsContext ? (
-            <Text style={[typography.caption, text, { color: colors.warning }]} accessibilityRole="text">
-              {t("generateDeck.scope.partialContextNote")}
+          {/* Truthful pre-flight disclosure (section 18) — shown whenever this selection will
+              actually take more than one sequential AI generation step, replacing the old
+              "only part will be included" warning this scope used to show: multi-batch now
+              processes the WHOLE selection, just across several bounded steps instead of one. */}
+          {batchPlan?.status === "ok" && batchPlan.batches.length > 1 ? (
+            <Text style={[typography.caption, text, { color: colors.textSecondary }]} accessibilityRole="text">
+              {plural("generateDeck.scope.multiBatchNotice", batchPlan.batches.length, { count: batchPlan.batches.length })}
             </Text>
           ) : null}
         </View>

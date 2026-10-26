@@ -31,8 +31,11 @@ export type SourceGenerationScope =
 export type SourceGenerationScopeKind = SourceGenerationScope["type"];
 
 export type SourceScopeResolutionErrorCode =
-  // "Entire source" was selected but the full normalized source does not fit inside one
-  // generation's context budget — never silently truncated and reported as "entire source".
+  // "Entire source" was selected but the source has zero chunks to generate from. (A source
+  // too large to even PLAN into batches is a separate, later failure — see batchPlanning.ts's
+  // "plan-too-large" — surfaced by the caller after this function returns "ok", never here:
+  // scope resolution only ever decides WHICH chunks are eligible, never whether they're
+  // processable in one or many requests.)
   | "entire-source-too-large"
   // "Uncovered material" was selected but zero uncovered chunks exist (every chunk already has a
   // live card referencing it, or the source has no content at all). The options screen should
@@ -109,8 +112,16 @@ export function resolveSourceGenerationScope(params: {
       return { status: "ok" };
 
     case "entireSource":
-      if (!fitsContextBudget(chunks)) return { status: "error", code: "entire-source-too-large" };
-      return { status: "ok" };
+      // Explicit chunk ids (never the bare "no restriction" `{status:"ok"}` automatic uses) —
+      // this is what lets the caller (generateDeckFlow.ts) tell "automatic, single bounded call,
+      // may legitimately leave material out" apart from "entire source, every chunk must be
+      // considered, batching into as many bounded calls as that takes." Multi-batch generation
+      // (see batchPlanning.ts/multiBatchGeneration.ts) is what actually makes good on this scope's
+      // own promise for a source larger than one context budget — this function's only job is
+      // deciding WHICH chunks are eligible, never whether a single request or several will be
+      // needed to process them.
+      if (chunks.length === 0) return { status: "error", code: "entire-source-too-large" };
+      return { status: "ok", chunkIds: chunks.map((chunk) => chunk.id) };
 
     case "uncovered": {
       const uncovered = new Set(params.coverage?.uncoveredChunkIds ?? []);

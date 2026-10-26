@@ -1094,6 +1094,9 @@ const nl = {
     generateButton: "Set genereren",
     generatingTitle: "Je set wordt gegenereerd",
     generatingBody: "Het geselecteerde bronmateriaal wordt gelezen en je kaarten worden gegenereerd.",
+    generatingBatchBody: "Kaarten genereren — stap {{current}} van {{total}}.",
+    generatingCombiningBody: "Kaarten combineren…",
+    canceling: "Annuleren…",
     retryButton: "Opnieuw proberen",
     backToSourceButton: "Terug naar bron",
     entry: {
@@ -1129,7 +1132,7 @@ const nl = {
       uncoveredLabel: "Niet-gedekt materiaal",
       uncoveredDescription: "Alleen secties die nog geen opgeslagen studiekaart hebben.",
       entireSourceLabel: "Volledige bron",
-      entireSourceDescription: "Gebruik de volledige bron — alleen beschikbaar als deze in één generatie past.",
+      entireSourceDescription: "Gebruik de volledige bron — kan bij een grote bron meerdere generatiestappen vereisen.",
       pageRangeLabel: "Paginabereik",
       pageRangeDescription: "Kies welke pagina's van deze bron te gebruiken.",
       sectionRangeLabel: "Sectiebereik",
@@ -1149,13 +1152,17 @@ const nl = {
       summaryUncovered: "Secties worden gebruikt die nog geen opgeslagen studiekaarten hebben.",
       summaryPageRange: "Pagina's {{start}}–{{end}}.",
       summarySectionRange: "Secties {{start}}–{{end}}.",
-      partialContextNote: "Deze selectie is groter dan één generatie kan gebruiken — slechts een deel wordt opgenomen.",
+      multiBatchNotice: {
+        one: "Dit duurt {{count}} AI-generatiestap.",
+        other: "Dit duurt {{count}} AI-generatiestappen.",
+      },
       error: {
         entireSourceTooLarge: "Deze bron is te groot om volledig in één generatie te gebruiken.",
         uncoveredUnavailable: "Er is geen niet-gedekt materiaal meer om uit te genereren.",
         pageRangeUnavailable: "Pagina-informatie is niet beschikbaar voor deze bron.",
         invalidRange: "Voer een geldig bereik in voor deze bron.",
         emptySelection: "Er is geen inhoud gevonden in die selectie.",
+        planTooLarge: "Deze bron is nu te groot om een set te genereren. Probeer een kleiner bereik.",
       },
     },
     unavailable: {

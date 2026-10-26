@@ -1058,6 +1058,9 @@ const hi = {
     generateButton: "डेक जनरेट करें",
     generatingTitle: "आपका डेक जनरेट हो रहा है",
     generatingBody: "चयनित स्रोत सामग्री पढ़ी जा रही है और आपके कार्ड बनाए जा रहे हैं।",
+    generatingBatchBody: "कार्ड जनरेट हो रहे हैं — चरण {{current}} / {{total}}",
+    generatingCombiningBody: "कार्ड संयोजित किए जा रहे हैं…",
+    canceling: "रद्द किया जा रहा है…",
     retryButton: "फिर कोशिश करें",
     backToSourceButton: "स्रोत पर वापस जाएँ",
     entry: {
@@ -1093,7 +1096,7 @@ const hi = {
       uncoveredLabel: "अनकवर्ड सामग्री",
       uncoveredDescription: "केवल वे सेक्शन जिनमें अभी तक कोई सेव किया गया स्टडी कार्ड नहीं है।",
       entireSourceLabel: "पूरा स्रोत",
-      entireSourceDescription: "पूरे स्रोत का उपयोग करें — यह केवल तब उपलब्ध है जब यह एक जनरेशन में फिट हो जाए।",
+      entireSourceDescription: "पूरे स्रोत का उपयोग करें — बड़े स्रोत के लिए कई जनरेशन चरण लग सकते हैं।",
       pageRangeLabel: "पेज रेंज",
       pageRangeDescription: "चुनें कि इस स्रोत के कौन से पेज उपयोग करने हैं।",
       sectionRangeLabel: "सेक्शन रेंज",
@@ -1111,13 +1114,16 @@ const hi = {
       summaryUncovered: "उन सेक्शन का उपयोग किया जा रहा है जिनमें अभी तक सेव किए गए स्टडी कार्ड नहीं हैं।",
       summaryPageRange: "पेज {{start}}–{{end}}।",
       summarySectionRange: "सेक्शन {{start}}–{{end}}।",
-      partialContextNote: "यह चयन एक जनरेशन में उपयोग हो सकने वाली सीमा से बड़ा है — केवल एक हिस्सा शामिल किया जाएगा।",
+      multiBatchNotice: {
+        other: "इसमें {{count}} AI जनरेशन चरण लगेंगे।",
+      },
       error: {
         entireSourceTooLarge: "यह स्रोत एक जनरेशन में पूरी तरह उपयोग करने के लिए बहुत बड़ा है।",
         uncoveredUnavailable: "जनरेट करने के लिए अब कोई अनकवर्ड सामग्री नहीं बची है।",
         pageRangeUnavailable: "इस स्रोत के लिए पेज जानकारी उपलब्ध नहीं है।",
         invalidRange: "इस स्रोत के लिए एक मान्य रेंज दर्ज करें।",
         emptySelection: "उस चयन में कोई सामग्री नहीं मिली।",
+        planTooLarge: "यह स्रोत अभी डेक जनरेट करने के लिए बहुत बड़ा है। एक छोटी रेंज आज़माएं।",
       },
     },
     unavailable: {

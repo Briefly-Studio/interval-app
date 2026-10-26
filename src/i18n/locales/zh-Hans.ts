@@ -1050,6 +1050,9 @@ const zhHans = {
     generateButton: "生成卡组",
     generatingTitle: "正在生成你的卡组",
     generatingBody: "正在读取所选来源内容并生成你的卡片。",
+    generatingBatchBody: "正在生成卡片——第 {{current}} 步，共 {{total}} 步。",
+    generatingCombiningBody: "正在合并卡片……",
+    canceling: "正在取消……",
     retryButton: "重试",
     backToSourceButton: "返回来源",
     entry: {
@@ -1085,7 +1088,7 @@ const zhHans = {
       uncoveredLabel: "未覆盖的内容",
       uncoveredDescription: "仅限尚无已保存学习卡片的部分。",
       entireSourceLabel: "整个来源",
-      entireSourceDescription: "使用整个来源——仅当其能容纳在一次生成中时才可用。",
+      entireSourceDescription: "使用整个来源——对于较大的来源可能需要多个生成步骤。",
       pageRangeLabel: "页面范围",
       pageRangeDescription: "选择要使用此来源的哪些页面。",
       sectionRangeLabel: "部分范围",
@@ -1103,13 +1106,16 @@ const zhHans = {
       summaryUncovered: "使用尚无已保存学习卡片的部分。",
       summaryPageRange: "第 {{start}}–{{end}} 页。",
       summarySectionRange: "第 {{start}}–{{end}} 部分。",
-      partialContextNote: "此选择超出了一次生成可使用的范围——只会包含其中一部分。",
+      multiBatchNotice: {
+        other: "这将需要 {{count}} 个 AI 生成步骤。",
+      },
       error: {
         entireSourceTooLarge: "此来源太大，无法在一次生成中完整使用。",
         uncoveredUnavailable: "没有可用于生成的未覆盖内容了。",
         pageRangeUnavailable: "此来源没有可用的页面信息。",
         invalidRange: "请输入此来源的有效范围。",
         emptySelection: "该选择范围内未找到任何内容。",
+        planTooLarge: "此来源目前太大，无法生成卡组。请尝试缩小范围。",
       },
     },
     unavailable: {

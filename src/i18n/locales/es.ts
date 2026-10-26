@@ -1096,6 +1096,9 @@ const es = {
     generateButton: "Generar mazo",
     generatingTitle: "Generando tu mazo",
     generatingBody: "Leyendo el material de la fuente seleccionada y generando tus tarjetas.",
+    generatingBatchBody: "Generando tarjetas — paso {{current}} de {{total}}.",
+    generatingCombiningBody: "Combinando tarjetas…",
+    canceling: "Cancelando…",
     retryButton: "Reintentar",
     backToSourceButton: "Volver a la fuente",
     entry: {
@@ -1131,7 +1134,7 @@ const es = {
       uncoveredLabel: "Material sin cubrir",
       uncoveredDescription: "Solo las secciones que aún no tienen una tarjeta de estudio guardada.",
       entireSourceLabel: "Fuente completa",
-      entireSourceDescription: "Usa la fuente completa: solo disponible cuando cabe en una generación.",
+      entireSourceDescription: "Usa la fuente completa — puede llevar varios pasos de generación para una fuente grande.",
       pageRangeLabel: "Rango de páginas",
       pageRangeDescription: "Elige qué páginas de esta fuente usar.",
       sectionRangeLabel: "Rango de secciones",
@@ -1151,13 +1154,17 @@ const es = {
       summaryUncovered: "Usando secciones que aún no tienen tarjetas de estudio guardadas.",
       summaryPageRange: "Páginas {{start}}–{{end}}.",
       summarySectionRange: "Secciones {{start}}–{{end}}.",
-      partialContextNote: "Esta selección es más grande de lo que una generación puede usar: solo se incluirá una parte.",
+      multiBatchNotice: {
+        one: "Esto tomará {{count}} paso de generación con IA.",
+        other: "Esto tomará {{count}} pasos de generación con IA.",
+      },
       error: {
         entireSourceTooLarge: "Esta fuente es demasiado grande para usarla completa en una generación.",
         uncoveredUnavailable: "No queda material sin cubrir para generar.",
         pageRangeUnavailable: "La información de páginas no está disponible para esta fuente.",
         invalidRange: "Ingresa un rango válido para esta fuente.",
         emptySelection: "No se encontró contenido en esa selección.",
+        planTooLarge: "Esta fuente es demasiado grande para generar un mazo ahora. Prueba un rango más pequeño.",
       },
     },
     unavailable: {

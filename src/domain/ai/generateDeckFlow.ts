@@ -1,9 +1,10 @@
 import type { LibrarySourceRecord } from "../../models/librarySource";
 import { loadSourceCoverage } from "../sourceCoverageService";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
-import type { NormalizedChunk } from "../normalization/types";
+import type { NormalizationResult, NormalizedChunk } from "../normalization/types";
 import { normalizeSource } from "../normalization/normalizeSource";
 import { generateStudyDeck } from "./aiService";
+import { planGenerationBatches, type BatchPlanErrorCode } from "./batchPlanning";
 import { prepareGenerationContext } from "./contextPreparation";
 import { deriveGenerationAvailability, type GenerationAvailabilityState } from "./generationAvailability";
 import { type GenerationCoverage, summarizeGenerationCoverage } from "./generationCoverage";
@@ -11,9 +12,10 @@ import {
   startGenerateDeckSession,
   type DraftProvenanceEntry,
 } from "./generateDeckSession";
+import { runMultiBatchGeneration, type MultiBatchProgress } from "./multiBatchGeneration";
 import { selectModelProvider } from "./providerSelection";
 import { resolveSourceGenerationScope, type SourceGenerationScope, type SourceScopeResolutionErrorCode } from "./sourceGenerationScope";
-import type { GenerationErrorCode, GenerationOptions } from "./types";
+import type { GeneratedDeckDraft, GenerationErrorCode, GenerationOptions } from "./types";
 
 // Orchestrates one end-to-end generation attempt for the UX shell:
 //   normalizeSource → availability guard → generateStudyDeck(selected provider) → populate the
@@ -33,7 +35,20 @@ export type GenerateDeckFlowOutcome =
   // validation (built from the same resolveSourceGenerationScope call) should normally prevent
   // this from ever being reached; this is a defensive backstop for source content changing
   // between screen-load and the Generate tap.
-  | { status: "scope-error"; code: SourceScopeResolutionErrorCode };
+  | { status: "scope-error"; code: SourceScopeResolutionErrorCode }
+  // The resolved scope's candidate chunks could not be partitioned into a safe number of batches
+  // (see batchPlanning.ts) — also resolved BEFORE any provider call. Like scope-error, the
+  // options screen's own live dry-run of planGenerationBatches should normally prevent this from
+  // being reached; this is the same kind of defensive backstop.
+  | { status: "plan-error"; code: BatchPlanErrorCode }
+  // The caller's isCanceled() returned true before all batches finished — no cards were saved,
+  // no draft session was populated. See multiBatchGeneration.ts's "Cancellation" doc comment.
+  | { status: "canceled" };
+
+export type GenerateDeckFlowCallbacks = {
+  onProgress?: (progress: MultiBatchProgress) => void;
+  isCanceled?: () => boolean;
+};
 
 /**
  * Pre-flight readiness check for the options screen — normalizes the source and maps the result
@@ -87,6 +102,32 @@ function buildProvenanceMap(chunks: { id: string; provenance: DraftProvenanceEnt
   return map;
 }
 
+/** Shared by every path below that ends in a usable combined draft (single-call or multi-batch)
+ * — the one place `startGenerateDeckSession` is called, so the two paths can never drift apart
+ * in how they populate the review session. */
+function finalizeReadyOutcome(
+  source: LibrarySourceRecord,
+  sourceScope: WorkspaceScope,
+  draft: GeneratedDeckDraft,
+  normalization: NormalizationResult,
+  options: GenerationOptions
+): GenerateDeckFlowOutcome {
+  startGenerateDeckSession({
+    sourceId: source.id,
+    sourceScope,
+    sourceTitle: source.displayTitle,
+    draft,
+    provenanceByChunkId: buildProvenanceMap(normalization.content.chunks),
+    options,
+    coverage: summarizeGenerationCoverage({
+      fullSourceIncluded: draft.generation.fullSourceIncluded,
+      chunkCount: draft.generation.selectedChunkIds.length,
+      excludedChunkCount: draft.generation.excludedChunkCount,
+    }),
+  });
+  return { status: "ready" };
+}
+
 export async function runGenerateDeckFlow(
   source: LibrarySourceRecord,
   options: GenerationOptions,
@@ -95,7 +136,11 @@ export async function runGenerateDeckFlow(
   sourceScope: WorkspaceScope,
   /** Which part of the source to draw from — defaults to Automatic (today's unchanged behavior)
    * when omitted, so this stays source-compatible with any other future caller. */
-  scope: SourceGenerationScope = { type: "automatic" }
+  scope: SourceGenerationScope = { type: "automatic" },
+  /** Progress/cancellation hooks for a multi-batch run — ignored entirely by the single-call
+   * path (Automatic, or any scope small enough to need only one batch), which completes too
+   * quickly for either to matter. See multiBatchGeneration.ts. */
+  callbacks?: GenerateDeckFlowCallbacks
 ): Promise<GenerateDeckFlowOutcome> {
   const normalization = await normalizeSource(source);
   const availability = deriveGenerationAvailability(normalization);
@@ -118,6 +163,36 @@ export async function runGenerateDeckFlow(
     return { status: "scope-error", code: resolvedScope.code };
   }
 
+  // Automatic is NEVER multi-batched, by product design (it always resolves to "no restriction"
+  // — `chunkIds` is undefined — and stays the existing fast single-call path unconditionally).
+  // Every other scope resolves an EXPLICIT chunkIds array, which may need batching if it's larger
+  // than one context budget.
+  if (resolvedScope.chunkIds !== undefined) {
+    const candidateChunks = normalization.content.chunks.filter((chunk) => resolvedScope.chunkIds!.includes(chunk.id));
+    const plan = planGenerationBatches(candidateChunks);
+    if (plan.status === "error") {
+      return { status: "plan-error", code: plan.code };
+    }
+
+    if (plan.batches.length > 1) {
+      const multiOutcome = await runMultiBatchGeneration({
+        provider: selectModelProvider(),
+        normalizedContent: normalization.content,
+        sourceTitle: source.displayTitle,
+        language: source.sourceLanguage,
+        options,
+        plan,
+        onProgress: callbacks?.onProgress,
+        isCanceled: callbacks?.isCanceled,
+      });
+      if (multiOutcome.status === "canceled") return { status: "canceled" };
+      if (multiOutcome.status === "error") return { status: "error", code: multiOutcome.error.code };
+      return finalizeReadyOutcome(source, sourceScope, multiOutcome.draft, normalization, options);
+    }
+    // Exactly one batch — identical cost/behavior to the single-call path below, just reusing
+    // the already-computed, already-validated batch chunk list instead of the raw resolved set.
+  }
+
   const outcome = await generateStudyDeck(selectModelProvider(), {
     sourceTitle: source.displayTitle,
     normalizedContent: normalization.content,
@@ -130,21 +205,7 @@ export async function runGenerateDeckFlow(
     return { status: "error", code: outcome.error.code };
   }
 
-  startGenerateDeckSession({
-    sourceId: source.id,
-    sourceScope,
-    sourceTitle: source.displayTitle,
-    draft: outcome.draft,
-    provenanceByChunkId: buildProvenanceMap(normalization.content.chunks),
-    options,
-    coverage: summarizeGenerationCoverage({
-      fullSourceIncluded: outcome.draft.generation.fullSourceIncluded,
-      chunkCount: outcome.draft.generation.selectedChunkIds.length,
-      excludedChunkCount: outcome.draft.generation.excludedChunkCount,
-    }),
-  });
-
-  return { status: "ready" };
+  return finalizeReadyOutcome(source, sourceScope, outcome.draft, normalization, options);
 }
 
 // GenerationErrorCode → i18n key for a friendly, non-technical message. Internal codes are never
@@ -175,4 +236,11 @@ export const SOURCE_SCOPE_ERROR_COPY_KEYS: Record<SourceScopeResolutionErrorCode
   "page-range-unavailable": "generateDeck.scope.error.pageRangeUnavailable",
   "invalid-range": "generateDeck.scope.error.invalidRange",
   "empty-selection": "generateDeck.scope.error.emptySelection",
+};
+
+// Same purpose again, for batch-plan failures (batchPlanning.ts) — resolved after scope
+// resolution succeeds but still before any provider call.
+export const BATCH_PLAN_ERROR_COPY_KEYS: Record<BatchPlanErrorCode, string> = {
+  "no-content": "generateDeck.scope.error.emptySelection",
+  "plan-too-large": "generateDeck.scope.error.planTooLarge",
 };

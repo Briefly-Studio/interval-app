@@ -680,9 +680,16 @@ skeleton's size-ceiling and selected-chunk-id consistency checks.
   `GenerationContext` sizing this batch left untouched.
   - **Update (Source Generation Scope batch):** a page-range (PDF)/generic-section-range picker
     and "Uncovered material" generation are now implemented — see `docs/source-generation-scope.md`.
-    Chapter/heading-based selection, whole-source multi-batch generation, and automatic retries
-    remain not implemented; the bounded `GenerationContext` sizing/budget itself is still
-    completely unchanged by that batch too.
+    Chapter/heading-based selection and automatic retries remain not implemented; the bounded
+    `GenerationContext` sizing/budget itself is still completely unchanged by that batch too.
+  - **Update (Whole-Source Multi-Batch Generation batch):** whole-source multi-batch generation
+    is now also implemented — see `docs/whole-source-generation.md`. A selected scope larger than
+    one bounded context can now be processed across several sequential, bounded
+    `generateStudyDeck` calls, combined into one review draft. The per-batch request/response
+    contract, count-quality validation, and this section's own `GenerationContext` sizing are all
+    still completely unchanged — multi-batch is a new orchestration layer ABOVE the existing
+    per-call contract, not a change to it. Automatic intentionally never multi-batches. Chapter/
+    heading-based selection and automatic retries remain not implemented.
 
 ## Provider landscape (non-binding — informs, does not select)
 

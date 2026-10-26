@@ -1049,6 +1049,9 @@ const ko = {
     generateButton: "덱 생성",
     generatingTitle: "덱을 생성하는 중",
     generatingBody: "선택한 소스 내용을 읽고 카드를 생성하고 있습니다.",
+    generatingBatchBody: "카드 생성 중 — {{total}} 중 {{current}}단계",
+    generatingCombiningBody: "카드를 결합하는 중…",
+    canceling: "취소하는 중…",
     retryButton: "다시 시도",
     backToSourceButton: "소스로 돌아가기",
     entry: {
@@ -1084,7 +1087,7 @@ const ko = {
       uncoveredLabel: "다루지 않은 자료",
       uncoveredDescription: "아직 저장된 학습 카드가 없는 섹션만 포함합니다.",
       entireSourceLabel: "전체 소스",
-      entireSourceDescription: "전체 소스를 사용합니다 — 한 번의 생성에 들어갈 때만 사용할 수 있습니다.",
+      entireSourceDescription: "전체 소스를 사용합니다 — 큰 소스의 경우 여러 생성 단계가 필요할 수 있습니다.",
       pageRangeLabel: "페이지 범위",
       pageRangeDescription: "이 소스의 어떤 페이지를 사용할지 선택하세요.",
       sectionRangeLabel: "섹션 범위",
@@ -1102,13 +1105,16 @@ const ko = {
       summaryUncovered: "아직 저장된 학습 카드가 없는 섹션을 사용합니다.",
       summaryPageRange: "{{start}}–{{end}} 페이지.",
       summarySectionRange: "{{start}}–{{end}} 섹션.",
-      partialContextNote: "이 선택 범위는 한 번의 생성에서 사용할 수 있는 것보다 큽니다 — 일부만 포함됩니다.",
+      multiBatchNotice: {
+        other: "이 작업은 {{count}}단계의 AI 생성이 필요합니다.",
+      },
       error: {
         entireSourceTooLarge: "이 소스는 너무 커서 한 번의 생성에서 전체를 사용할 수 없습니다.",
         uncoveredUnavailable: "생성할 수 있는 다루지 않은 자료가 더 이상 없습니다.",
         pageRangeUnavailable: "이 소스에는 페이지 정보를 사용할 수 없습니다.",
         invalidRange: "이 소스에 유효한 범위를 입력하세요.",
         emptySelection: "해당 선택 범위에서 콘텐츠를 찾을 수 없습니다.",
+        planTooLarge: "이 소스는 지금 덱을 생성하기에 너무 큽니다. 더 작은 범위를 시도하세요.",
       },
     },
     unavailable: {
