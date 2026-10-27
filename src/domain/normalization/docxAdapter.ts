@@ -42,6 +42,7 @@ export type GenericStructuralBlock = {
    * adapter tracks that (a future DOCX integration can derive this trivially by remembering the
    * last "heading" block seen during its own top-to-bottom parse). */
   heading?: string;
+  headingLevel?: number;
 };
 
 export type StructuredAdapterInput = {
@@ -75,7 +76,7 @@ export function normalizeStructuredBlocks(input: StructuredAdapterInput): Struct
   for (const block of input.blocks) {
     const text = block.text;
     if (!text) continue;
-    const provenance: ChunkProvenance = { blockIndex: index, heading: block.heading };
+    const provenance: ChunkProvenance = { blockIndex: index, heading: block.heading, ...(block.headingLevel !== undefined ? { headingLevel: block.headingLevel } : {}) };
     chunks.push({
       id: computeChunkId(input.sourceId, index, text),
       index,
@@ -127,7 +128,7 @@ export function mapDocxBlocksToGenericBlocks(blocks: DocxBlock[]): GenericStruct
     if (block.kind === "heading") {
       const text = flattenRuns(block.runs);
       if (text) currentHeading = text;
-      generic.push({ type: "heading", text, heading: currentHeading });
+      generic.push({ type: "heading", text, heading: currentHeading, headingLevel: block.level });
       continue;
     }
     if (block.kind === "paragraph") {

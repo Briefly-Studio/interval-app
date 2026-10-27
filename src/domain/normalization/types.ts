@@ -1,3 +1,4 @@
+import type { SourceStructureWarning, WorksheetIdentity, WorksheetStructureMetadata } from "../sourceStructure";
 import type { SourceType } from "../../models/librarySource";
 
 // Source Normalization Foundation — the canonical, format-agnostic representation future AI
@@ -59,6 +60,10 @@ export type ChunkProvenance = {
   blockIndex?: number;
   /** Nearest enclosing heading text, when a structured adapter can supply one. */
   heading?: string;
+  /** Real DOCX paragraph heading level; absent when the adapter has no level evidence. */
+  headingLevel?: number;
+  /** All real worksheets intersected by this unchanged chunk. A boundary chunk may span sheets. */
+  worksheets?: WorksheetIdentity[];
   /** Reserved for a future audio-transcript adapter — millisecond timestamp range. Never
    * populated by anything in this batch (no transcription is implemented). */
   timeRangeMs?: { start: number; end: number };
@@ -85,6 +90,9 @@ export type NormalizedChunk = {
 };
 
 export type NormalizedSourceMetadata = {
+  /** Optional enrichment from the same parse that produced normalized text. */
+  worksheets?: WorksheetStructureMetadata[];
+  structureWarnings?: SourceStructureWarning[];
   /** Size of the resolved source file actually read, in bytes. */
   byteSize?: number;
   /** Only populated by a format with real page semantics AND when it's actually known — never

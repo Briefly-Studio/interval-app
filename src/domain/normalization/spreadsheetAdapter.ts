@@ -1,5 +1,7 @@
 import { unzipSync, type UnzipFileInfo } from "fflate";
 
+import { boundStructureTitle, type SourceStructureWarning, type WorksheetIdentity, type WorksheetStructureMetadata } from "../sourceStructure";
+import { readWorkbookSheetIdentities, readWorksheetRelationships } from "./workbookStructure";
 import { segmentText } from "./chunking";
 import { NORMALIZATION_VERSION, type NormalizedSourceContent } from "./types";
 import type { SourceType } from "../../models/librarySource";
@@ -22,7 +24,7 @@ import type { SourceType } from "../../models/librarySource";
 // uncompressed size from the ZIP central directory), so a hostile entry is rejected before a
 // single byte of it is ever inflated. Only four kinds of entry are ever accepted: the exact paths
 // `xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, `xl/sharedStrings.xml`, and worksheet parts
-// matching `xl/worksheets/sheetN.xml` — charts, drawings, embedded images/objects, VBA macros
+// directly under `xl/worksheets/` with an XML extension — charts, drawings, embedded images/objects, VBA macros
 // (`xl/vbaProject.bin`), and every other package part are rejected by the filter and never
 // touched, exactly like DOCX's media/styles/headers exclusion.
 //
@@ -44,7 +46,7 @@ const MAX_COLUMNS_PER_ROW = 200;
 const WORKBOOK_PATH = "xl/workbook.xml";
 const WORKBOOK_RELS_PATH = "xl/_rels/workbook.xml.rels";
 const SHARED_STRINGS_PATH = "xl/sharedStrings.xml";
-const WORKSHEET_RE = /^xl\/worksheets\/sheet[0-9]+\.xml$/i;
+const WORKSHEET_RE = /^xl\/worksheets\/[^/\\]+\.xml$/i;
 
 function isSafeEntryName(name: string): boolean {
   if (name.startsWith("/")) return false;
@@ -132,20 +134,6 @@ function parseWorkbookSheets(xml: string, maxSheets: number): WorkbookSheet[] {
 }
 
 // ---- xl/_rels/workbook.xml.rels: relationship id -> worksheet part path ----
-
-function parseWorkbookRelationships(xml: string): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const token of scan(xml)) {
-    if ("text" in token) continue;
-    if (localName(token.tag.name) !== "Relationship") continue;
-    const id = attrValue(token.tag.attrs, "Id");
-    const target = attrValue(token.tag.attrs, "Target");
-    if (!id || !target) continue;
-    const normalized = target.replace(/^\.?\//, "");
-    map.set(id, normalized.startsWith("worksheets/") ? `xl/${normalized}` : `xl/worksheets/${normalized.replace(/^.*\//, "")}`);
-  }
-  return map;
-}
 
 // ---- xl/sharedStrings.xml: index -> plain text (rich-text runs concatenated, same as a DOCX
 // paragraph's runs — formatting is dropped, the words are kept) ----
@@ -335,11 +323,10 @@ function resolveCellText(cellType: string, rawValue: string, sharedStrings: stri
   return value;
 }
 
-export type SpreadsheetSheet = { name: string; rows: string[][] };
+export type SpreadsheetSheet = { name: string; rows: string[][]; identity?: WorksheetIdentity };
 
 export type SpreadsheetReadOutcome =
-  | { status: "ready"; sheets: SpreadsheetSheet[] }
-  | { status: "empty" }
+  | { status: "ready" | "empty"; sheets: SpreadsheetSheet[]; structureWarnings: SourceStructureWarning[] }
   | { status: "too-large" }
   // Not a valid XLSX package (encrypted workbook, or a file renamed to .xlsx that isn't one) —
   // same framing as DOCX's own "unsupported" for an unreadable-but-not-corrupt archive.
@@ -354,6 +341,7 @@ export function readSpreadsheetArchive(archiveBytes: Uint8Array): SpreadsheetRea
   if (archiveBytes.byteLength > MAX_ARCHIVE_BYTES) return { status: "too-large" };
 
   let entries: Record<string, Uint8Array>;
+  let worksheetBytes = 0, worksheetCount = 0, exceededSheetBudget = false;
   try {
     entries = unzipSync(archiveBytes, {
       filter(file: UnzipFileInfo) {
@@ -361,7 +349,13 @@ export function readSpreadsheetArchive(archiveBytes: Uint8Array): SpreadsheetRea
         if (file.name === WORKBOOK_PATH) return file.originalSize <= MAX_WORKBOOK_XML_BYTES;
         if (file.name === WORKBOOK_RELS_PATH) return file.originalSize <= MAX_RELS_XML_BYTES;
         if (file.name === SHARED_STRINGS_PATH) return file.originalSize <= MAX_SHARED_STRINGS_BYTES;
-        if (WORKSHEET_RE.test(file.name)) return file.originalSize <= MAX_WORKSHEET_XML_BYTES;
+        if (WORKSHEET_RE.test(file.name)) {
+          worksheetBytes += file.originalSize; worksheetCount++;
+          if (file.originalSize > MAX_WORKSHEET_XML_BYTES || worksheetBytes > MAX_ARCHIVE_BYTES || worksheetCount > MAX_SHEETS) {
+            exceededSheetBudget = true; return false;
+          }
+          return true;
+        }
         return false;
       },
     });
@@ -369,6 +363,7 @@ export function readSpreadsheetArchive(archiveBytes: Uint8Array): SpreadsheetRea
     return { status: "unsupported" };
   }
 
+  if (exceededSheetBudget) return { status: "too-large" };
   const workbookXmlBytes = entries[WORKBOOK_PATH];
   if (!workbookXmlBytes) return { status: "unsupported" };
 
@@ -385,24 +380,30 @@ export function readSpreadsheetArchive(archiveBytes: Uint8Array): SpreadsheetRea
     return { status: "failed" };
   }
 
+  const structureWarnings = new Set<SourceStructureWarning>();
+  const identities = readWorkbookSheetIdentities(workbookXml);
+  if (!identities) structureWarnings.add("workbook-sheet-metadata-unavailable");
   let workbookSheets: WorkbookSheet[];
   let relationships: Map<string, string>;
   let sharedStrings: string[];
   try {
-    workbookSheets = parseWorkbookSheets(workbookXml, MAX_SHEETS);
-    relationships = parseWorkbookRelationships(relsXml);
+    workbookSheets = identities ? identities.slice(0, MAX_SHEETS).map(i => ({ name: i.sheetName, relId: i.relId })) : parseWorkbookSheets(workbookXml, MAX_SHEETS);
+    const rels = readWorksheetRelationships(relsXml);
+    relationships = rels.paths;
+    if (rels.malformed) structureWarnings.add("workbook-sheet-metadata-unavailable");
     sharedStrings = sharedStringsXml ? parseSharedStrings(sharedStringsXml, 1_000_000) : [];
   } catch {
     return { status: "failed" };
   }
-  if (workbookSheets.length === 0) return { status: "empty" };
+  if (workbookSheets.length === 0) return { status: "empty", sheets: [], structureWarnings: [...structureWarnings] };
+  if (identities && identities.length > MAX_SHEETS) structureWarnings.add("structure-truncated");
 
   const sheets: SpreadsheetSheet[] = [];
   let totalRows = 0;
   for (const sheet of workbookSheets) {
     const path = relationships.get(sheet.relId);
     const bytes = path ? entries[path] : undefined;
-    if (!bytes) continue; // relationship points at a part this filter rejected or that's absent.
+    if (!bytes) { structureWarnings.add("workbook-sheet-metadata-unavailable"); continue; }
 
     let sheetXml: string;
     try {
@@ -422,13 +423,17 @@ export function readSpreadsheetArchive(archiveBytes: Uint8Array): SpreadsheetRea
     totalRows += parsed.rows.length;
     if (totalRows > MAX_TOTAL_ROWS) return { status: "too-large" };
 
-    sheets.push({ name: sheet.name, rows: parsed.rows });
+    const identity = identities?.find(i => i.relId === sheet.relId && i.sheetName === sheet.name);
+    // Aliased worksheet parts are malformed, so avoid publishing either claimed identity.
+    const aliased = workbookSheets.filter(s => relationships.get(s.relId) === path).length > 1;
+    if (aliased) structureWarnings.add("workbook-sheet-metadata-unavailable");
+    sheets.push({ name: sheet.name, rows: parsed.rows, ...(identity && !aliased ? { identity: {
+      sheetName: identity.sheetName, sheetIndex: identity.sheetIndex, visibility: identity.visibility,
+    } } : {}) });
   }
 
   const hasAnyContent = sheets.some((s) => s.rows.some((row) => row.some((cell) => cell.trim().length > 0)));
-  if (!hasAnyContent) return { status: "empty" };
-
-  return { status: "ready", sheets };
+  return { status: hasAnyContent ? "ready" : "empty", sheets, structureWarnings: [...structureWarnings] };
 }
 
 // ---- Text representation + chunking (reuses the existing flat-text chunker) ----
@@ -436,16 +441,23 @@ export function readSpreadsheetArchive(archiveBytes: Uint8Array): SpreadsheetRea
 /**
  * Renders a workbook as one flat, honest text document — "Sheet: X" / "Columns: ..." / "Row N:
  * a | b | c" — then runs it through the SAME `segmentText` every TXT/PDF source already uses, so
- * line/char provenance is real (it cites real lines/characters of THIS generated text) without
- * adding a single new provenance field or a parallel chunking strategy. The first row of each
+ * line/char provenance is real (it cites real lines/characters of THIS generated text). Worksheet
+ * identity is attached separately by interval intersection without changing text or chunking.
+ * The first row of each
  * sheet is treated as a header row (its values become the "Columns:" line) only when the sheet
  * has more than one row — a single-row sheet has no separate header to extract.
  */
 export function buildSpreadsheetText(sheets: SpreadsheetSheet[]): string {
-  const parts: string[] = [];
+  return buildSpreadsheetTextWithMetadata(sheets).text;
+}
+function buildSpreadsheetTextWithMetadata(sheets: SpreadsheetSheet[]): { text: string; worksheets: WorksheetStructureMetadata[]; truncatedTitle: boolean } {
+  const parts: string[] = [], worksheets: WorksheetStructureMetadata[] = [];
+  let offset = 0, truncatedTitle = false;
   for (const sheet of sheets) {
     const nonEmptyRows = sheet.rows.filter((row) => row.some((cell) => cell.trim().length > 0));
-    if (nonEmptyRows.length === 0) continue;
+    const identity = sheet.identity ? { ...sheet.identity, sheetName: boundStructureTitle(sheet.identity.sheetName) } : undefined;
+    if (identity && identity.sheetName !== sheet.identity!.sheetName) truncatedTitle = true;
+    if (nonEmptyRows.length === 0) { if (identity) worksheets.push(identity); continue; }
 
     const lines: string[] = [`Sheet: ${sheet.name}`];
     const [header, ...dataRows] = nonEmptyRows;
@@ -456,9 +468,12 @@ export function buildSpreadsheetText(sheets: SpreadsheetSheet[]): string {
       // Only one real row in the whole sheet — nothing to call a "header" versus "data" distinctly.
       lines.push(`Row 1: ${header.join(" | ")}`);
     }
-    parts.push(lines.join("\n"));
+    const part = lines.join("\n");
+    if (parts.length) offset += 2;
+    if (identity) worksheets.push({ ...identity, charRange: { start: offset, end: offset + part.length } });
+    parts.push(part); offset += part.length;
   }
-  return parts.join("\n\n");
+  return { text: parts.join("\n\n"), worksheets, truncatedTitle };
 }
 
 export type SpreadsheetAdapterInput = {
@@ -484,6 +499,9 @@ export function normalizeSpreadsheetSource(input: SpreadsheetAdapterInput): Spre
     return { status: read.status };
   }
 
+  const rendered = buildSpreadsheetTextWithMetadata(read.sheets);
+  const warnings = new Set(read.structureWarnings);
+  if (rendered.truncatedTitle) warnings.add("structure-truncated");
   const base = {
     sourceId: input.sourceId,
     sourceType: input.sourceType,
@@ -491,7 +509,7 @@ export function normalizeSpreadsheetSource(input: SpreadsheetAdapterInput): Spre
     originalName: input.originalName,
     language: input.language,
     contentKind: "text" as const,
-    metadata: { byteSize: input.byteSize },
+    metadata: { byteSize: input.byteSize, worksheets: rendered.worksheets, structureWarnings: [...warnings] },
     normalizationVersion: NORMALIZATION_VERSION,
   };
 
@@ -500,13 +518,18 @@ export function normalizeSpreadsheetSource(input: SpreadsheetAdapterInput): Spre
   }
 
   // read.status === "ready"
-  const text = buildSpreadsheetText(read.sheets);
+  const text = rendered.text;
   if (text.length === 0) {
     return { status: "empty", content: { ...base, chunks: [], extraction: { status: "empty", adapter: "spreadsheet-structured-v1" } } };
   }
 
   const { chunks, truncated } = segmentText(input.sourceId, text);
   if (truncated) return { status: "too-large" };
+  for (const chunk of chunks) {
+    const range = chunk.provenance.charRange!;
+    chunk.provenance.worksheets = rendered.worksheets.filter(sheet => sheet.charRange && range.start < sheet.charRange.end && range.end > sheet.charRange.start)
+      .map(({ sheetName, sheetIndex, visibility }) => ({ sheetName, sheetIndex, visibility }));
+  }
 
   return {
     status: "ready",
