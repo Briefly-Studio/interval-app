@@ -1,6 +1,6 @@
 import { AiHttpError, generateStudyDeckRemote, getAiHttpBody, getAiHttpStatus, isAiNetworkError } from "../../cloud/ai/http";
 import type { ModelProvider, ModelProviderInput, ModelProviderOutcome } from "./aiService";
-import type { GenerationErrorCode } from "./types";
+import type { GenerationErrorCode, TokenUsage } from "./types";
 
 // The mobile-side real ModelProvider implementation. This file knows exactly one thing: "call
 // Interval's own backend generation endpoint." It never names, imports, or references Bedrock,
@@ -70,6 +70,31 @@ type BackendErrorBody = {
   error?: unknown;
 };
 
+type BackendSuccessBody = {
+  usage?: unknown;
+};
+
+/**
+ * Defensively extracts the backend's own `usage` field (see the Lambda's `index.mjs` — added for
+ * the AI evaluation harness, docs/ai-evaluation.md) only when it has exactly the expected shape —
+ * never trusted blindly, never fabricated/estimated if absent or malformed. A provider that
+ * doesn't report usage (or a response that predates this field) simply yields `undefined`.
+ */
+function extractUsage(body: BackendSuccessBody | undefined): TokenUsage | undefined {
+  const usage = body?.usage;
+  if (
+    usage &&
+    typeof usage === "object" &&
+    typeof (usage as Record<string, unknown>).inputTokens === "number" &&
+    typeof (usage as Record<string, unknown>).outputTokens === "number" &&
+    typeof (usage as Record<string, unknown>).totalTokens === "number"
+  ) {
+    const { inputTokens, outputTokens, totalTokens } = usage as Record<string, number>;
+    return { inputTokens, outputTokens, totalTokens };
+  }
+  return undefined;
+}
+
 function isKnownErrorCode(value: unknown): value is GenerationErrorCode {
   return typeof value === "string" && KNOWN_ERROR_CODES.has(value);
 }
@@ -119,7 +144,7 @@ export function createBackendProvider(deps: BackendProviderDeps): ModelProvider 
 
       try {
         const raw = await generateStudyDeckRemote(deps.getBaseUrl(), accessToken, input.request, input.context);
-        return { status: "ok", raw };
+        return { status: "ok", raw, usage: extractUsage(raw as BackendSuccessBody | undefined) };
       } catch (error) {
         if (isAiNetworkError(error)) {
           return {

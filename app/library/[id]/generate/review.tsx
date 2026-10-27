@@ -12,6 +12,7 @@ import {
 } from "../../../../src/domain/ai/generateDeckSession";
 import { saveDraftDeck, type SaveDraftErrorCode } from "../../../../src/domain/ai/generateDeckSave";
 import { deriveFewerCardsExplanation, hasTrustworthyChunkScope } from "../../../../src/domain/ai/generationCoverage";
+import { emitGenerationReviewOutcome } from "../../../../src/domain/ai/generationTelemetry";
 import { useTranslation } from "../../../../src/i18n";
 import { contentDirectionStyle } from "../../../../src/i18n/contentDirection";
 import { useLayoutDirection } from "../../../../src/i18n/direction";
@@ -110,6 +111,16 @@ export default function GenerateDeckReviewScreen() {
   };
 
   const discardAndLeave = () => {
+    if (session && !savedRef.current) {
+      emitGenerationReviewOutcome({
+        attemptId: session.attemptId,
+        generatedCount: session.generatedCardCount,
+        editedCount: session.editedCardIds.length,
+        deletedCount: session.generatedCardCount - session.cards.length,
+        savedCount: 0,
+        abandoned: true,
+      });
+    }
     clearGenerateDeckSession();
     goToSource();
   };

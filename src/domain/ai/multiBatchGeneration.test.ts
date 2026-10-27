@@ -148,7 +148,11 @@ test("cancellation before the first batch starts: zero provider calls made", () 
       isCanceled: () => true,
     });
 
-    assert.deepEqual(outcome, { status: "canceled", completedBatchCount: 0 });
+    assert.equal(outcome.status, "canceled");
+    if (outcome.status === "canceled") {
+      assert.equal(outcome.completedBatchCount, 0);
+      assert.equal(typeof outcome.totalDurationMs, "number");
+    }
     assert.equal(provider.callCount(), 0);
   })();
 });
@@ -455,7 +459,8 @@ test("cancel and provider rejection at the same boundary settles as canceled, no
   const provider:ModelProvider={id:"network",async generate(){canceled=true;throw new Error("private network error");}};
   const outcome=await runMultiBatchGeneration({provider,normalizedContent:makeContent(chunks),sourceTitle:"Source",
     options:DEFAULT_GENERATION_OPTIONS,plan:planFor(chunks,100),isCanceled:()=>canceled});
-  assert.deepEqual(outcome,{status:"canceled",completedBatchCount:0});
+  assert.equal(outcome.status,"canceled");
+  if(outcome.status==="canceled"){assert.equal(outcome.completedBatchCount,0);assert.equal(typeof outcome.totalDurationMs,"number");}
 });
 
 for (const code of ["daily-limit-reached","generation-in-progress","provider-unavailable","generation-timeout","validation-failed"] as const) {

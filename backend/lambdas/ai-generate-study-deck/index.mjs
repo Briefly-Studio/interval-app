@@ -457,6 +457,15 @@ export async function handleGenerateStudyDeck(event, deps = {}) {
         generatedAt: new Date().toISOString(),
         issues: validation.cardIssues || [],
       },
+      // Top-level siblings of `generation`, deliberately NOT nested inside it — these are
+      // provider-performance numbers (already computed above for the log lines; never fabricated
+      // or estimated), not part of the generation CONTRACT metadata that review/session state
+      // ever copies or persists. Added for the AI evaluation harness (docs/ai-evaluation.md) —
+      // `usage` is Bedrock's own real `{inputTokens, outputTokens, totalTokens}` (never present
+      // for a provider that doesn't report it), `durationMs` is this one provider call's wall-clock
+      // time. Still never returned to the client on any error path above.
+      usage: providerResult.usage ?? undefined,
+      durationMs,
     });
   } catch (e) {
     // Exception class name only — never a message, stack, or any fragment of source/model
