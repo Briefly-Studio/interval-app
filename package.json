@@ -9,7 +9,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test:sync": "node --test backend/lambdas/sync-push/*.test.mjs backend/lambdas/sync-pull/*.test.mjs",
+    "test:sync": "node --test backend/lambdas/sync-push/*.test.mjs backend/lambdas/sync-pull/*.test.mjs backend/scripts/*.test.mjs",
     "test:ai": "npm --prefix backend/lambdas/ai-generate-study-deck ci --silent --no-audit --no-fund && node --import ./scripts/ai-test-loader.mjs --test src/domain/ai/*.test.ts src/cloud/ai/*.test.ts src/domain/normalization/*.test.ts backend/lambdas/ai-generate-study-deck/*.test.mjs",
     "test:docx": "node --test src/domain/docxTableLayout.test.ts",
     "test:scheduling": "node --import ./scripts/ai-test-loader.mjs --test src/domain/scheduling/*.test.ts src/models/cardScheduling.test.ts src/models/reviewEvent.test.ts src/cloud/sync/reviewEventMerge.test.ts src/cloud/sync/validateChange.reviewEvent.test.ts",

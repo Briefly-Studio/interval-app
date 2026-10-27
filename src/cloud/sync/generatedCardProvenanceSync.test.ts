@@ -11,14 +11,18 @@ import { classifyChange, makeChangeKey } from "../../../backend/lambdas/sync-pus
 import { nextCursorForPage } from "../../../backend/lambdas/sync-pull/lib.mjs";
 import { upgradeGeneratedCardProvenance } from "../../models/generatedCardProvenance";
 import { upgradeLibrarySource } from "../../models/librarySource";
-import { cursorKey } from "../../storage/keys";
 import { generatedCardProvenanceKey } from "../../storage/generatedCardProvenanceKeys";
 
 let device="A", environment="development", envFails=false, scope:WorkspaceScope={kind:"user",sub:"user-1"};
 let storage=new Map<string,string>(), decks=new Map<string,DeckRecord[]>(), cards=new Map<string,CardRecord[]>();
-let remote=new Map<string,Change>(), log=new Map<string,Change>();
+let remote=new Map<string,Change>(), log=new Map<string,{change:Change;seq:number}>();
 let outgoing:Change[]=[];
-let clock=0, failProvenanceWrite=false;
+let clock=0, failProvenanceWrite=false, nextSeq=0;
+// Models the real backend's server-assigned ingestion-order `seq` (see
+// docs/sync-cursor-semantics.md) — NOT the change's own domain `ts`/`changeKey`. This is what
+// lets this fake backend actually exercise the fixed cursor behavior rather than the old,
+// buggy ts-ordered one.
+const seq=()=>++nextSeq;
 let duringPush:(()=>Promise<void>)|undefined;
 const clone=<T>(value:T):T=>structuredClone(value);
 const time=()=>new Date(Date.UTC(2026,0,1,0,0,++clock)).toISOString();
@@ -58,15 +62,20 @@ mock.module(moduleUrl("./http.ts"),{namedExports:{
       const current=remote.get(id);
       if(current&&(current.record.rev??0)>c.incomingRev){rejected.push({entity:change.entity,id:change.id});continue;}
       remote.set(id,clone(change));
-      const ck=makeChangeKey(c,body.deviceId); if(!log.has(ck))log.set(ck,clone(change));
+      // Server-assigned seq, never the change's own ts — the same root fix
+      // docs/sync-cursor-semantics.md describes for the real backend. A retried push of the
+      // exact same change (same changeKey) is still idempotent: the counter is only consumed
+      // on first insertion.
+      const ck=makeChangeKey(c,body.deviceId); if(!log.has(ck))log.set(ck,{change:clone(change),seq:seq()});
       accepted.push({entity:change.entity,id:change.id});
     }
     if(duringPush){const callback=duringPush;duringPush=undefined;await callback();}
     return {accepted,rejected};
   },
   pullChanges:async(_token:string,body:{cursor?:string})=>{
-    const rows=[...log].filter(([k])=>!body.cursor||k>body.cursor).sort(([a],[b])=>a<b?-1:a>b?1:0);
-    return {changes:clone(rows.map(([,c])=>c)),cursor:nextCursorForPage(rows.map(([k])=>({SK:`C#${k}`})),body.cursor).cursor};
+    const cursorSeq=body.cursor&&/^\d+$/.test(body.cursor)?Number(body.cursor):0;
+    const rows=[...log.values()].filter((r)=>r.seq>cursorSeq).sort((a,b)=>a.seq-b.seq);
+    return {changes:clone(rows.map((r)=>r.change)),cursor:nextCursorForPage(rows,body.cursor).cursor};
   },
   describeSyncFailure:()=>"test-category",getSyncDiagnosticCode:()=>"test-category",isSyncNetworkError:()=>false,
 }});
@@ -85,7 +94,7 @@ function saveCard(id="card-1"){
   cards.set(key(scope,"deck-1"),[...(cards.get(key(scope,"deck-1"))??[]),c]);
 }
 const coverage=()=>loadSourceCoverage(scope,source);
-beforeEach(()=>{device="A";environment="development";envFails=false;scope={kind:"user",sub:"user-1"};clock=0;
+beforeEach(()=>{device="A";environment="development";envFails=false;scope={kind:"user",sub:"user-1"};clock=0;nextSeq=0;
   storage=new Map();decks=new Map();cards=new Map();remote=new Map();log=new Map();outgoing=[];duringPush=undefined;failProvenanceWrite=false;});
 
 test("offline save → collect/push/markClean → B pulls; coverage and persisted restart match",async()=>{
@@ -152,7 +161,7 @@ test("Development/Staging enabled; Production, unknown config, and guest never s
   await store.recordGeneratedCardProvenance(scope,[legacy()]);
   environment="production";assert.equal(isGeneratedCardProvenanceSyncEnabled(),false);assert.equal(await SyncService.getPendingDirtyCount(scope),0);
   const remoteP=upgradeGeneratedCardProvenance(legacy("remote-card"))!;
-  log.set(remoteP.updatedAt,{entity:"generatedCardProvenance",id:remoteP.id,op:"upsert",ts:remoteP.updatedAt,record:remoteP});
+  log.set(remoteP.updatedAt,{change:{entity:"generatedCardProvenance",id:remoteP.id,op:"upsert",ts:remoteP.updatedAt,record:remoteP},seq:seq()});
   await SyncService.syncOnce();assert.equal(outgoing.length,0);assert.equal((await store.getGeneratedCardProvenance(scope)).length,1);
   environment="staging";assert.equal(isGeneratedCardProvenanceSyncEnabled(),true);assert.equal(await SyncService.getPendingDirtyCount(scope),1);
   envFails=true;assert.equal(isGeneratedCardProvenanceSyncEnabled(),false);envFails=false;
@@ -165,7 +174,7 @@ test("remote validation enforces stable identity, timestamps, bounded shape and 
   assert.equal(validateChange(change).ok,true);
   for(const patch of [{id:"wrong"},{op:"delete"},{ts:time()},{record:{...p,sourceText:"private"}},{record:{...p,cardId:"wrong"}}])assert.equal(validateChange({...change,...patch}).ok,false);
   assert.equal(validateChange({...change,op:"delete",record:{...p,deletedAt:p.updatedAt}}).ok,true);
-  log.set(p.updatedAt,{...change,record:{...p,sourceChunkIds:[]} as typeof p} as Change);
+  log.set(p.updatedAt,{change:{...change,record:{...p,sourceChunkIds:[]} as typeof p} as Change,seq:seq()});
   const warnings:unknown[][]=[];const warn=mock.method(console,"warn",(...args:unknown[])=>{warnings.push(args);});
   await SyncService.syncOnce();warn.mock.restore();
   assert.deepEqual(await store.getGeneratedCardProvenance(scope),[]);assert.ok(warnings.length);
@@ -181,18 +190,21 @@ test("saveDraftDeck remains offline/best-effort when provenance persistence fail
   assert.equal("sourceId" in decks.get(location(scope))![0],false);
 });
 
-test("KNOWN backend limit: backdated legacy provenance can miss advanced cursor; full replay recovers",async()=>{
+test("FIXED (was a known backend limit): backdated provenance is delivered to an already-advanced cursor WITHOUT full replay (docs/sync-cursor-semantics.md)",async()=>{
   saveCard();const oldLink=legacy();await SyncService.syncOnce();
   device="B";await SyncService.syncOnce();
   const deck=decks.get(location(scope))![0];
   decks.set(location(scope),[{...deck,rev:deck.rev+1,updatedAt:time(),dirty:true}]);
-  await SyncService.syncOnce(); // B's cursor has advanced beyond oldLink.generatedAt.
+  await SyncService.syncOnce(); // B's cursor has advanced — but past a SERVER-ORDERING position,
+  // never past oldLink's own (older) domain timestamp, since the fake backend above now orders
+  // by server-assigned seq, exactly like the real one.
   device="A";await store.recordGeneratedCardProvenance(scope,[oldLink]);await SyncService.syncOnce();
   assert.equal((await coverage()).coveredChunkCount,1);
-  device="B";await SyncService.syncOnce();assert.equal((await coverage()).coveredChunkCount,0);
-  // Exercise replay without changing any sync implementation or hiding the inherited gap.
-  storage.delete(storageKey(cursorKey(scope)));await SyncService.syncOnce();
-  assert.equal((await coverage()).coveredChunkCount,1);
+  // B's very next ORDINARY incremental pull receives the backdated change — no cursor reset,
+  // no Force Resync, no full replay. This is the exact scenario that used to fail before the
+  // sync-cursor-hardening fix (see this test's previous name/body in git history).
+  device="B";await SyncService.syncOnce();
+  assert.equal((await coverage()).coveredChunkCount,1,"backdated provenance must be visible after an ordinary incremental pull, not only after a full replay");
 });
 
 test("same-id card acknowledgements cannot mark rejected provenance clean",async()=>{

@@ -167,23 +167,33 @@ changes while advancing the shared cursor; later enablement requires a deliberat
 (the existing Force Resync workflow) to recover previously skipped history. No automatic cursor
 reset is added, preserving existing cursor invariants.
 
-The existing backend log is ordered by client timestamps, not server commit sequence. A late
-offline/backdated push or a same-millisecond key inserted behind another device's cursor may
-never be delivered to that device's incremental pull. This inherited limitation also affects
-cards/decks; provenance sync cannot guarantee cross-device equality in those cases. A full
-history replay can recover retained changes, while a general fix requires separately reviewed
-backend/cursor work and deployment. See docs/sync-invariants.md. Migration preserves old
-generatedAt/updatedAt rather than falsifying creation time, so an already-advanced peer may need
-that replay after legacy provenance upload. This limitation must be checked during rollout,
-not hidden behind the feature's convergence tests.
+**FIXED (sync-cursor-hardening batch) — update to the paragraph below, which described this as an
+unsolved, inherited gap:** the backend log is no longer ordered by client timestamps at all. A
+server-assigned monotonic `seq` (generated at push time, independent of any client clock) now
+drives pull ordering — see `docs/sync-cursor-semantics.md` for the full design. A late offline/
+backdated provenance push is delivered to an already-advanced cursor on the very next ordinary
+incremental pull, with no full replay required; the regression test this limitation originally
+pointed at (`src/cloud/sync/generatedCardProvenanceSync.test.ts`) now asserts exactly that fixed
+behavior rather than documenting the gap. **Not yet deployed to any environment** — see that
+doc's "Rollout" section for the required infra → backfill → Lambda deployment order before this
+is live anywhere, including Development.
+
+Original limitation, preserved for context: "The existing backend log is ordered by client
+timestamps, not server commit sequence. A late offline/backdated push or a same-millisecond key
+inserted behind another device's cursor may never be delivered to that device's incremental
+pull. This inherited limitation also affects cards/decks; provenance sync cannot guarantee
+cross-device equality in those cases. A full history replay can recover retained changes, while
+a general fix requires separately reviewed backend/cursor work and deployment." That "separately
+reviewed backend/cursor work" is exactly `docs/sync-cursor-semantics.md`.
 
 Convergence requires successful delivery of the participating records and any dirty repairs,
 matching source bytes/chunk normalization, and compatible client versions. The sync integration
-suite explicitly reproduces a missed backdated legacy upload and verifies full replay recovery;
-its normal convergence tests do not conceal that inherited delivery gap. A repair may require
-another explicit/opportunistic sync. Source Coverage still uses its existing source-file
-resolution path (local file works offline; a missing local original may need cloud retrieval).
-Device tests, source parsing quality and live backend parity are not established by Node tests.
+suite's regression test for this (see above) now proves ordinary incremental convergence rather
+than documenting a gap that needed full replay to paper over. A repair may still require another
+explicit/opportunistic sync for unrelated reasons (e.g. a still-offline device). Source Coverage
+still uses its existing source-file resolution path (local file works offline; a missing local
+original may need cloud retrieval). Device tests, source parsing quality and live backend parity
+are not established by Node tests.
 
 ## Validation
 

@@ -14,6 +14,13 @@ export interface IntervalResourceNames {
   syncPull: string;
   records: string;
   changes: string;
+  // Authoritative, strongly-consistent-queryable ordered change stream (sync-cursor-hardening
+  // rework, docs/sync-cursor-semantics.md) — a dedicated base table (PK=U#<sub>, SK=seq Number),
+  // never a GSI on `changes`: DynamoDB GSIs can never serve a `ConsistentRead: true` query, so
+  // ordering the pull stream through one left a real eventual-consistency gap (a higher-seq row's
+  // index projection could become visible before a lower-seq row's, letting a cursor skip past a
+  // position that may still be invisible). A dedicated table's own primary key has no such gap.
+  changeStream: string;
   userPool: string;
   mobileClient: string;
   syncLambdaRole: string;
@@ -51,6 +58,7 @@ export function resourceNamesFor(environmentName: IntervalEnvironmentName): Inte
     syncPull: `${prefix}-sync-pull`,
     records: `${prefix}-records`,
     changes: `${prefix}-changes`,
+    changeStream: `${prefix}-change-stream`,
     userPool: `${prefix}-user-pool`,
     mobileClient: `${prefix}-mobile`,
     syncLambdaRole: `${prefix}-sync-lambda-role`,

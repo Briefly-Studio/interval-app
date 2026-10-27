@@ -19,10 +19,17 @@ const app = new cdk.App();
 // keeping this synthesizable without any local AWS credentials.
 const region = "us-east-2";
 
+// Sync-cursor-hardening rollout flags (docs/sync-cursor-semantics.md's "Rollout" section) — read
+// per-environment context keys (persisted, safe-by-default in cdk.json; overridable per-deploy
+// via `-c developmentSyncCursorMode=v2` etc.) so Development and Staging can be transitioned
+// independently. IntervalSyncStack itself re-validates and fail-closes these regardless of what
+// is passed here — this read is not the only safety net.
 new IntervalSyncStack(app, "IntervalDevelopmentStack", {
   env: { region },
   environmentName: "development",
   description: "Interval Development environment: sync API, Lambdas, DynamoDB, Cognito. See docs/cdk-infrastructure.md.",
+  syncCursorMode: app.node.tryGetContext("developmentSyncCursorMode"),
+  syncPushMaintenance: app.node.tryGetContext("developmentSyncPushMaintenance"),
 });
 
 // IntervalDevelopmentStack is deployed and founder-QA verified end-to-end (auth, sync, deck/card
@@ -36,6 +43,8 @@ new IntervalSyncStack(app, "IntervalStagingStack", {
   env: { region },
   environmentName: "staging",
   description: "Interval Staging/Beta environment: sync API, Lambdas, DynamoDB, Cognito. See docs/cdk-infrastructure.md.",
+  syncCursorMode: app.node.tryGetContext("stagingSyncCursorMode"),
+  syncPushMaintenance: app.node.tryGetContext("stagingSyncPushMaintenance"),
 });
 
 // Production is deliberately NOT instantiated here — see infra/lib/environment-config.ts's
