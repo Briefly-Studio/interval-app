@@ -42,4 +42,9 @@ app-example
 
 # generated native folders
 /ios
-/android 
+/android
+
+# AI generation evaluation harness run output (docs/ai-evaluation.md) — schema/fixtures/harness
+# code is committed; actual run results (mock or real-provider) are local-only artifacts, never
+# committed by default.
+/eval-output/

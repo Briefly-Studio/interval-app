@@ -6,7 +6,7 @@ import { resolveRequestedCardCount, resolveTargetMinimumCardCount } from "./gene
 import { dedupeCombinedCards } from "./multiBatchDedupe";
 import { computeCardDraftId, deriveGenerationStatus } from "./responseValidation";
 import { GENERATION_CONTRACT_VERSION } from "./types";
-import type { GeneratedCardDraft, GeneratedDeckDraft, GenerationError, GenerationOptions } from "./types";
+import type { GeneratedCardDraft, GeneratedDeckDraft, GenerationError, GenerationOptions, TokenUsage } from "./types";
 
 // Sequential multi-batch orchestration — runs one bounded generateStudyDeck call per planned
 // batch (never in parallel; see docs/whole-source-generation.md's "Sequential execution"
@@ -26,11 +26,16 @@ export type MultiBatchProgress =
   | { phase: "preparingReview" };
 
 export type MultiBatchOutcome =
-  | { status: "ready"; draft: GeneratedDeckDraft }
+  // `usage`/`totalDurationMs` are evaluation/telemetry-only (see types.ts's TokenUsage doc
+  // comment) — `usage` is the SUM of every batch's own reported usage, present only when EVERY
+  // batch reported one (never a partial/misleading total); `totalDurationMs` is always present
+  // (Date.now() wall-clock across the whole sequential run, same timing convention this file's
+  // own logAggregateOutcome already used internally — now also returned to the caller).
+  | { status: "ready"; draft: GeneratedDeckDraft; usage?: TokenUsage; totalDurationMs: number }
   // The underlying error from whichever batch failed first — reuses the EXISTING
   // GenerationErrorCode taxonomy/copy untouched; the user is never shown "batch" terminology.
-  | { status: "error"; error: GenerationError; failedAtBatchIndex: number; completedBatchCount: number }
-  | { status: "canceled"; completedBatchCount: number };
+  | { status: "error"; error: GenerationError; failedAtBatchIndex: number; completedBatchCount: number; totalDurationMs: number }
+  | { status: "canceled"; completedBatchCount: number; totalDurationMs: number };
 
 export type RunMultiBatchGenerationParams = {
   provider: ModelProvider;
@@ -66,9 +71,12 @@ function logAggregateOutcome(detail: Record<string, unknown>): void {
 export async function runMultiBatchGeneration(params: RunMultiBatchGenerationParams): Promise<MultiBatchOutcome> {
   const { provider, normalizedContent, sourceTitle, language, options, plan } = params;
   const startedAt = Date.now();
-  const canceled = (completedBatchCount: number): MultiBatchOutcome => ({ status: "canceled", completedBatchCount });
+  const canceled = (completedBatchCount: number): MultiBatchOutcome => ({
+    status: "canceled", completedBatchCount, totalDurationMs: Date.now() - startedAt,
+  });
   const failure = (code: GenerationError["code"], index: number): MultiBatchOutcome => ({
     status: "error", error: { code, message: "Generation did not complete." }, failedAtBatchIndex: index, completedBatchCount: index,
+    totalDurationMs: Date.now() - startedAt,
   });
   if (params.isCanceled?.()) return canceled(0);
   params.onProgress?.({ phase: "preparing" });
@@ -87,6 +95,10 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
   let combinedTitle: string | null = null;
   let providerId = provider.id;
   const consideredChunkIds = new Set<string>();
+  // Aggregate token usage across batches — present on the final outcome only if EVERY batch
+  // reported one (never a partial/misleading sum; see MultiBatchOutcome's own doc comment).
+  let usageSum = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  let usageComplete = true;
 
   for (let i = 0; i < plan.batches.length; i++) {
     if (params.isCanceled?.()) {
@@ -97,7 +109,7 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
         outcome: "canceled",
         totalDurationMs: Date.now() - startedAt,
       });
-      return { status: "canceled", completedBatchCount: i };
+      return { status: "canceled", completedBatchCount: i, totalDurationMs: Date.now() - startedAt };
     }
 
     const batch = plan.batches[i];
@@ -131,7 +143,17 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
         errorCode: outcome.error.code,
         totalDurationMs: Date.now() - startedAt,
       });
-      return { status: "error", error: outcome.error, failedAtBatchIndex: i, completedBatchCount: i };
+      return { status: "error", error: outcome.error, failedAtBatchIndex: i, completedBatchCount: i, totalDurationMs: Date.now() - startedAt };
+    }
+
+    if (outcome.usage) {
+      usageSum = {
+        inputTokens: usageSum.inputTokens + outcome.usage.inputTokens,
+        outputTokens: usageSum.outputTokens + outcome.usage.outputTokens,
+        totalTokens: usageSum.totalTokens + outcome.usage.totalTokens,
+      };
+    } else {
+      usageComplete = false;
     }
 
     if (combinedTitle === null) combinedTitle = outcome.draft.title;
@@ -198,6 +220,7 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
   params.onProgress?.({ phase: "preparingReview" });
   if (params.isCanceled?.()) return canceled(plan.batches.length);
 
+  const totalDurationMs = Date.now() - startedAt;
   logAggregateOutcome({
     multiBatch: true,
     plannedBatchCount: plan.batches.length,
@@ -207,8 +230,8 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
     finalCardCount: resultingCardCount,
     duplicateCardsRemoved: duplicatesRemoved,
     outcome: "ready",
-    totalDurationMs: Date.now() - startedAt,
+    totalDurationMs,
   });
 
-  return { status: "ready", draft };
+  return { status: "ready", draft, usage: usageComplete ? usageSum : undefined, totalDurationMs };
 }

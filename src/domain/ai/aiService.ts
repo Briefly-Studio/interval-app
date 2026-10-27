@@ -11,6 +11,7 @@ import type {
   GenerationError,
   GenerationErrorCode,
   GenerationOptions,
+  TokenUsage,
 } from "./types";
 
 /**
@@ -51,7 +52,10 @@ export type ModelProviderInput = {
 };
 
 export type ModelProviderOutcome =
-  | { status: "ok"; raw: unknown }
+  // `usage` is evaluation/telemetry-only (see types.ts's own TokenUsage doc comment) — optional,
+  // never fabricated by a provider that doesn't actually report it (the mock provider never sets
+  // it; see mockProvider.ts).
+  | { status: "ok"; raw: unknown; usage?: TokenUsage }
   | { status: "error"; error: { code: GenerationErrorCode; message: string } };
 
 /**
@@ -154,7 +158,13 @@ export async function generateStudyDeck(
 
   const request = buildRequest(normalizedContent, input, context.chunks.map((chunk) => chunk.id));
 
+  // Wall-clock duration of the one provider round trip — Date.now(), matching the existing
+  // convention this repository already uses for the same purpose (multiBatchGeneration.ts's own
+  // totalDurationMs, the backend Lambda's own durationMs) rather than introducing a different
+  // timing API just for this. Evaluation/telemetry-only — never part of the generation contract.
+  const startedAt = Date.now();
   const providerOutcome = await provider.generate({ request, context });
+  const durationMs = Date.now() - startedAt;
   if (providerOutcome.status === "error") {
     return errorOutcome(providerOutcome.error.code, providerOutcome.error.message);
   }
@@ -172,5 +182,5 @@ export async function generateStudyDeck(
     };
   }
 
-  return { status: "ready", draft: validation.draft };
+  return { status: "ready", draft: validation.draft, usage: providerOutcome.usage, durationMs };
 }

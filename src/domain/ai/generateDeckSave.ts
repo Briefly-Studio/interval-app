@@ -7,6 +7,7 @@ import { recordGeneratedCardProvenance } from "../../storage/generatedCardProven
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import { validateDraftCardBack, validateDraftCardFront } from "./draftCardEditing";
 import type { GenerateDeckSession } from "./generateDeckSession";
+import { emitGenerationReviewOutcome } from "./generationTelemetry";
 import type { DifficultyOption } from "./types";
 
 // Turns an accepted draft session into a real Interval deck + cards using the existing storage
@@ -173,6 +174,14 @@ export async function saveDraftDeck(scope: WorkspaceScope, session: GenerateDeck
       // persisted; losing provenance here only means Source Coverage won't see these cards.
     }
 
+    emitGenerationReviewOutcome({
+      attemptId: session.attemptId,
+      generatedCount: session.generatedCardCount,
+      editedCount: session.editedCardIds.length,
+      deletedCount: session.generatedCardCount - session.cards.length,
+      savedCount: cards.length,
+      abandoned: false,
+    });
     return { status: "saved", deckId, cardCount: cards.length };
   } finally {
     saveInFlight = false;

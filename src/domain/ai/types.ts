@@ -215,4 +215,14 @@ export type GenerationError = {
   cardIssues?: CardValidationIssue[];
 };
 
-export type GenerateStudyDeckOutcome = { status: "ready"; draft: GeneratedDeckDraft } | { status: "error"; error: GenerationError };
+// ---- Provider performance (evaluation/telemetry-only — never part of the persisted generation
+// contract above, never copied onto GenerateDeckSession or any saved record) ----
+
+/** A real provider's own reported token counts — e.g. Bedrock's Converse API `usage` field.
+ * Never fabricated or estimated when a provider doesn't report it (see backendProvider.ts and
+ * docs/ai-evaluation.md's "Token usage" section) — absent, not guessed, in that case. */
+export type TokenUsage = { inputTokens: number; outputTokens: number; totalTokens: number };
+
+export type GenerateStudyDeckOutcome =
+  | { status: "ready"; draft: GeneratedDeckDraft; usage?: TokenUsage; durationMs?: number }
+  | { status: "error"; error: GenerationError };

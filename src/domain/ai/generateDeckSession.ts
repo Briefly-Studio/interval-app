@@ -32,6 +32,10 @@ export type DraftCard = {
 export type DraftProvenanceEntry = Pick<ChunkProvenance, "lineRange" | "page" | "heading">;
 
 export type GenerateDeckSession = {
+  /** Correlates this review session back to the generation attempt that produced it — see
+   * generationAttemptId.ts/generationTelemetry.ts. Opaque, random; not persisted beyond this
+   * in-memory session (never written to the saved DeckRecord/CardRecord/GeneratedCardProvenance). */
+  attemptId: string;
   sourceId: string;
   /** The workspace/account scope the source was read from AND the draft was generated in,
    * captured once at generation time. Save uses THIS scope — never a scope re-resolved at save
@@ -70,9 +74,17 @@ export type GenerateDeckSession = {
   /** Set once the user changes the title or any card, or deletes a card — drives the
    * discard-confirmation prompt so an untouched draft can be abandoned without a nag. */
   edited: boolean;
+  /** Ids of distinct cards edited at least once (deduped, append-only — a card edited twice
+   * still counts once). Review-outcome telemetry derives `editedCount` from this array's length
+   * rather than this session storing a separately-maintained count — same "derive, don't
+   * duplicate" precedent as `generatedCardCount` vs. `cards.length` below. Deleting an
+   * already-edited card does not remove it from this list — "was edited" and "was deleted" are
+   * independent facts about a card, not mutually exclusive ones. */
+  editedCardIds: string[];
 };
 
 type StartSessionInput = {
+  attemptId: string;
   sourceId: string;
   sourceScope: WorkspaceScope;
   sourceTitle: string;
@@ -100,6 +112,7 @@ function getSnapshot(): GenerateDeckSession | null {
 
 export function startGenerateDeckSession(input: StartSessionInput): void {
   session = {
+    attemptId: input.attemptId,
     sourceId: input.sourceId,
     sourceScope: input.sourceScope,
     sourceTitle: input.sourceTitle,
@@ -119,6 +132,7 @@ export function startGenerateDeckSession(input: StartSessionInput): void {
     targetMinimumCardCount: input.draft.generation.targetMinimumCardCount,
     generationStatus: input.draft.generation.generationStatus,
     edited: false,
+    editedCardIds: [],
   };
   emit();
 }
@@ -150,7 +164,8 @@ export function updateDraftCard(id: string, fields: { front: string; back: strin
     return { ...card, front: fields.front, back: fields.back };
   });
   if (!changed) return;
-  session = { ...session, cards, edited: true };
+  const editedCardIds = session.editedCardIds.includes(id) ? session.editedCardIds : [...session.editedCardIds, id];
+  session = { ...session, cards, edited: true, editedCardIds };
   emit();
 }
 

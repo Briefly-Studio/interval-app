@@ -182,7 +182,7 @@ test("remote validation enforces stable identity, timestamps, bounded shape and 
 
 test("saveDraftDeck remains offline/best-effort when provenance persistence fails",async()=>{
   const {saveDraftDeck}=await import("../../domain/ai/generateDeckSave");
-  const session={sourceId:source.id,sourceScope:scope,deckTitle:"Generated",cards:[{id:"draft",front:"Question",back:"Answer",sourceChunkIds:["chunk_a"]}],options:{cardCount:"small",difficulty:"balanced",cardStyle:"question-answer"}} as GenerateDeckSession;
+  const session={attemptId:"test-attempt",sourceId:source.id,sourceScope:scope,deckTitle:"Generated",cards:[{id:"draft",front:"Question",back:"Answer",sourceChunkIds:["chunk_a"]}],options:{cardCount:"small",difficulty:"balanced",cardStyle:"question-answer"},generatedCardCount:1,editedCardIds:[]} as unknown as GenerateDeckSession;
   failProvenanceWrite=true;const result=await saveDraftDeck(scope,session);
   assert.equal(result.status,"saved");assert.equal(decks.get(location(scope))?.length,1);
   assert.equal(outgoing.length,0);assert.equal([...cards.values()][0].length,1);

@@ -423,6 +423,39 @@ For anything not covered directly in this file, these are the authoritative docu
     cutover — same integration file). No change to Source Coverage math, the AI generation
     pipeline, or any entity's own conflict rules. No Production deployment or enablement of any
     kind — `SYNC_CURSOR_MODE`/`SYNC_PUSH_MAINTENANCE` have no meaning there at all.
+36. `docs/ai-evaluation.md` — Interval's first AI generation evaluation harness + privacy-safe
+    quality telemetry foundation (`src/domain/ai/evaluation/`,
+    `src/domain/ai/generationAttemptId.ts`/`generationTelemetry.ts`). **Implemented, merged into
+    `v3.3-dev`; not yet founder-QA verified** (the mock-mode CLI run and every automated test are
+    verified; no real-provider Development run has been performed). Two deliberately separate
+    layers — a controlled, reproducible OFFLINE evaluation harness (ten small, entirely
+    internally-authored, non-copyrighted fixtures across TXT/PDF/DOCX/XLSX; a Cartesian-product
+    matrix builder that defaults to a small smoke selection, never the full grid, without an
+    explicit `--all`; objective-only scoring — count-check status, chunk-provenance grounding,
+    simple substring-based expected/forbidden-concept matching, exact-duplicate detection,
+    latency, and, now end-to-end for the first time, real provider token usage; a
+    `npm run eval:ai` CLI) — and RUNTIME quality telemetry from real sessions
+    (`GenerationReviewOutcome`: generated/edited/deleted/saved counts + abandoned, emitted via a
+    dev-only `console.log`, same `typeof __DEV__` guard convention `multiBatchGeneration.ts`'s
+    own `logAggregateOutcome` already established — no telemetry backend exists or was built).
+    Introduces `generateAttemptId()` (a random, opaque, non-cryptographic correlation id — nothing
+    in this pipeline had one before) and `GenerateDeckSession.editedCardIds` (new instrumentation;
+    `deletedCount` needed no new field, already derivable as `generatedCardCount - cards.length`).
+    **Additive provider-performance plumbing** (`types.ts`'s new `TokenUsage`,
+    `ModelProviderOutcome`/`GenerateStudyDeckOutcome`/`MultiBatchOutcome`'s new optional
+    `usage`/`durationMs` fields, the backend Lambda's response now also returning its
+    already-computed `usage`/`durationMs`): real Bedrock token usage was being computed and
+    logged to CloudWatch but never reached the mobile client at all before this batch — now
+    surfaced end-to-end, still never fabricated/estimated when a provider doesn't report it,
+    still never part of the persisted `GenerationMetadata` contract (unchanged) or any saved
+    record. Real-provider evaluation runs require explicit `--real` plus `--base-url`/
+    `--access-token` (never a default/Production endpoint), print the exact planned backend-
+    request count before any request, and refuse to proceed without a separate `--yes` —
+    never bypasses the backend's own rate limiting. **Never implements** a numeric automated
+    quality/difficulty score, semantic/fuzzy concept matching, hallucination detection beyond one
+    deterministic forbidden-keyword check, a telemetry backend, or any CI pipeline wiring. No
+    model/provider/prompt change, no Production/Staging AI enablement change, no sync-cursor or
+    Source Coverage change.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -1016,6 +1049,25 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   source until deployed. No AWS mutation of any kind was performed by this batch; `npx cdk
   synth` was run (clean, with and without `-c` overrides) for both
   Development and Staging, never `cdk deploy`.
+- **The AI generation evaluation harness (item 36 above) is implemented and verified in MOCK
+  mode only — no real-provider Development run has been performed.** Several fixtures
+  (`txt-factual-rich`, `txt-spanish-baseline`, `xlsx-spreadsheet-facts`) are deliberately written
+  so their key `expectedConcepts` cluster within the mock provider's own 160-character card-back
+  snippet window — an honest adaptation to the mock's "one card per chunk" behavior (a crude
+  proxy for real generation), not a gamed fixture; this constraint does not apply to a real-
+  provider run. There is no automated difficulty-differentiation score and no semantic/fuzzy
+  concept matching or general hallucination detection — both are explicitly deferred to the
+  human-review rubric (`docs/ai-evaluation.md`'s own section). No CI pipeline wiring was added
+  for `npm run test:eval`/`npm run eval:ai` — running either in CI on every push is a separate,
+  not-yet-made decision.
+- **Bedrock token usage (`usage`/`durationMs`) now reaches the mobile client for the first time**
+  (`backend/lambdas/ai-generate-study-deck/index.mjs`'s response, `src/domain/ai/types.ts`'s new
+  `TokenUsage`, and `ModelProviderOutcome`/`GenerateStudyDeckOutcome`/`MultiBatchOutcome`'s new
+  optional fields) — added for the evaluation harness above, previously computed and logged to
+  CloudWatch only. Still never fabricated/estimated when absent; still never part of the
+  persisted `GenerationMetadata` contract or any saved record. Not yet exercised against a real
+  Development response outside this batch's own unit tests (which inject fake HTTP bodies, never
+  a real Bedrock call).
 
 ## Accessibility Guardrails
 

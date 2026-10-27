@@ -4,6 +4,7 @@ import type { WorkspaceScope } from "../../storage/workspaceScope";
 import type { NormalizationResult, NormalizedChunk } from "../normalization/types";
 import { normalizeSource } from "../normalization/normalizeSource";
 import { generateStudyDeck } from "./aiService";
+import { generateAttemptId } from "./generationAttemptId";
 import { planGenerationBatches, type BatchPlanErrorCode } from "./batchPlanning";
 import { summarizeGenerationPlan, type GenerationPlanSummary } from "./generationPresentation";
 import { prepareGenerationContext } from "./contextPreparation";
@@ -110,6 +111,7 @@ function buildProvenanceMap(chunks: { id: string; provenance: DraftProvenanceEnt
  * — the one place `startGenerateDeckSession` is called, so the two paths can never drift apart
  * in how they populate the review session. */
 function finalizeReadyOutcome(
+  attemptId: string,
   source: LibrarySourceRecord,
   sourceScope: WorkspaceScope,
   draft: GeneratedDeckDraft,
@@ -117,6 +119,7 @@ function finalizeReadyOutcome(
   options: GenerationOptions
 ): GenerateDeckFlowOutcome {
   startGenerateDeckSession({
+    attemptId,
     sourceId: source.id,
     sourceScope,
     sourceTitle: source.displayTitle,
@@ -146,6 +149,10 @@ export async function runGenerateDeckFlow(
   callbacks?: GenerateDeckFlowCallbacks
 ): Promise<GenerateDeckFlowOutcome> {
   clearGenerateDeckSession();
+  // One attempt id per flow invocation — covers whole-source multi-batch too (several backend
+  // requests, but ONE user-facing generation attempt and ONE review session). See
+  // generationAttemptId.ts/generationTelemetry.ts.
+  const attemptId = generateAttemptId();
   if (callbacks?.isCanceled?.()) return { status: "canceled" };
   const normalization = await normalizeSource(source);
   if (callbacks?.isCanceled?.()) return { status: "canceled" };
@@ -198,7 +205,7 @@ export async function runGenerateDeckFlow(
       if (callbacks?.isCanceled?.()) return { status: "canceled" };
       if (multiOutcome.status === "error") return { status: "error", code: multiOutcome.error.code,
         multiBatch: { completed: multiOutcome.completedBatchCount, total: plan.batches.length } };
-      return finalizeReadyOutcome(source, sourceScope, multiOutcome.draft, normalization, options);
+      return finalizeReadyOutcome(attemptId, source, sourceScope, multiOutcome.draft, normalization, options);
     }
     // Exactly one batch — identical cost/behavior to the single-call path below, just reusing
     // the already-computed, already-validated batch chunk list instead of the raw resolved set.
@@ -222,7 +229,7 @@ export async function runGenerateDeckFlow(
     return { status: "error", code: outcome.error.code };
   }
 
-  return finalizeReadyOutcome(source, sourceScope, outcome.draft, normalization, options);
+  return finalizeReadyOutcome(attemptId, source, sourceScope, outcome.draft, normalization, options);
 }
 
 // GenerationErrorCode → i18n key for a friendly, non-technical message. Internal codes are never
