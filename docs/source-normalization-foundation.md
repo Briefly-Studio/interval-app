@@ -77,7 +77,8 @@ back:
 | Format (this batch)     | Provenance populated                          |
 | ------------------------ | ---------------------------------------------- |
 | Plain text                | `charRange` (offsets into the adapter's normalized text) + `lineRange` (1-based, inclusive) |
-| Structured blocks (future DOCX) | `blockIndex` + `heading` (see docxAdapter.ts) |
+| DOCX structured blocks | `blockIndex` + `heading`; actual heading chunks also retain `headingLevel` |
+| XLSX | `charRange` + `lineRange`, plus `worksheets[]` identities intersected by the unchanged chunk |
 | PDF with extractable text | `page` (real, 1-based, from actual per-page extraction) + `charRange` — a true, document-wide offset (see "PDF text extraction" below); `lineRange` is deliberately never populated for PDF |
 | PDF with no extractable text, or DOCX | none — extraction itself is `empty`/`pending-extraction`, so no chunk exists to attach anything to |
 | Image / audio              | none — no text chunks exist for these content kinds in this batch |
@@ -211,22 +212,39 @@ version is available via npm); `exceljs` is Node-oriented (`tmp`, `archiver`, `u
 Instead, `spreadsheetAdapter.ts` reuses `fflate` (already a dependency, already audited for this
 exact purpose — see DOCX) with the same zip-bomb/untrusted-input defense: an allow-list of exactly
 four entry kinds (`xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, `xl/sharedStrings.xml`,
-`xl/worksheets/sheetN.xml`), each with its own pre-inflation size ceiling — no chart, drawing,
+`xl/worksheets/*.xml` directly under that directory), each with its own pre-inflation size ceiling — no chart, drawing,
 embedded object, or macro part is ever accepted.
 
 Each sheet's rows render as one flat, honest text block — `Sheet: <name>` / `Columns: <header
 row>` / `Row N: <cells joined with " | ">` — then the WHOLE workbook's text runs through the
 existing `segmentText()` chunker (the same one TXT/PDF already use), so line/char provenance is
-real (it cites real lines/characters of this generated text) without adding a single new
-provenance field or a parallel chunking strategy — exactly the path the mission's own provenance
-guidance recommends when "existing provenance types do not support spreadsheet coordinates."
+real (it cites real lines/characters of this generated text). Worksheet identity is added by
+interval intersection over these unchanged chunks, without a parallel chunking strategy.
 `contentKind: "text"` (not a new kind) follows from reusing the flat-text chunker as-is. A cell
 absent from the XML (Excel omits blank cells entirely) becomes an honest empty slot at its real
 column position, never silently dropped and never fabricated. A formula cell's cached,
 already-computed result is used (the same value Excel itself displays) — the formula source text
-itself is never read or evaluated. **Known limitation:** sheet/row identity lives only in the
-chunk's own text (e.g. "Row 12: ..."), not in a structured `ChunkProvenance` field — deliberate,
-per the mission's explicit instruction not to redesign the provenance system for this.
+itself is never read or evaluated.
+
+**Structure update:** actual worksheet names, 1-based tab indices and visibility now survive
+in `metadata.worksheets` and intersecting `ChunkProvenance.worksheets[]`. Empty sheets remain
+available as empty structure nodes. A chunk can span worksheets, so this is coarse membership,
+not proof of exclusive sheet text. Row labels remain rendered nonempty-row ordinals, not real
+Excel row coordinates. Bounded relationship validation rejects external/traversal/ambiguous
+paths; optional malformed identity metadata yields warnings without failing safely extracted
+text. See `docs/source-structure.md` for limits, warnings and compatibility.
+
+## Derived Source Structure
+
+`extractSourceStructure(content)` consumes the existing normalized result, with no second file
+parse, persistence or sync. DOCX preserves real Heading1–Heading3 levels and derives heading
+intervals/hierarchy; XLSX exposes actual worksheets. PDF currently has no outline bridge, and
+TXT has no semantic evidence: both return no semantic nodes. No heuristic chapter detection.
+
+Normalization version stays 1: additive provenance does not enter `computeChunkId`; unchanged
+supported valid files retain their existing text, order and IDs. Source Coverage and generated
+card provenance continue using the same chunk references. See `docs/source-structure.md` for
+node identity, stale snapshots, worksheet overlap and future generation-scope integration.
 
 ## Image normalization
 

@@ -431,6 +431,16 @@ except where legacy `.briefly` compatibility is being explicitly explained (see 
 identifiers" above).
 
 
+## Source Structure foundation
+
+`docs/source-structure.md` is the authority for derived semantic structure. Use
+`extractSourceStructure` on an already-normalized result; never guess chapters. DOCX retains
+real Heading1–Heading3 levels; XLSX preserves actual worksheet identities/visibility/empty
+sheets. PDF has no outline bridge and TXT has no semantic nodes. Existing chunk IDs/version 1
+remain stable for unchanged supported valid input. XLSX chunks may span sheets: inspect warnings
+before promising exclusive worksheet scope. No new scope picker, structure persistence/sync or
+Source Coverage math change. Run `npm run test:structure`; native Founder QA remains pending.
+
 ## Core Product Rule
 
 The app must remain useful without an account.
