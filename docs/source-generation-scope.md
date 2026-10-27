@@ -134,36 +134,22 @@ a source has more than one section (a single-section source has nothing to range
 Validation mirrors page range exactly: `startSection <= endSection`, both within
 `[1, totalSectionCount]`, with the same `invalid-range`/`empty-selection` error codes.
 
-## Chapter / heading detection — investigated, not shipped
+## Semantic structure foundation; selection UI deferred
 
-**DOCX's normalization adapter already attaches a real, non-heuristic `heading` field to each
-chunk's provenance** (`ChunkProvenance.heading`, tracked top-to-bottom during the parser's own
-document-order walk — see `docs/source-normalization-foundation.md`). This was found during this
-batch's preflight and is a genuine, structural signal, not a guess. It was deliberately **not**
-turned into a "Chapter" scope option in this batch:
+`docs/source-structure.md` documents the new derived structure API. DOCX normalization now
+preserves real Heading1–Heading3 levels; heading nodes represent deterministic parent/child
+chunk intervals, including repeated titles. XLSX now retains actual worksheet names, tab order,
+visibility and empty sheets as structured metadata rather than requiring text parsing.
 
-- Not every DOCX has headings at all, and partial heading coverage would produce an inconsistent,
-  confusing picker (some documents offering clean chapters, most offering none).
-- Designing a good "pick a chapter" UX (list of heading labels, handling duplicate/empty headings,
-  deciding what a chunk with no preceding heading belongs to) is real, separate product design
-  work, not a natural extension of the range-picker UI this batch already built.
-- XLSX has no equivalent structural signal at all (see below) — a chapter-like feature that only
-  ever works for one of four formats would be an inconsistent, surprising feature boundary.
+`extractSourceStructure(normalizedContent)` and `resolveStructureNodeChunks(content, structure,
+nodeId)` provide the seam for a future semantic scope picker. The resolver rejects stale/empty
+nodes and discloses known worksheet chunk overlap. Existing XLSX chunks can span sheets: a
+future picker must handle warnings/coarse boundaries before claiming exclusive worksheet scope.
 
-No other format's adapter was changed to add structural detection, and nothing here uses a
-heuristic (bold text, first line, font size, etc.) to guess at structure — exactly per this
-mission's explicit instruction. A future batch could build a real "Chapter" scope on top of DOCX's
-existing `heading` field; it would need its own founder-approved UX design first.
-
-## XLSX worksheet selection — investigated, not shipped
-
-Worksheet identity is **not** a structured `ChunkProvenance` field — per
-`docs/source-normalization-foundation.md`'s own documented, deliberate limitation, sheet/row
-identity lives only in the chunk's own rendered text (`Sheet: X` / `Row N:` lines), not in a
-structured field. Recovering sheet affiliation would require either parsing chunk text (fragile,
-format-coupled) or a small `spreadsheetAdapter.ts` change to add a `sheetName` field to
-`ChunkProvenance` — out of scope for this batch (no adapter provenance-shape changes were made).
-XLSX sources get the generic ordinal section range instead, same as TXT.
+No `structureNode` scope variant or new picker was added. Automatic, Entire source, Uncovered,
+PDF page ranges and generic section ranges remain unchanged. TXT has no semantic structure;
+the installed PDF extractor exposes no outline API, so PDF retains only its real page selection.
+No headings/chapters are inferred from typography, capitalization or text patterns.
 
 ## Interaction with bounded context
 
@@ -238,10 +224,10 @@ before any provider is ever called, so it is never confused with a provider/vali
   across several linked requests. Explicitly not implemented~~ **now implemented** — see
   `docs/whole-source-generation.md` for the full design (batch planning, card allocation,
   sequential orchestration, cross-batch dedupe, failure/cancellation policy, quota implications).
-- **Chapter/heading-based selection** — DOCX's real `heading` provenance field is a solid
-  foundation (see above), but needs its own UX design, not an incidental extension of this batch's
-  range picker.
-- **XLSX worksheet selection** — needs a small `ChunkProvenance.sheetName` adapter change first.
+- **Chapter/heading-based selection** — the derived heading-node foundation now exists (see
+  `docs/source-structure.md`), with scope/UI integration still deferred.
+- **XLSX worksheet selection** — actual worksheet metadata/node APIs now exist; shared boundary
+  chunks need explicit handling before a picker can promise exclusive selection.
 - Any future selection UI (chapter picker, worksheet picker, etc.) plugs into the exact same seam
   this batch introduced — `SourceGenerationScope` gains a new variant,
   `resolveSourceGenerationScope` gains a new case, and `generateStudyDeck`'s existing
