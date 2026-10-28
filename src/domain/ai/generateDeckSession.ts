@@ -3,6 +3,8 @@ import { useSyncExternalStore } from "react";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
 import type { ChunkProvenance } from "../normalization/types";
 import type { GenerationCoverage } from "./generationCoverage";
+import type { SourceGenerationScopeKind } from "./sourceGenerationScope";
+import type { SourceStructureNode } from "../sourceStructure";
 import type { GeneratedDeckDraft, GenerationOptions, GenerationStatus } from "./types";
 
 // In-memory, single-slot holder for the ONE Generate Study Deck draft the user is currently
@@ -81,6 +83,13 @@ export type GenerateDeckSession = {
    * already-edited card does not remove it from this list — "was edited" and "was deleted" are
    * independent facts about a card, not mutually exclusive ones. */
   editedCardIds: string[];
+  /** Which SourceGenerationScope kind this generation used — never the nodeId/title, only the
+   * kind string (e.g. "structureNode"), so review-outcome telemetry (generationTelemetry.ts) can
+   * report WHICH scope families get used without ever carrying source content. */
+  scopeType: SourceGenerationScopeKind;
+  /** Only set when `scopeType === "structureNode"` — "heading" or "worksheet", never the node's
+   * own id or title. Lets telemetry distinguish DOCX-section from XLSX-worksheet generation. */
+  structureNodeType?: SourceStructureNode["type"];
 };
 
 type StartSessionInput = {
@@ -92,6 +101,8 @@ type StartSessionInput = {
   provenanceByChunkId: Record<string, DraftProvenanceEntry>;
   options: GenerationOptions;
   coverage: GenerationCoverage;
+  scopeType: SourceGenerationScopeKind;
+  structureNodeType?: SourceStructureNode["type"];
 };
 
 let session: GenerateDeckSession | null = null;
@@ -133,6 +144,8 @@ export function startGenerateDeckSession(input: StartSessionInput): void {
     generationStatus: input.draft.generation.generationStatus,
     edited: false,
     editedCardIds: [],
+    scopeType: input.scopeType,
+    structureNodeType: input.structureNodeType,
   };
   emit();
 }

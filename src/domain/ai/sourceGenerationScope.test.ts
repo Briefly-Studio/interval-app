@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { zipSync, strToU8 } from "fflate";
 
-import type { NormalizedChunk } from "../normalization/types";
+import type { NormalizedChunk, NormalizedSourceContent } from "../normalization/types";
+import { normalizeDocxSource } from "../normalization/docxAdapter";
+import { normalizeSpreadsheetSource } from "../normalization/spreadsheetAdapter";
+import { extractSourceStructure } from "../sourceStructure";
 import { DEFAULT_CONTEXT_CHAR_BUDGET } from "./contextPreparation";
 import { fitsContextBudget, getSectionCount, resolveSourceGenerationScope } from "./sourceGenerationScope";
 
@@ -228,4 +232,96 @@ test("sectionRange errors for a source with zero chunks", () => {
 test("getSectionCount is simply the chunk count", () => {
   assert.equal(getSectionCount([chunk(0), chunk(1), chunk(2)]), 3);
   assert.equal(getSectionCount([]), 0);
+});
+
+// ---- Structure node (DOCX heading / XLSX worksheet) ----
+
+const structureSourceId = "structure-scope-fixture";
+function docxContent(body: string): NormalizedSourceContent {
+  const archiveBytes = zipSync({ "word/document.xml": strToU8(`<w:document><w:body>${body}</w:body></w:document>`) });
+  const result = normalizeDocxSource({ sourceId: structureSourceId, sourceType: "docx", title: "Document", archiveBytes });
+  assert.ok(result.status === "ready" || result.status === "empty");
+  return result.content;
+}
+const heading = (level: number, text: string) => `<w:p><w:pPr><w:pStyle w:val="Heading${level}"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+const para = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+function xlsxBytes(sheets: { name: string; text: string }[]): Uint8Array {
+  const files: Record<string, string> = {
+    "xl/workbook.xml": `<workbook><sheets>${sheets.map((s, i) => `<sheet name="${s.name}" r:id="r${i}"/>`).join("")}</sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<Relationships>${sheets.map((s, i) => `<Relationship Id="r${i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}</Relationships>`,
+  };
+  sheets.forEach((s, i) => { files[`xl/worksheets/sheet${i + 1}.xml`] = `<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>${s.text}</t></is></c></row></sheetData></worksheet>`; });
+  return zipSync(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, strToU8(v)])));
+}
+function workbookContent(sheets: { name: string; text: string }[]): NormalizedSourceContent {
+  const result = normalizeSpreadsheetSource({ sourceId: structureSourceId, sourceType: "xlsx", title: "Workbook", archiveBytes: xlsxBytes(sheets) });
+  assert.ok(result.status === "ready" || result.status === "empty");
+  return result.content;
+}
+
+test("structureNode resolves ok with the node's own chunk ids, delegating to resolveStructureNodeChunks", () => {
+  const content = docxContent(heading(1, "IAM") + para("Policies text"));
+  const structure = extractSourceStructure(content);
+  const nodeId = structure.nodes[0].id;
+  const result = resolveSourceGenerationScope({
+    chunks: content.chunks,
+    scope: { type: "structureNode", nodeId, structureSnapshot: structure },
+    normalizedContent: content,
+  });
+  assert.deepEqual(result, { status: "ok", chunkIds: content.chunks.map((c) => c.id), sharedWithOtherNodes: false });
+});
+
+test("structureNode includes a parent heading's descendant chunks", () => {
+  const content = docxContent(heading(1, "IAM") + para("Intro") + heading(2, "Policies") + para("Detail"));
+  const structure = extractSourceStructure(content);
+  const parent = structure.nodes.find((n) => n.title === "IAM")!;
+  const result = resolveSourceGenerationScope({
+    chunks: content.chunks,
+    scope: { type: "structureNode", nodeId: parent.id, structureSnapshot: structure },
+    normalizedContent: content,
+  });
+  assert.equal(result.status, "ok");
+  if (result.status === "ok") assert.deepEqual(result.chunkIds, content.chunks.map((c) => c.id));
+});
+
+test("structureNode maps resolveStructureNodeChunks' error codes 1:1 (not-found, stale, empty)", () => {
+  const content = docxContent(heading(1, "A") + para("Body"));
+  const structure = extractSourceStructure(content);
+  const nodeId = structure.nodes[0].id;
+
+  assert.deepEqual(
+    resolveSourceGenerationScope({ chunks: content.chunks, scope: { type: "structureNode", nodeId: "missing", structureSnapshot: structure }, normalizedContent: content }),
+    { status: "error", code: "structure-node-not-found" }
+  );
+  assert.deepEqual(
+    resolveSourceGenerationScope({ chunks: content.chunks, scope: { type: "structureNode", nodeId, structureSnapshot: structure }, normalizedContent: { ...content, normalizationVersion: 2 } }),
+    { status: "error", code: "structure-node-stale" }
+  );
+
+  const empty = workbookContent([{ name: "Empty", text: "" }]);
+  const emptyStructure = extractSourceStructure(empty);
+  assert.deepEqual(
+    resolveSourceGenerationScope({ chunks: empty.chunks, scope: { type: "structureNode", nodeId: emptyStructure.nodes[0].id, structureSnapshot: emptyStructure }, normalizedContent: empty }),
+    { status: "error", code: "structure-node-empty" }
+  );
+});
+
+test("structureNode is a defensive-backstop error when no normalizedContent was supplied at all", () => {
+  const content = docxContent(heading(1, "A") + para("Body"));
+  const structure = extractSourceStructure(content);
+  const result = resolveSourceGenerationScope({ chunks: content.chunks, scope: { type: "structureNode", nodeId: structure.nodes[0].id, structureSnapshot: structure } });
+  assert.deepEqual(result, { status: "error", code: "structure-node-not-found" });
+});
+
+test("structureNode discloses sharedWithOtherNodes for the known XLSX chunk-spans-worksheets limitation", () => {
+  const content = workbookContent([{ name: "One", text: "A" }, { name: "Two", text: "B" }]);
+  const structure = extractSourceStructure(content);
+  assert.ok(structure.warnings.includes("shared-worksheet-chunks"));
+  const result = resolveSourceGenerationScope({
+    chunks: content.chunks,
+    scope: { type: "structureNode", nodeId: structure.nodes[0].id, structureSnapshot: structure },
+    normalizedContent: content,
+  });
+  assert.deepEqual(result, { status: "ok", chunkIds: content.chunks.map((c) => c.id), sharedWithOtherNodes: true });
 });

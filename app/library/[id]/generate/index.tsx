@@ -32,11 +32,18 @@ import {
   type SourceGenerationScopeKind,
   type SourceScopeResolutionErrorCode,
 } from "../../../../src/domain/ai/sourceGenerationScope";
-import { buildSourceScopeChoices, SCOPE_SUMMARY_KEY } from "../../../../src/domain/ai/sourceGenerationScopeUi";
+import {
+  buildSourceScopeChoices,
+  buildStructureNodeChoices,
+  buildStructureNodePickerLabel,
+  SCOPE_SUMMARY_KEY,
+  type StructureNodeChoice,
+} from "../../../../src/domain/ai/sourceGenerationScopeUi";
 import type { CardCountOption, CardStyleOption, DifficultyOption, GenerationErrorCode } from "../../../../src/domain/ai/types";
-import type { NormalizedChunk } from "../../../../src/domain/normalization/types";
+import type { NormalizedChunk, NormalizedSourceContent } from "../../../../src/domain/normalization/types";
 import { loadSourceCoverage } from "../../../../src/domain/sourceCoverageService";
 import type { SourceCoverage } from "../../../../src/domain/sourceCoverage";
+import type { SourceStructure } from "../../../../src/domain/sourceStructure";
 import { useTranslation } from "../../../../src/i18n";
 import { useLayoutDirection } from "../../../../src/i18n/direction";
 import type { LibrarySourceRecord } from "../../../../src/models/librarySource";
@@ -50,7 +57,10 @@ import { EmptyState } from "../../../../src/ui/EmptyState";
 import { IconButton } from "../../../../src/ui/IconButton";
 import { OptionRadioGroup } from "../../../../src/ui/OptionRadioGroup";
 import { Screen } from "../../../../src/ui/Screen";
+import { StructureNodePicker, type StructureNodePickerItem } from "../../../../src/ui/StructureNodePicker";
 import { TextField } from "../../../../src/ui/TextField";
+
+const EMPTY_STRUCTURE: SourceStructure = { sourceId: "", normalizationVersion: 0, nodes: [], warnings: [] };
 
 type ScreenState =
   | { phase: "loading" }
@@ -89,15 +99,20 @@ export default function GenerateStudyDeckScreen() {
   const [scopeChunks, setScopeChunks] = useState<NormalizedChunk[] | null>(null);
   const [pageCount, setPageCount] = useState<number | undefined>(undefined);
   const [sourceCoverage, setSourceCoverage] = useState<SourceCoverage | null>(null);
+  // This source's own real structure (DOCX headings / XLSX worksheets) — null for PDF/TXT or any
+  // source with none. See sourceStructure.ts's "no heuristic inference" principle.
+  const [structure, setStructure] = useState<SourceStructure | null>(null);
+  const [normalizedContent, setNormalizedContent] = useState<NormalizedSourceContent | null>(null);
 
-  // Source scope selection (Automatic/Entire source/Uncovered/Page range/Section range) — never
-  // persisted, defaults to Automatic for every fresh generation session (section 16), same
-  // posture as cardCount/difficulty/cardStyle below.
+  // Source scope selection (Automatic/Entire source/Uncovered/Page range/Section range/a real
+  // structural region) — never persisted, defaults to Automatic for every fresh generation
+  // session (section 16), same posture as cardCount/difficulty/cardStyle below.
   const [scopeKind, setScopeKind] = useState<SourceGenerationScopeKind>("automatic");
   const [pageRangeStart, setPageRangeStart] = useState("");
   const [pageRangeEnd, setPageRangeEnd] = useState("");
   const [sectionRangeStart, setSectionRangeStart] = useState("");
   const [sectionRangeEnd, setSectionRangeEnd] = useState("");
+  const [selectedStructureNodeId, setSelectedStructureNodeId] = useState<string | null>(null);
 
   const [cardCount, setCardCount] = useState<CardCountOption>(
     typeof DEFAULT_GENERATION_OPTIONS.cardCount === "number" ? "medium" : DEFAULT_GENERATION_OPTIONS.cardCount
@@ -121,7 +136,12 @@ export default function GenerateStudyDeckScreen() {
   // "Entire source" is now offered whenever the full source can be PLANNED at all (one request
   // or several sequential batches — see batchPlanning.ts) — no longer gated to "fits one request".
   const entireSourceAvailable = canPlanBatchesFor(scopeChunks ?? []);
-  const scopeChoices = buildSourceScopeChoices({ totalSectionCount, pageCount, hasUncoveredMaterial, entireSourceAvailable });
+  const scopeChoices = buildSourceScopeChoices({ totalSectionCount, pageCount, hasUncoveredMaterial, entireSourceAvailable, structure });
+  // One choice per real structural node (DOCX heading / XLSX worksheet), in document order —
+  // only ever non-empty when `structure` itself has nodes (see buildSourceScopeChoices above,
+  // which is what actually gates whether the "structureNode" top-level choice is even offered).
+  const structureNodeChoices: StructureNodeChoice[] = structure ? buildStructureNodeChoices(structure) : [];
+  const isWorksheetStructure = structure?.nodes[0]?.type === "worksheet";
 
   function parseRangeInput(raw: string): number {
     const trimmed = raw.trim();
@@ -134,10 +154,12 @@ export default function GenerateStudyDeckScreen() {
       ? { type: "pageRange", startPage: parseRangeInput(pageRangeStart), endPage: parseRangeInput(pageRangeEnd) }
       : scopeKind === "sectionRange"
         ? { type: "sectionRange", startSection: parseRangeInput(sectionRangeStart), endSection: parseRangeInput(sectionRangeEnd) }
-        : { type: scopeKind };
+        : scopeKind === "structureNode"
+          ? { type: "structureNode", nodeId: selectedStructureNodeId ?? "", structureSnapshot: structure ?? EMPTY_STRUCTURE }
+          : { type: scopeKind };
 
   const scopeResolution = scopeChunks
-    ? resolveSourceGenerationScope({ chunks: scopeChunks, scope: selectedScope, coverage: sourceCoverage ?? undefined, pageCount })
+    ? resolveSourceGenerationScope({ chunks: scopeChunks, scope: selectedScope, coverage: sourceCoverage ?? undefined, pageCount, normalizedContent: normalizedContent ?? undefined })
     : null;
 
   // Automatic never batches (see generateDeckFlow.ts) — a dry-run batch plan is only meaningful,
@@ -200,6 +222,11 @@ export default function GenerateStudyDeckScreen() {
       setScopeChunks(availability.scopeChunks);
       setPageCount(availability.pageCount);
       setSourceCoverage(coverageResult);
+      setStructure(availability.structure);
+      setNormalizedContent(availability.normalizedContent);
+      // A fresh availability check may reflect a changed source (re-attach) — never carry a node
+      // selection from a prior structure snapshot forward into a new one.
+      setSelectedStructureNodeId(null);
       if (availability.canGenerate) {
         setScreenState({ phase: "options" });
       } else {
@@ -231,12 +258,23 @@ export default function GenerateStudyDeckScreen() {
     }, [checkAvailability])
   );
 
+  // Full root-first breadcrumb path for the currently selected structure node (e.g.
+  // "AWS › IAM › Policies", or just "Q4 Budget" for a worksheet with no ancestors) — always fully
+  // qualified regardless of duplicate-title ambiguity, since this one-line summary has no
+  // surrounding tree/indentation context to lean on (see StructureNodeChoice.ancestorTitles).
+  function selectedStructureNodeTitle(): string {
+    const choice = structureNodeChoices.find((c) => c.nodeId === selectedStructureNodeId);
+    return choice ? [...choice.ancestorTitles, choice.title].join(" › ") : "";
+  }
+
   function scopeLabel(): string {
     return selectedScope.type === "pageRange"
       ? t("generateDeck.scope.summaryPageRange", { start: selectedScope.startPage, end: selectedScope.endPage })
       : selectedScope.type === "sectionRange"
         ? t("generateDeck.scope.summarySectionRange", { start: selectedScope.startSection, end: selectedScope.endSection })
-        : t(SCOPE_SUMMARY_KEY[selectedScope.type] as any);
+        : selectedScope.type === "structureNode"
+          ? t("generateDeck.scope.summaryStructureNode", { title: selectedStructureNodeTitle() })
+          : t(SCOPE_SUMMARY_KEY[selectedScope.type] as any);
   }
 
   function planLines(plan: GenerationPlanSummary): string[] {
@@ -564,23 +602,56 @@ export default function GenerateStudyDeckScreen() {
             </View>
           ) : null}
 
-          {scopeResolution?.status === "error" ? (
-            <Text style={[typography.caption, text, { color: colors.danger }]} accessibilityRole="text">
-              {t(SOURCE_SCOPE_ERROR_COPY_KEYS[scopeResolution.code] as any)}
-            </Text>
-          ) : batchPlan?.status === "error" ? (
-            <Text style={[typography.caption, text, { color: colors.danger }]} accessibilityRole="text">
-              {t(batchPlan.code === "plan-too-large" ? planTooLargeCopy(scopeKind) : BATCH_PLAN_ERROR_COPY_KEYS[batchPlan.code] as any)}
-            </Text>
-          ) : (
-            <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
-              {selectedScope.type === "pageRange"
-                ? t("generateDeck.scope.summaryPageRange", { start: selectedScope.startPage, end: selectedScope.endPage })
-                : selectedScope.type === "sectionRange"
-                  ? t("generateDeck.scope.summarySectionRange", { start: selectedScope.startSection, end: selectedScope.endSection })
-                  : t(SCOPE_SUMMARY_KEY[selectedScope.type] as any)}
-            </Text>
-          )}
+          {scopeKind === "structureNode" ? (
+            <View style={{ gap: spacing.xs }}>
+              <StructureNodePicker
+                groupLabel={t(isWorksheetStructure ? "generateDeck.scope.structurePickerWorksheetLabel" : "generateDeck.scope.structurePickerSectionLabel")}
+                value={selectedStructureNodeId}
+                onChange={setSelectedStructureNodeId}
+                items={structureNodeChoices.map((c): StructureNodePickerItem => {
+                  const { label, accessibilityLabel, description } = buildStructureNodePickerLabel(c, isWorksheetStructure, {
+                    ancestorContext: (path) => t("generateDeck.scope.structureAncestorContext", { path }),
+                    levelContext: (level) => t("generateDeck.scope.structureLevelContext", { level }),
+                    duplicatePosition: (position, total) => t("generateDeck.scope.structureDuplicatePosition", { position, total }),
+                    emptyHint: t("generateDeck.scope.structureNodeEmptyHint"),
+                    sharedHint: t("generateDeck.scope.structureNodeSharedHint"),
+                    sectionCount: (chunkCount) => plural("generateDeck.scope.structureNodeSectionCount", chunkCount, { count: chunkCount }),
+                  });
+                  return {
+                    nodeId: c.nodeId,
+                    label,
+                    accessibilityLabel,
+                    level: isWorksheetStructure ? 0 : c.level,
+                    disabled: c.disabled,
+                    description,
+                  };
+                })}
+              />
+              {!selectedStructureNodeId ? (
+                <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+                  {t(isWorksheetStructure ? "generateDeck.scope.structurePickRequiredWorksheet" : "generateDeck.scope.structurePickRequiredSection")}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* The dedicated "choose a section/worksheet" hint above already covers the
+              not-yet-selected case for structureNode — nothing further to show below until a
+              node is actually picked, so this whole error/summary block stays silent then. */}
+          {scopeKind === "structureNode" && !selectedStructureNodeId ? null
+            : scopeResolution?.status === "error" ? (
+              <Text style={[typography.caption, text, { color: colors.danger }]} accessibilityRole="text">
+                {t(SOURCE_SCOPE_ERROR_COPY_KEYS[scopeResolution.code] as any)}
+              </Text>
+            ) : batchPlan?.status === "error" ? (
+              <Text style={[typography.caption, text, { color: colors.danger }]} accessibilityRole="text">
+                {t(batchPlan.code === "plan-too-large" ? planTooLargeCopy(scopeKind) : BATCH_PLAN_ERROR_COPY_KEYS[batchPlan.code] as any)}
+              </Text>
+            ) : (
+              <Text style={[typography.caption, text, { color: colors.textSecondary }]}>
+                {scopeLabel()}
+              </Text>
+            )}
 
 
         </View>

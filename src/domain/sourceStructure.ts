@@ -90,6 +90,33 @@ export function extractSourceStructure(content: NormalizedSourceContent): Source
   return { sourceId: content.sourceId, normalizationVersion: content.normalizationVersion, nodes, warnings: [...warnings] };
 }
 
+/**
+ * The ordered ancestor chain for `nodeId`, root-first, INCLUDING the node itself — e.g. for a
+ * "EC2" node nested under "AWS", returns `[AWS, EC2]`. Pure, deterministic, bounded by
+ * `SOURCE_STRUCTURE_LIMITS.maxDepth`. Used to disambiguate same-titled nodes in the picker/
+ * preflight/accessibility labels (see docs/source-generation-scope.md's "Structure breadcrumbs"
+ * section) — never used to alter the actual node's own `title`, which stays source text,
+ * untouched, always. Returns `[]` for an unknown `nodeId` (never throws) and is defensively
+ * cycle-safe (a cycle cannot occur given how `extractSourceStructure` assigns `parentId` — each
+ * parent is always a node already pushed earlier in the same top-to-bottom pass — but a guard
+ * costs nothing and this function makes no assumption about a caller-supplied `structure`
+ * actually being one `extractSourceStructure` itself produced).
+ */
+export function buildStructureBreadcrumbNodes(structure: SourceStructure, nodeId: string): SourceStructureNode[] {
+  const byId = new Map(structure.nodes.map((n) => [n.id, n]));
+  const start = byId.get(nodeId);
+  if (!start) return [];
+  const chain: SourceStructureNode[] = [];
+  const seen = new Set<string>();
+  let current: SourceStructureNode | undefined = start;
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    chain.unshift(current);
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  return chain;
+}
+
 export type StructureSelection = { status: "ok"; chunkIds: string[]; sharedWithOtherNodes: boolean }
   | { status: "error"; code: "stale-structure" | "node-not-found" | "empty-node" };
 /** Seam for future scope UI. Reject stale snapshots and disclose overlapping leaf membership.

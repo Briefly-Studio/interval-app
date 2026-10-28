@@ -2,7 +2,10 @@
 
 Lets the user choose WHAT PART of a Library source Generate Study Deck should draw from, before
 generation starts, instead of the app always picking an opaque bounded subset with no control.
-**Implemented, merged into `v3.3-dev`; not yet founder-QA verified.**
+**Implemented, merged into `v3.3-dev`; not yet founder-QA verified.** The structure-aware
+`structureNode` scope (DOCX headings / XLSX worksheets — see below) was added in a later,
+Structured Generation Scope batch, also merged into `v3.3-dev` and also not yet founder-QA
+verified.
 
 ## Why this exists
 
@@ -24,15 +27,26 @@ export type SourceGenerationScope =
   | { type: "entireSource" }
   | { type: "uncovered" }
   | { type: "pageRange"; startPage: number; endPage: number }
-  | { type: "sectionRange"; startSection: number; endSection: number };
+  | { type: "sectionRange"; startSection: number; endSection: number }
+  | { type: "structureNode"; nodeId: string; structureSnapshot: SourceStructure };
 ```
 
+**Update (Structured Generation Scope batch):** `structureNode` is new — see "Structure-aware
+scope (DOCX headings / XLSX worksheets)" below. `structureSnapshot` is the `SourceStructure` the
+user picked `nodeId` from (captured once by the options screen, carried unchanged), never
+recomputed by the resolver — this is what lets staleness be distinguished from a node simply not
+existing.
+
 A single pure resolution function, `resolveSourceGenerationScope({ chunks, scope, coverage?,
-pageCount? })`, turns one of these into either `{ status: "ok", chunkIds?: string[] }` (`chunkIds`
-omitted means "no restriction — every chunk remains eligible") or `{ status: "error", code }`.
-Deterministic, preserves the chunks' own existing document order, dedupes trivially (it only ever
-filters an already-deduplicated chunk list), and never falls back from one scope to another — a
-scope that can't be satisfied is always a typed, explicit error, never a silent substitution.
+pageCount?, normalizedContent? })`, turns one of these into either `{ status: "ok", chunkIds?:
+string[], sharedWithOtherNodes?: boolean }` (`chunkIds` omitted means "no restriction — every
+chunk remains eligible"; `sharedWithOtherNodes` only ever set for a `structureNode` worksheet
+whose chunks are also claimed by another node) or `{ status: "error", code }`. `normalizedContent`
+is only read for `structureNode` — the resolver delegates entirely to `resolveStructureNodeChunks`
+(`sourceStructure.ts`) rather than reimplementing staleness/empty-node detection. Deterministic,
+preserves the chunks' own existing document order, dedupes trivially (it only ever filters an
+already-deduplicated chunk list), and never falls back from one scope to another — a scope that
+can't be satisfied is always a typed, explicit error, never a silent substitution.
 
 **Scope selection and the existing bounded `GenerationContext` (`contextPreparation.ts`) are two
 different things, deliberately kept separate:**
@@ -134,22 +148,74 @@ a source has more than one section (a single-section source has nothing to range
 Validation mirrors page range exactly: `startSection <= endSection`, both within
 `[1, totalSectionCount]`, with the same `invalid-range`/`empty-selection` error codes.
 
-## Semantic structure foundation; selection UI deferred
+## Structure-aware scope (DOCX headings / XLSX worksheets)
 
-`docs/source-structure.md` documents the new derived structure API. DOCX normalization now
-preserves real Heading1–Heading3 levels; heading nodes represent deterministic parent/child
-chunk intervals, including repeated titles. XLSX now retains actual worksheet names, tab order,
-visibility and empty sheets as structured metadata rather than requiring text parsing.
+**Implemented (Structured Generation Scope batch), merged into `v3.3-dev`; not yet founder-QA
+verified.** `docs/source-structure.md` documents the derived structure API this scope builds on.
+DOCX normalization preserves real Heading1–Heading3 levels; heading nodes represent deterministic
+parent/child chunk intervals, including repeated titles. XLSX retains actual worksheet names, tab
+order, visibility and empty sheets as structured metadata rather than requiring text parsing.
 
-`extractSourceStructure(normalizedContent)` and `resolveStructureNodeChunks(content, structure,
-nodeId)` provide the seam for a future semantic scope picker. The resolver rejects stale/empty
-nodes and discloses known worksheet chunk overlap. Existing XLSX chunks can span sheets: a
-future picker must handle warnings/coarse boundaries before claiming exclusive worksheet scope.
+`checkGenerationAvailability` (`generateDeckFlow.ts`) now calls `extractSourceStructure` once,
+over the SAME normalization it already runs for `scopeChunks`/`pageCount` — pure and synchronous,
+so this adds no extra async work or second normalization pass — and returns the result as
+`structure: SourceStructure | null`. `buildSourceScopeChoices` (`sourceGenerationScopeUi.ts`)
+offers a new "Document section" (DOCX) or "Worksheet" (XLSX) top-level choice only when
+`structure.nodes.length > 0` — never for TXT/PDF, which carry zero structural evidence, and never
+an empty picker. `buildStructureNodeChoices(structure)` turns the flat `SourceStructureNode[]`
+into one choice per node, in document order, each carrying its real ancestor titles (root-first,
+via the new `buildStructureBreadcrumbNodes` helper in `sourceStructure.ts`), heading level (for
+visual indentation only), chunk count, `disabled` (zero chunks — in practice only ever reachable
+for an empty worksheet; a DOCX heading's own interval always includes at least its own
+heading-text chunk), `sharedWithOtherNodes`, `titleIsAmbiguous` (another node with a DIFFERENT
+parent shares this exact title — the screen breadcrumb-qualifies the ON-SCREEN label only then),
+and `duplicatePosition` (set only for true same-title-SAME-parent siblings, which breadcrumb can
+never tell apart since their ancestor paths are identical — a presentation-only, deterministic
+`{position, total}` rank in real document order, e.g. "2 of 2 with this exact title"). The
+ACCESSIBILITY label is always fully qualified regardless of either flag, since indentation is
+never the only hierarchy cue.
 
-No `structureNode` scope variant or new picker was added. Automatic, Entire source, Uncovered,
-PDF page ranges and generic section ranges remain unchanged. TXT has no semantic structure;
-the installed PDF extractor exposes no outline API, so PDF retains only its real page selection.
-No headings/chapters are inferred from typography, capitalization or text patterns.
+**Update (duplicate-sibling disambiguation fix):** the original batch left one known gap — two
+literal same-titled siblings under the identical parent rendered an identical qualified label,
+since breadcrumb-qualifying them produced the same string for both. Fixed: `titleIsAmbiguous` now
+means "disambiguated by breadcrumb" specifically (only true when the duplicate has a *different*
+parent), and a new `duplicatePosition` field covers the same-parent case with positional secondary
+text instead. Neither `nodeId` (selection identity) nor the real source `title` is ever touched —
+this is presentation-only, composed by a new pure helper,
+`buildStructureNodePickerLabel` (`sourceGenerationScopeUi.ts`), which the options screen now calls
+instead of composing the label/accessibility label inline. See that function's own tests in
+`sourceGenerationScopeUi.test.ts` for the full two-sibling/three-sibling/unique-title/
+accessibility/RTL-ordering coverage.
+
+Selecting a node resolves through the EXISTING seam exactly as originally planned: `resolveSourceGenerationScope`'s
+new `structureNode` case delegates entirely to `resolveStructureNodeChunks(content, structure,
+nodeId)` and maps its three error cases 1:1 (`stale-structure` → `structure-node-stale`,
+`node-not-found` → `structure-node-not-found`, `empty-node` → `structure-node-empty`) — no
+staleness/empty-node logic is reimplemented here. A stale/missing selection is never silently
+substituted with Automatic; it is a typed `scope-error` the options screen surfaces with recovery
+copy ("Choose a section again."), same posture as every other scope's error path.
+
+The picker itself (`src/ui/StructureNodePicker.tsx`) is the first hierarchical/tree selection
+control in this codebase — a flat, scrollable, indented list (never a modal, never virtualized:
+structure is bounded to `SOURCE_STRUCTURE_LIMITS.maxNodes`, realistically far smaller), extending
+`OptionRadioGroup`'s existing visual language (fill + border + check glyph + bold label, never
+color alone, full touch target regardless of indentation) rather than introducing a second
+interaction pattern. Indentation direction flips for RTL locales via `useLayoutDirection().isRtl`.
+
+Automatic, Entire source, Uncovered, PDF page ranges and generic section ranges remain completely
+unchanged — this is purely additive. TXT still has no semantic structure; the installed PDF
+extractor still exposes no outline API, so PDF retains only its real page selection. No
+headings/chapters are ever inferred from typography, capitalization or text patterns — a source
+with no real structural evidence simply never offers this choice at all.
+
+A `structureNode` generation threads `scope.type` (and, only when `structureNode`, the selected
+node's own `type` — "heading" or "worksheet", never its id or title) onto
+`GenerateDeckSession.scopeType`/`structureNodeType`, read by the existing privacy-safe runtime
+telemetry (`generationTelemetry.ts`'s `GenerationReviewOutcome`) so category-level usage of this
+scope family is observable without ever carrying source content. Multi-batch generation
+(`docs/whole-source-generation.md`) needed zero code changes for this scope — `structureNode`
+resolves an explicit `chunkIds` array exactly like `pageRange`/`sectionRange` already did, and
+`generateDeckFlow.ts`'s existing chunk-id-based batching pipeline is already format/scope-agnostic.
 
 ## Interaction with bounded context
 
@@ -188,13 +254,15 @@ generation would, nothing scope-specific was added to that logic.
 
 A compact "Generate from" `OptionRadioGroup` control on the existing Generate Study Deck setup
 screen (`app/library/[id]/generate/index.tsx`), with inline `TextField` "From"/"To" inputs shown
-only for Page range / Section range. Which choices are even offered is computed per-source by
+only for Page range / Section range, and the new `StructureNodePicker` shown only for Document
+section / Worksheet. Which choices are even offered is computed per-source by
 `buildSourceScopeChoices` (`src/domain/ai/sourceGenerationScopeUi.ts`) — Automatic is always
-present; Uncovered/Entire source/Page range/Section range each appear only when truthfully
-available for this specific source. A pre-generation summary line always states, in plain
-language, what will happen ("Using the full source.", "Pages 20–40.", …) before the user taps
-Generate. The Generate button is disabled whenever the current selection doesn't resolve
-successfully (invalid range, etc.) — the same resolver call used for this live validation is the
+present; Uncovered/Entire source/Page range/Section range/Document section/Worksheet each appear
+only when truthfully available for this specific source. A pre-generation summary line always
+states, in plain language, what will happen ("Using the full source.", "Pages 20–40.",
+"Generating from "AWS › IAM"." for a picked structure node, …) before the user taps Generate. The
+Generate button is disabled whenever the current selection doesn't resolve successfully (invalid
+range, no node picked yet, etc.) — the same resolver call used for this live validation is the
 one `runGenerateDeckFlow` calls again, fresh, at actual generation time.
 
 ## Persistence
@@ -212,6 +280,9 @@ setting, no new AsyncStorage key.
 | `page-range-unavailable` | A page range was selected but no trustworthy page count exists for this source. |
 | `invalid-range` | The requested range is reversed, out of bounds, zero/negative, or non-integer. |
 | `empty-selection` | A structurally valid range/scope resolves to zero actual chunks. |
+| `structure-node-stale` | A `structureNode` selection's source/structure changed since it was picked. |
+| `structure-node-not-found` | A `structureNode` selection's `nodeId` doesn't exist in its own snapshot (or no content/snapshot was supplied at all — a defensive backstop). |
+| `structure-node-empty` | A `structureNode` selection resolves cleanly but currently has zero chunks. |
 
 Every one of these is reachable live on the options screen (disables Generate, shows the matching
 copy) before it would ever reach `runGenerateDeckFlow`'s own defensive re-check (a new
@@ -224,15 +295,15 @@ before any provider is ever called, so it is never confused with a provider/vali
   across several linked requests. Explicitly not implemented~~ **now implemented** — see
   `docs/whole-source-generation.md` for the full design (batch planning, card allocation,
   sequential orchestration, cross-batch dedupe, failure/cancellation policy, quota implications).
-- **Chapter/heading-based selection** — the derived heading-node foundation now exists (see
-  `docs/source-structure.md`), with scope/UI integration still deferred.
-- **XLSX worksheet selection** — actual worksheet metadata/node APIs now exist; shared boundary
-  chunks need explicit handling before a picker can promise exclusive selection.
-- Any future selection UI (chapter picker, worksheet picker, etc.) plugs into the exact same seam
-  this batch introduced — `SourceGenerationScope` gains a new variant,
-  `resolveSourceGenerationScope` gains a new case, and `generateStudyDeck`'s existing
-  `selectedChunkIds` plumbing (unchanged by this batch, already existed before it) needs no
-  further changes.
+- **Chapter/heading-based selection** and **XLSX worksheet selection** — ~~the derived heading-node
+  foundation now exists, with scope/UI integration still deferred~~ **now implemented** — see
+  "Structure-aware scope (DOCX headings / XLSX worksheets)" above.
+- **Combining scopes** (e.g. "uncovered material within this one section") was explicitly out of
+  scope for the Structured Generation Scope batch and remains unimplemented — each scope is still
+  a mutually exclusive top-level choice.
+- **Coverage-by-structure-node** (disclosing coverage per heading/worksheet, not just per whole
+  source) was likewise explicitly out of scope and remains unimplemented — Source Coverage's own
+  math is completely unchanged by this batch.
 
 ## Founder QA
 
@@ -245,3 +316,12 @@ or algorithm. No change to Source Coverage's own calculations (`sourceCoverage.t
 `sourceCoverageService.ts` — reused as-is). No change to the count-quality contract
 (`responseValidation.ts`, `generationOptions.ts`). No change to any normalization adapter's
 provenance shape. No new npm dependency.
+
+**Additionally, for the Structured Generation Scope batch (`structureNode`):** no PDF/TXT
+heuristic chapters or sections were ever introduced — both formats remain exactly as truthful as
+before (PDF: real page selection only; TXT: no structural scope at all). No change to
+`extractSourceStructure`/`resolveStructureNodeChunks` (`sourceStructure.ts`) beyond the new,
+purely additive `buildStructureBreadcrumbNodes` helper. No change to `GeneratedCardProvenance`,
+sync, or the AI evaluation harness's own fixtures/matrix (the harness only ever constructs
+`{type:"entireSource"}`/bounded cases; it compiles against the widened `SourceGenerationScope`
+with zero changes). No new npm dependency.
