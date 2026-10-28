@@ -156,7 +156,7 @@ For anything not covered directly in this file, these are the authoritative docu
     pre-existing provider-throttle `rate-limited`. See that document's "Rate limits and cost
     controls" section for the full design. No model/provider/prompt/context-limit change, no
     Staging/Production AI enablement change — see that section's "Known limitation" for the
-    disclosed no-request-idempotency-key gap. **A first-use AI consent/disclosure flow is now
+    request-idempotency migration gap (see `docs/ai-request-idempotency.md`). **A first-use AI consent/disclosure flow is now
     implemented** (`src/domain/ai/aiConsent.ts`, `src/storage/aiConsent.ts`,
     `src/ui/aiConsentDialog.ts`): before a user's first REAL cloud-AI generation (never for mock
     generation), a plain-language `Alert.alert` explains what text leaves the device and requires
@@ -345,7 +345,7 @@ For anything not covered directly in this file, these are the authoritative docu
     removed from all 13 locales rather than left dead). **Never implements** safe resume/
     idempotency after a partial failure (retry restarts from batch 1), true RAG/multi-pass
     retrieval, or any change to the backend's quota/concurrency scheme — see that doc's "Known
-    limitations" and "Future resume/idempotency opportunities" sections. No backend/AWS/CDK/EAS/
+    limitations" and "Request identity and future resume" sections. No backend/AWS/CDK/EAS/
     Staging/Production change, no change to Source Coverage's own calculations or
     `GeneratedCardProvenance` (a different branch's territory), no model/provider change, no new
     npm dependency.
@@ -438,8 +438,8 @@ For anything not covered directly in this file, these are the authoritative docu
     (`GenerationReviewOutcome`: generated/edited/deleted/saved counts + abandoned, emitted via a
     dev-only `console.log`, same `typeof __DEV__` guard convention `multiBatchGeneration.ts`'s
     own `logAggregateOutcome` already established — no telemetry backend exists or was built).
-    Introduces `generateAttemptId()` (a random, opaque, non-cryptographic correlation id — nothing
-    in this pipeline had one before) and `GenerateDeckSession.editedCardIds` (new instrumentation;
+    Introduces `generateAttemptId()` (an opaque correlation id, now upgraded to secure OS/Web
+    Crypto UUIDs for request correlation) and `GenerateDeckSession.editedCardIds` (new instrumentation;
     `deletedCount` needed no new field, already derivable as `generatedCardCount - cards.length`).
     **Additive provider-performance plumbing** (`types.ts`'s new `TokenUsage`,
     `ModelProviderOutcome`/`GenerateStudyDeckOutcome`/`MultiBatchOutcome`'s new optional
@@ -473,6 +473,17 @@ sheets. PDF has no outline bridge and TXT has no semantic nodes. Existing chunk 
 remain stable for unchanged supported valid input. XLSX chunks may span sheets: inspect warnings
 before promising exclusive worksheet scope. No new scope picker, structure persistence/sync or
 Source Coverage math change. Run `npm run test:structure`; native Founder QA remains pending.
+
+## AI request idempotency
+
+`docs/ai-request-idempotency.md` governs provider-request identity/replay. One secure attempt
+UUID per run, distinct secure UUID per batch; retained same-call retry reuses its request ID.
+Dedicated Development/Staging TTL storage and Development Lambda keyed admission are implemented,
+not deployed. Committed modes remain legacy; activate optional → client → required deliberately.
+Keyed quota/provider_started marking is transactional; unknown/expired claims are never blindly
+re-executed. Cached generated responses have 24-hour logical eligibility plus asynchronous TTL
+cleanup, encryption and no PITR. No batch resume, automatic HTTP retry, Staging real AI or
+Production change. Run `test:idempotency`, `test:ai`, `test:eval` and CDK build/synth before rollout.
 
 ## Core Product Rule
 
@@ -944,11 +955,10 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   Generate Study Deck Lambda (`backend/lambdas/ai-generate-study-deck/rateLimiter.mjs`, a new
   Development-only `interval-dev-ai-rate-limits` table) — closing the gap
   `docs/cdk-infrastructure.md`'s "Rate limiting" section previously flagged as a blocker before
-  any Staging deployment of this Lambda. Known, accepted limitation: there is no request-level
-  idempotency key, so a mobile client retry after a local timeout whose original request already
-  completed server-side is counted as a new request (see
-  `docs/ai-generation-foundation.md`'s "Known limitation: no request-level idempotency" for the
-  one incidental mitigation this still has via the concurrency lease).
+  any Staging deployment of this Lambda. Request-level idempotency is now
+  implemented behind an explicit backend migration mode; committed legacy behavior still has
+  the duplicate-retry gap until activation. See `docs/ai-request-idempotency.md`; full user restart
+  always remains a new logical request, and no batch resume was added.
 - **A first-use AI consent/disclosure flow is now implemented**, gated to real cloud-AI
   generation only (`src/domain/ai/aiConsent.ts`/`src/storage/aiConsent.ts`/
   `src/ui/aiConsentDialog.ts`) — see `docs/ai-generation-foundation.md`'s "First-use consent"
@@ -1027,7 +1037,7 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   cross-batch dedupe, cancellation, and the pre-flight step-count disclosure all behave correctly
   end to end, and that each batch genuinely consumes a separate daily-quota unit as designed. See
   `docs/whole-source-generation.md`'s "Founder QA" section. Known, accepted (not just untested)
-  limitations, not pending fixes: no safe resume/idempotency after a mid-sequence failure (retry
+  limitations, not pending fixes: no batch resume after a mid-sequence failure (retry
   restarts from batch 1, re-consuming quota for already-succeeded batches), and cancellation
   cannot interrupt an already-in-flight request, but now discards its result (including the
   final step) and prevents later calls/review publication. See the whole-source doc for QA polish.

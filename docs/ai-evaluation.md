@@ -52,7 +52,7 @@ These are two different files, two different purposes, and neither one feeds the
   `generatedCardCount - cards.length`.
 - **Can a saved card be traced to a generation attempt: no.** No session/attempt/request id
   existed anywhere in the pipeline. This batch adds `generateAttemptId()` (a random, opaque,
-  non-cryptographic correlation id — see "Generation attempt identity" below), generated once per
+  secure UUID correlation id — see "Generation attempt identity" below), generated once per
   `runGenerateDeckFlow` invocation and carried on `GenerateDeckSession.attemptId`.
 - **Privacy constraints:** never record source text, prompts, generated card text, filenames,
   auth tokens, or (in telemetry) unnecessary full chunk-id arrays. Fixture text is fine to use —
@@ -228,6 +228,27 @@ logged to CloudWatch, never returned to the mobile client) — `undefined`, neve
 a provider (the mock) doesn't report it. Multi-batch aggregates `tokenUsage` by summing every
 batch's own usage, but only when EVERY batch reported one (never a partial/misleading sum).
 
+## Request replay and execution metrics
+
+`providerExecutionCount` is optional provider/domain/evaluation performance metadata. New keyed
+backend responses report first completion as 1 and replay as 0 through transport headers, while
+the cached application payload stays identical. Multi-batch sums only when every returned step
+reports a count. Missing/legacy/error/lost-response information remains unknown, never guessed
+from HTTP attempts or the preflight planned request estimate. This is observed completed-response
+execution data, not a complete account billing meter. Cached `tokenUsage` describes the original
+result and must not be interpreted as newly spent replay tokens. No automatic retry was added.
+
+These counts describe application provider executions, not SDK transport attempts or confirmed
+service-side model executions. The production Bedrock client uses `maxAttempts: 1`, so one
+application call makes at most one explicit SDK invocation attempt. A lost response still cannot
+prove whether the service executed; error/unknown cases must not be reported as known zero cost.
+See `docs/ai-request-idempotency.md`'s retry audit for the exact guarantee.
+
+Attempt IDs now use the existing Expo OS UUID/Web Crypto sources and are sent as safe correlation
+IDs; each provider request has a separate UUID. These IDs contain no source/account data.
+See `docs/ai-request-idempotency.md` for rollout modes and failure/retention semantics. The mock
+harness and all CI tests remain fake-provider-only; no new source/card text enters telemetry.
+
 ## Privacy
 
 Hard rule, enforced by the type shapes themselves, not just convention: nothing in
@@ -326,13 +347,13 @@ harness code, and this document; never commit an actual run's results by default
 
 ## Generation attempt identity
 
-`generationAttemptId.ts`'s `generateAttemptId()` — a random, opaque, v4-UUID-*shaped* (not a
-real cryptographic UUID; `Math.random()`-seeded, which is adequate since nothing security-
-sensitive depends on this id being unguessable, only on two attempts almost certainly not
-colliding) string. Generated once per `runGenerateDeckFlow` invocation (covers whole-source
-multi-batch too — several backend requests, one user-facing attempt, one review session), carried
-on `GenerateDeckSession.attemptId`. Never persisted beyond the in-memory session, never written
-to a saved `DeckRecord`/`CardRecord`/`GeneratedCardProvenance` entry, never sent to any backend.
+`generationAttemptId.ts`'s `generateAttemptId()` uses the existing native Expo OS UUIDv4
+bridge or Web Crypto; it fails closed if neither is available. Generated once per
+`runGenerateDeckFlow` invocation, it spans multi-batch requests and the one review session.
+`GenerateDeckSession.attemptId` remains in memory and is not copied to saved decks/cards or
+provenance. It is now sent as safe backend correlation metadata and temporarily retained by
+activated request idempotency. Each provider request has a separate secure UUID, not the attempt
+ID reused as a batch key. See `docs/ai-request-idempotency.md` for retention and rollout.
 
 ## Runtime telemetry foundation
 

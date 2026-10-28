@@ -28,6 +28,10 @@ function categorizeErrorCode(code: GenerationErrorCode): EvaluationOutcomeCatego
     case "provider-unavailable":
     case "generation-timeout":
     case "generation-in-progress":
+    case "request-in-progress":
+    case "request-outcome-unknown":
+    case "idempotency-conflict":
+    case "idempotency-storage-failure":
       return "provider-unavailable";
     default:
       // normalization-not-ready / source-empty / source-too-large / unsupported-source /
@@ -91,7 +95,8 @@ function buildReadyResult(
   allowedChunkIds: ReadonlySet<string>,
   latencyMs: number,
   usage: GenerationEvaluationResult["tokenUsage"],
-  batchInfo: GenerationEvaluationResult["batchInfo"]
+  batchInfo: GenerationEvaluationResult["batchInfo"],
+  providerExecutionCount?: number
 ): GenerationEvaluationResult {
   const generatedCount = cards.length;
   const countCheckStatus = deriveCountCheckStatus({ generatedCount, targetMinimum, requestedMaximum, generationStatusIsComplete });
@@ -107,6 +112,7 @@ function buildReadyResult(
     tokenUsage: usage,
     generationStatus: generationStatusIsComplete ? "complete" : "insufficient-distinct-content",
     batchInfo,
+    providerExecutionCount,
   };
 }
 
@@ -141,7 +147,7 @@ export async function runEvaluationCase({ provider, evalCase }: RunEvaluationCas
       return buildReadyResult(
         fixture, evalCase, requestedMaximum, targetMinimum,
         outcome.draft.cards, outcome.draft.generation.generationStatus === "complete", allowed,
-        outcome.durationMs ?? Date.now() - startedAt, outcome.usage, undefined
+        outcome.durationMs ?? Date.now() - startedAt, outcome.usage, undefined, outcome.providerExecutionCount
       );
     }
 
@@ -181,7 +187,7 @@ export async function runEvaluationCase({ provider, evalCase }: RunEvaluationCas
         fixture, evalCase, requestedMaximum, targetMinimum,
         multiOutcome.draft.cards, multiOutcome.draft.generation.generationStatus === "complete", allowed,
         multiOutcome.totalDurationMs, multiOutcome.usage,
-        { plannedBatchCount: plan.batches.length, completedBatchCount: plan.batches.length }
+        { plannedBatchCount: plan.batches.length, completedBatchCount: plan.batches.length }, multiOutcome.providerExecutionCount
       );
     }
 
@@ -202,7 +208,7 @@ export async function runEvaluationCase({ provider, evalCase }: RunEvaluationCas
       fixture, evalCase, requestedMaximum, targetMinimum,
       outcome.draft.cards, outcome.draft.generation.generationStatus === "complete", allowed,
       outcome.durationMs ?? Date.now() - startedAt, outcome.usage,
-      { plannedBatchCount: 1, completedBatchCount: 1 }
+      { plannedBatchCount: 1, completedBatchCount: 1 }, outcome.providerExecutionCount
     );
   } catch (e) {
     return errorResult(

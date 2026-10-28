@@ -23,10 +23,12 @@
 
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DeleteCommand, DynamoDBDocumentClient, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 import { runGeneration } from "./bedrockClient.mjs";
 import { acquireConcurrencyLease, checkAndConsumeDailyQuota, releaseConcurrencyLease } from "./rateLimiter.mjs";
+
+import { handleIdempotentRequest, resolveIdempotencyMode, validRequestId } from "./requestIdempotency.mjs";
 
 const GENERATION_CONTRACT_VERSION = 1;
 
@@ -86,10 +88,17 @@ function deriveGenerationStatus(resultingCardCount, targetMinimumCardCount) {
 // reconstructed per request. No explicit region is passed: Lambda sets AWS_REGION automatically
 // to the function's own deployed region (us-east-2 for both Development and Staging — see
 // infra/bin/interval-infra.ts), and the SDK v3 client resolves it from that without this file
-// needing to know or hardcode it. maxAttempts is set explicitly to 2 (one retry beyond the
-// initial attempt) — the ONLY retry mechanism anywhere in this Lambda; bedrockClient.mjs's
-// runGeneration performs no retry of its own, so retries are never stacked across two layers.
-const bedrockClient = new BedrockRuntimeClient({ maxAttempts: 2 });
+// needing to know or hardcode it. One SDK attempt only: a transport failure may arrive AFTER
+// Bedrock accepted the request. Retrying inside the SDK would bypass our durable request state
+// and count two possible model executions as one application provider execution.
+// Restricted dependency injection lets tests exercise the real SDK middleware without network
+// or credentials. Production supplies no overrides; retry settings cannot be overridden here.
+export function createBedrockRuntimeClient({ requestHandler, region, credentials } = {}) {
+  return new BedrockRuntimeClient({ maxAttempts: 1,
+    ...(requestHandler ? { requestHandler } : {}), ...(region ? { region } : {}),
+    ...(credentials ? { credentials } : {}) });
+}
+const bedrockClient = createBedrockRuntimeClient();
 
 // Same reuse-across-warm-invocations reasoning as bedrockClient above. @aws-sdk/client-dynamodb
 // is reliably bundled in the Lambda Node.js runtime (unlike @aws-sdk/client-bedrock-runtime —
@@ -361,6 +370,73 @@ async function callModelProvider(request, context, deps = {}) {
  * network access. `handler` below (the actual Lambda entry point AWS invokes) always calls this
  * with no override — real invocations are unaffected by this seam's existence.
  */
+async function executeValidatedGeneration(request, context, deps) {
+  const startedAt = Date.now();
+  const providerResult = await (deps.provider ? deps.provider(request, context) : callModelProvider(request, context, deps));
+  const durationMs = Date.now() - startedAt;
+
+  if (providerResult.status === "error") {
+    // Category-level observability only — never source text, prompt, card contents, or a raw
+    // provider exception (see CLAUDE.md's logging guardrails and this repository's existing
+    // convention in runGeneration's own diagnostic line).
+    console.log("[ai-generate-study-deck] provider outcome: failure", providerResult.code, "duration_ms:", durationMs);
+    return resp(502, { error: providerResult.code, message: providerResult.message });
+  }
+  console.log(
+    "[ai-generate-study-deck] provider outcome: success duration_ms:",
+    durationMs,
+    "token_usage:",
+    providerResult.usage ?? "unavailable"
+  );
+
+  const contextChunkIds = new Set(context.chunks.map((chunk) => chunk.id));
+  const validation = validateModelResponse(providerResult.raw, contextChunkIds, request);
+  if (validation.status === "invalid") {
+    return resp(422, { error: "validation-failed", deckIssues: validation.deckIssues, cardIssues: validation.cardIssues || [] });
+  }
+
+  const generationStatus = deriveGenerationStatus(validation.cards.length, request.targetMinimumCardCount);
+  // Category-level aggregate counts only — never source text, prompts, or card content — so a
+  // future pass can measure whether Small/Medium/Large are actually behaving as intended.
+  console.log(
+    "[ai-generate-study-deck] generation result:",
+    "requestedMax:",
+    request.requestedCardCount,
+    "targetMinimum:",
+    request.targetMinimumCardCount,
+    "generatedCount:",
+    validation.cards.length,
+    "generationStatus:",
+    generationStatus
+  );
+
+  return resp(200, {
+    title: validation.title,
+    cards: validation.cards,
+    generation: {
+      generationContractVersion: GENERATION_CONTRACT_VERSION,
+      normalizationVersion: request.normalizationVersion,
+      sourceId: request.sourceId,
+      selectedChunkIds: request.selectedChunkIds,
+      requestedCardCount: request.requestedCardCount,
+      targetMinimumCardCount: request.targetMinimumCardCount,
+      resultingCardCount: validation.cards.length,
+      generationStatus,
+      generatedAt: new Date().toISOString(),
+      issues: validation.cardIssues || [],
+    },
+    // Top-level siblings of `generation`, deliberately NOT nested inside it — these are
+    // provider-performance numbers (already computed above for the log lines; never fabricated
+    // or estimated), not part of the generation CONTRACT metadata that review/session state
+    // ever copies or persists. Added for the AI evaluation harness (docs/ai-evaluation.md) —
+    // `usage` is Bedrock's own real `{inputTokens, outputTokens, totalTokens}` (never present
+    // for a provider that doesn't report it), `durationMs` is this one provider call's wall-clock
+    // time. Still never returned to the client on any error path above.
+    usage: providerResult.usage ?? undefined,
+    durationMs,
+  });
+}
+
 export async function handleGenerateStudyDeck(event, deps = {}) {
   try {
     const sub = getUserSub(event);
@@ -376,6 +452,21 @@ export async function handleGenerateStudyDeck(event, deps = {}) {
     const parsed = validateRequestBody(body);
     if (parsed.error) return resp(400, { error: parsed.error });
     const { request, context } = parsed;
+    const mode = resolveIdempotencyMode(deps.idempotencyMode ?? process.env.AI_IDEMPOTENCY_MODE);
+    if ((request.requestId !== undefined && !validRequestId(request.requestId))
+      || (request.generationAttemptId !== undefined && !validRequestId(request.generationAttemptId))
+      || (mode === "required" && !request.requestId)) return resp(400, { error: "invalid-request-id" });
+    if (mode !== "legacy" && request.requestId) {
+      const db = resolveRateLimitDeps(deps);
+      return await handleIdempotentRequest({ sub, request, context,
+        execute: () => executeValidatedGeneration(request, context, deps),
+        deps: { client: db.client, tableName: deps.idempotencyTableName ?? process.env.AI_IDEMPOTENCY_TABLE,
+          rateLimitTableName: db.tableName, Put: db.PutCommandCtor, Update: db.UpdateCommandCtor, Delete: db.DeleteCommandCtor,
+          Get: deps.GetCommandCtor ?? GetCommand, Transact: deps.TransactWriteCommandCtor ?? TransactWriteCommand,
+          now: () => deps.now ?? new Date(), modelIdentity: process.env.BEDROCK_MODEL_ID ?? "unconfigured",
+          policy: RATE_LIMIT_CONFIG, configured: Boolean(deps.provider || process.env.BEDROCK_MODEL_ID) },
+      });
+    }
 
     // Rate limiting runs AFTER request validation (so a malformed/auth-invalid request never
     // consumes quota or a concurrency slot) and BEFORE the provider call (so quota is charged for
@@ -394,79 +485,8 @@ export async function handleGenerateStudyDeck(event, deps = {}) {
       return resp(503, { error: "provider-unavailable", message: "The generation service is temporarily unavailable." });
     }
 
-    const startedAt = Date.now();
-    let providerResult;
-    try {
-      providerResult = await callModelProvider(request, context, deps);
-    } finally {
-      // Always released — success AND failure — regardless of what callModelProvider returns or
-      // throws, so a held slot is never left occupied longer than the actual attempt took. An
-      // un-released lease still self-expires via its own TTL check (rateLimiter.mjs), so a
-      // release-side hiccup here is a bounded availability cost, never a correctness one.
-      await rateLimit.release();
-    }
-    const durationMs = Date.now() - startedAt;
-
-    if (providerResult.status === "error") {
-      // Category-level observability only — never source text, prompt, card contents, or a raw
-      // provider exception (see CLAUDE.md's logging guardrails and this repository's existing
-      // convention in runGeneration's own diagnostic line).
-      console.log("[ai-generate-study-deck] provider outcome: failure", providerResult.code, "duration_ms:", durationMs);
-      return resp(502, { error: providerResult.code, message: providerResult.message });
-    }
-    console.log(
-      "[ai-generate-study-deck] provider outcome: success duration_ms:",
-      durationMs,
-      "token_usage:",
-      providerResult.usage ?? "unavailable"
-    );
-
-    const contextChunkIds = new Set(context.chunks.map((chunk) => chunk.id));
-    const validation = validateModelResponse(providerResult.raw, contextChunkIds, request);
-    if (validation.status === "invalid") {
-      return resp(422, { error: "validation-failed", deckIssues: validation.deckIssues, cardIssues: validation.cardIssues || [] });
-    }
-
-    const generationStatus = deriveGenerationStatus(validation.cards.length, request.targetMinimumCardCount);
-    // Category-level aggregate counts only — never source text, prompts, or card content — so a
-    // future pass can measure whether Small/Medium/Large are actually behaving as intended.
-    console.log(
-      "[ai-generate-study-deck] generation result:",
-      "requestedMax:",
-      request.requestedCardCount,
-      "targetMinimum:",
-      request.targetMinimumCardCount,
-      "generatedCount:",
-      validation.cards.length,
-      "generationStatus:",
-      generationStatus
-    );
-
-    return resp(200, {
-      title: validation.title,
-      cards: validation.cards,
-      generation: {
-        generationContractVersion: GENERATION_CONTRACT_VERSION,
-        normalizationVersion: request.normalizationVersion,
-        sourceId: request.sourceId,
-        selectedChunkIds: request.selectedChunkIds,
-        requestedCardCount: request.requestedCardCount,
-        targetMinimumCardCount: request.targetMinimumCardCount,
-        resultingCardCount: validation.cards.length,
-        generationStatus,
-        generatedAt: new Date().toISOString(),
-        issues: validation.cardIssues || [],
-      },
-      // Top-level siblings of `generation`, deliberately NOT nested inside it — these are
-      // provider-performance numbers (already computed above for the log lines; never fabricated
-      // or estimated), not part of the generation CONTRACT metadata that review/session state
-      // ever copies or persists. Added for the AI evaluation harness (docs/ai-evaluation.md) —
-      // `usage` is Bedrock's own real `{inputTokens, outputTokens, totalTokens}` (never present
-      // for a provider that doesn't report it), `durationMs` is this one provider call's wall-clock
-      // time. Still never returned to the client on any error path above.
-      usage: providerResult.usage ?? undefined,
-      durationMs,
-    });
+    try { return await executeValidatedGeneration(request, context, deps); }
+    finally { await rateLimit.release(); }
   } catch (e) {
     // Exception class name only — never a message, stack, or any fragment of source/model
     // content. See this repository's logging guardrails (CLAUDE.md) and this file's own header.

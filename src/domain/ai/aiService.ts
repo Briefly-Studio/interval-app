@@ -1,3 +1,4 @@
+import { generateAttemptId, generateProviderRequestId } from "./generationAttemptId";
 import type { NormalizedSourceContent, ExtractionStatus } from "../normalization/types";
 import { prepareGenerationContext } from "./contextPreparation";
 import type { PrepareContextOptions } from "./contextPreparation";
@@ -55,7 +56,7 @@ export type ModelProviderOutcome =
   // `usage` is evaluation/telemetry-only (see types.ts's own TokenUsage doc comment) — optional,
   // never fabricated by a provider that doesn't actually report it (the mock provider never sets
   // it; see mockProvider.ts).
-  | { status: "ok"; raw: unknown; usage?: TokenUsage }
+  | { status: "ok"; raw: unknown; usage?: TokenUsage; providerExecutionCount?: number; idempotencyReplay?: boolean }
   | { status: "error"; error: { code: GenerationErrorCode; message: string } };
 
 /**
@@ -70,6 +71,9 @@ export interface ModelProvider {
 }
 
 export type GenerateStudyDeckInput = {
+  /** Keep these when retrying this logical call; omit only for a genuinely new request. */
+  generationAttemptId?: string;
+  requestId?: string;
   sourceTitle: string;
   normalizedContent: NormalizedSourceContent;
   options: GenerationOptions;
@@ -113,6 +117,8 @@ function buildRequest(
   selectedChunkIds: string[]
 ): GenerateStudyDeckRequest {
   return {
+    generationAttemptId: input.generationAttemptId ?? generateAttemptId(),
+    requestId: input.requestId ?? generateProviderRequestId(),
     sourceId: content.sourceId,
     sourceTitle: input.sourceTitle,
     normalizationVersion: content.normalizationVersion,
@@ -182,5 +188,5 @@ export async function generateStudyDeck(
     };
   }
 
-  return { status: "ready", draft: validation.draft, usage: providerOutcome.usage, durationMs };
+  return { status: "ready", draft: validation.draft, usage: providerOutcome.usage, durationMs, providerExecutionCount: providerOutcome.providerExecutionCount, idempotencyReplay: providerOutcome.idempotencyReplay };
 }

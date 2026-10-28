@@ -167,10 +167,10 @@ export function classifyBedrockError(error) {
  * output/generic-failure deterministically, with no real AWS SDK call, network access, or
  * credential ever touched by a test.
  *
- * Retry policy: this function performs NO retry of its own. The only retry that can occur is
- * whatever `client`'s own configured `maxAttempts` performs internally (index.mjs sets this
- * explicitly to 2 — one retry beyond the initial attempt) — retries are never stacked on top of
- * each other across two layers.
+ * Retry policy: one send, no retry loop. index.mjs constructs the production SDK client with
+ * maxAttempts: 1 (initial attempt only), preventing middleware from silently resending after
+ * an ambiguous outcome. The idempotency envelope owns recovery; injected test clients must not
+ * be mistaken for the production transport configuration.
  */
 export async function runGeneration(client, CommandCtor, modelId, request, context, timeoutMs = BEDROCK_CALL_TIMEOUT_MS) {
   const params = buildConverseParams(modelId, request, context);

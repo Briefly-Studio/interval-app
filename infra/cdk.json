@@ -31,6 +31,8 @@
     "@aws-cdk/aws-lambda-nodejs:useLatestRuntimeVersion": false,
 
     "_comment_syncCursorRollout": "Sync-cursor-hardening rollout flags (docs/sync-cursor-semantics.md's 'Rollout' section). PERSISTED, SAFE-BY-DEFAULT values — committed here, not left to be remembered on an ad-hoc CLI flag, so a routine future `cdk deploy` with no extra flags can never silently revert an already-completed cutover OR silently activate one that hasn't happened yet. 'legacy'/'false' is always the fail-closed default if a key is ever missing (see interval-sync-stack.ts's own resolution, which never trusts this file's presence either). To change ONE environment's live mode: either (a) edit the value below and commit, so every future deploy preserves it, or (b) pass an explicit `-c key=value` override on a single `cdk deploy` invocation for a one-off operational step, then promote that value into this file once confirmed stable. Development and Staging are independently keyed on purpose — changing one never affects the other.",
+    "developmentAiIdempotencyMode": "legacy",
+    "stagingAiIdempotencyMode": "legacy",
     "developmentSyncCursorMode": "legacy",
     "developmentSyncPushMaintenance": "false",
     "stagingSyncCursorMode": "legacy",

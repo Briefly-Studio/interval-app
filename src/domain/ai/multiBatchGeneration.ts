@@ -1,3 +1,4 @@
+import { generateAttemptId, generateProviderRequestId } from "./generationAttemptId";
 import type { NormalizedSourceContent } from "../normalization/types";
 import { generateStudyDeck, type ModelProvider } from "./aiService";
 import { allocateCardsAcrossBatches } from "./batchCardAllocation";
@@ -31,13 +32,14 @@ export type MultiBatchOutcome =
   // batch reported one (never a partial/misleading total); `totalDurationMs` is always present
   // (Date.now() wall-clock across the whole sequential run, same timing convention this file's
   // own logAggregateOutcome already used internally — now also returned to the caller).
-  | { status: "ready"; draft: GeneratedDeckDraft; usage?: TokenUsage; totalDurationMs: number }
+  | { status: "ready"; draft: GeneratedDeckDraft; usage?: TokenUsage; totalDurationMs: number; providerExecutionCount?: number }
   // The underlying error from whichever batch failed first — reuses the EXISTING
   // GenerationErrorCode taxonomy/copy untouched; the user is never shown "batch" terminology.
   | { status: "error"; error: GenerationError; failedAtBatchIndex: number; completedBatchCount: number; totalDurationMs: number }
   | { status: "canceled"; completedBatchCount: number; totalDurationMs: number };
 
 export type RunMultiBatchGenerationParams = {
+  generationAttemptId?: string;
   provider: ModelProvider;
   normalizedContent: NormalizedSourceContent;
   sourceTitle: string;
@@ -87,6 +89,10 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
     || new Set(plannedIds).size !== plannedIds.length || plan.totalCandidateChunks !== plannedIds.length
     || plannedIds.some((id) => !sourceIds.has(id))) return failure("validation-failed", 0);
 
+  const generationAttemptId = params.generationAttemptId ?? generateAttemptId();
+  // Allocate before dispatch, outside any transport retry. Same run, distinct logical requests.
+  const requestIds = plan.batches.map(() => generateProviderRequestId());
+  let executionCount = 0, executionCountComplete = true;
   const requestedCardCount = resolveRequestedCardCount(options.cardCount);
   const targetMinimumCardCount = resolveTargetMinimumCardCount(options.cardCount);
   const perBatchCeilings = allocateCardsAcrossBatches({ batchCount: plan.batches.length, requestedCardCount });
@@ -121,6 +127,7 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
     let outcome;
     try {
       outcome = await generateStudyDeck(provider, {
+        generationAttemptId, requestId: requestIds[i],
         sourceTitle,
         normalizedContent,
         options: batchOptions,
@@ -146,6 +153,8 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
       return { status: "error", error: outcome.error, failedAtBatchIndex: i, completedBatchCount: i, totalDurationMs: Date.now() - startedAt };
     }
 
+    if (outcome.providerExecutionCount === undefined) executionCountComplete = false;
+    else executionCount += outcome.providerExecutionCount;
     if (outcome.usage) {
       usageSum = {
         inputTokens: usageSum.inputTokens + outcome.usage.inputTokens,
@@ -233,5 +242,5 @@ export async function runMultiBatchGeneration(params: RunMultiBatchGenerationPar
     totalDurationMs,
   });
 
-  return { status: "ready", draft, usage: usageComplete ? usageSum : undefined, totalDurationMs };
+  return { status: "ready", draft, usage: usageComplete ? usageSum : undefined, totalDurationMs, providerExecutionCount: executionCountComplete ? executionCount : undefined };
 }

@@ -613,19 +613,19 @@ exists specifically so a future pass can measure whether Small/Medium/Large are 
 as the "Count contract" section above intends (e.g. is Medium routinely landing near 15, or still
 clustering near 7?) without needing a dedicated analytics pipeline — none was built here.
 
-### Known limitation: no request-level idempotency
+### Request-level idempotency
 
-There is no idempotency key in the request contract, and this batch does not add one ("do not
-invent a large idempotency subsystem unless needed"). API Gateway HTTP API does not itself retry a
-Lambda proxy integration that already returned a response (even an error one); the realistic
-duplicate-request source is the mobile client itself retrying after a local timeout/network error
-without having seen Interval's own response. If the original request's Lambda invocation actually
-completed server-side (quota consumed, lease released) before the client gave up and retried, the
-retry is treated as a brand-new request and consumes another quota unit — a known, accepted gap.
-The concurrency lease incidentally mitigates the single most likely real-world case (the original
-request is STILL in flight when the client retries): the retry hits the same user's still-held
-lease and is rejected with `generation-in-progress` rather than double-counting. This is a
-beneficial side effect, not a solved idempotency guarantee, and should not be relied upon as one.
+The request now carries separate optional attempt/request UUIDs for contract-v1 rollout.
+`docs/ai-request-idempotency.md` is the authority for durable claims, exact response replay,
+atomic quota/provider-start admission, unknown outcomes, retention/privacy and migration.
+Committed mode remains legacy until an approved backend optional → client → required rollout.
+When activated, same-key replay does not invoke the provider or consume quota; full user restart
+uses new keys and remains a new charged logical request. No batch resume or automatic HTTP retry.
+The daily limit remains 20 and concurrency remains one. The generation Bedrock client now
+uses `maxAttempts: 1`, preventing SDK resends after ambiguous outcomes; wrapper/mobile retry
+loops remain absent. Its API is Converse, not InvokeModel. The original nontransactional limiter
+continues serving compatibility-mode keyless requests; keyed mode uses the same policy atomically
+with its durable provider-start marker. See the new doc for crash/admission limitations.
 
 ## Mock adapter
 
