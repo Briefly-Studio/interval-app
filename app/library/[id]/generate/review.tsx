@@ -119,6 +119,8 @@ export default function GenerateDeckReviewScreen() {
         deletedCount: session.generatedCardCount - session.cards.length,
         savedCount: 0,
         abandoned: true,
+        scopeType: session.scopeType,
+        structureNodeType: session.structureNodeType,
       });
     }
     clearGenerateDeckSession();

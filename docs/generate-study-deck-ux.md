@@ -381,6 +381,12 @@ localized message. No raw error, stack trace, or internal code is ever shown.
   calls and the results combined into one review draft, with a truthful pre-flight step-count
   disclosure and real per-batch progress on the generating screen. Automatic still never does
   this — it remains the unchanged, single-request, no-user-opt-in default described above.
+- **Update (Structured Generation Scope batch):** a "Document section" (DOCX) / "Worksheet"
+  (XLSX) scope choice now exists alongside the others, only ever offered when the source actually
+  has real derived structure (`docs/source-structure.md`) — never a heuristic PDF/TXT chapter.
+  Picking a node resolves through the existing `selectedChunkIds`/batch-planner seam with zero
+  changes to batching or the provider — see `docs/source-generation-scope.md`'s "Structure-aware
+  scope" section for the full picker/accessibility/telemetry design.
 - No regenerate / "generate more cards" action, and no "add card" flow — a fully-emptied draft
   must be discarded and regenerated.
 - Draft is in-memory only and does not survive an app restart.

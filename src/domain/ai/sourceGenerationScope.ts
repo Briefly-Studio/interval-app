@@ -1,5 +1,6 @@
-import type { NormalizedChunk } from "../normalization/types";
+import type { NormalizedChunk, NormalizedSourceContent } from "../normalization/types";
 import type { SourceCoverage } from "../sourceCoverage";
+import { resolveStructureNodeChunks, type SourceStructure } from "../sourceStructure";
 import { DEFAULT_CONTEXT_CHAR_BUDGET } from "./contextPreparation";
 
 // Source scope selection — lets the user choose WHAT PART of a Library source Generate Study
@@ -26,7 +27,16 @@ export type SourceGenerationScope =
   | { type: "entireSource" }
   | { type: "uncovered" }
   | { type: "pageRange"; startPage: number; endPage: number }
-  | { type: "sectionRange"; startSection: number; endSection: number };
+  | { type: "sectionRange"; startSection: number; endSection: number }
+  // A real structural region — a DOCX heading section or an XLSX worksheet — never a heuristic
+  // PDF/TXT chapter (see docs/source-generation-scope.md's "Structure breadcrumbs" section and
+  // src/domain/sourceStructure.ts's own "no heuristic inference" principle). `structureSnapshot`
+  // is the SourceStructure the user actually picked `nodeId` from (captured once by the options
+  // screen from checkGenerationAvailability, carried unchanged ever since) — never recomputed by
+  // this file — so resolution below can tell "this node no longer exists/changed since selection"
+  // apart from "this node currently has no content," exactly like every other scope variant
+  // carries its own user-selected values (startPage/endPage, startSection/endSection) inline.
+  | { type: "structureNode"; nodeId: string; structureSnapshot: SourceStructure };
 
 export type SourceGenerationScopeKind = SourceGenerationScope["type"];
 
@@ -49,14 +59,35 @@ export type SourceScopeResolutionErrorCode =
   | "invalid-range"
   // The range (or coverage subset) was itself valid, but resolves to zero actual chunks — e.g. a
   // page range that lands entirely on pages that produced no extractable text.
-  | "empty-selection";
+  | "empty-selection"
+  // A structureNode scope was selected but the source changed (different normalization, or the
+  // referenced node's own derived shape no longer matches `structureSnapshot`) since the user
+  // picked it — mirrors resolveStructureNodeChunks's "stale-structure". Distinct from
+  // "structure-node-not-found" so the UI can say "this document changed" rather than "this
+  // section is gone" when it genuinely knows which happened.
+  | "structure-node-stale"
+  // A structureNode scope referenced a nodeId that does not exist in `structureSnapshot` itself,
+  // or (the defensive-backstop case) no snapshot/content was supplied at all — mirrors
+  // resolveStructureNodeChunks's "node-not-found". The options screen's own picker should never
+  // let this happen in practice; this is a backstop, same posture as every other scope's own
+  // "-unavailable" codes above.
+  | "structure-node-not-found"
+  // The referenced node resolves cleanly but currently has zero chunks — in practice only ever
+  // reachable for an empty worksheet (a DOCX heading's own interval always includes at least its
+  // own heading-text chunk, so a "body-less" heading never actually hits this) — mirrors
+  // resolveStructureNodeChunks's "empty-node".
+  | "structure-node-empty";
 
 export type ResolvedSourceGenerationScope =
   // `chunkIds` omitted (undefined) means "no restriction" — every chunk in the normalized source
   // remains eligible, exactly like omitting `selectedChunkIds` from aiService.ts's
   // GenerateStudyDeckInput today. Automatic and a successfully-fitting Entire Source both resolve
   // this way; they differ only in the upfront feasibility check Entire Source performs.
-  | { status: "ok"; chunkIds?: string[] }
+  // `sharedWithOtherNodes` is only ever set (and only ever true) for a structureNode scope whose
+  // resolved chunks also belong to another node — the known XLSX "a chunk can span worksheet
+  // boundaries" limitation (sourceStructure.ts) — surfaced here rather than recomputed by a
+  // caller, since resolveStructureNodeChunks already knows it for free.
+  | { status: "ok"; chunkIds?: string[]; sharedWithOtherNodes?: boolean }
   | { status: "error"; code: SourceScopeResolutionErrorCode };
 
 function totalApproxChars(chunks: NormalizedChunk[]): number {
@@ -104,6 +135,12 @@ export function resolveSourceGenerationScope(params: {
   coverage?: SourceCoverage;
   /** Only read for scope.type === "pageRange" — NormalizedSourceContent.metadata.pageCount. */
   pageCount?: number;
+  /** Only read for scope.type === "structureNode". Must be the CURRENT normalized content for
+   * this same source (re-normalized fresh at generation time, same convention as `chunks` —
+   * see generateDeckFlow.ts). Never the stale structureSnapshot itself: resolveStructureNodeChunks
+   * (sourceStructure.ts) re-derives a fresh SourceStructure from this and does its own
+   * comparison against `scope.structureSnapshot` — not duplicated here. */
+  normalizedContent?: NormalizedSourceContent;
 }): ResolvedSourceGenerationScope {
   const { chunks, scope } = params;
 
@@ -150,6 +187,22 @@ export function resolveSourceGenerationScope(params: {
         .map((chunk) => chunk.id);
       if (chunkIds.length === 0) return { status: "error", code: "empty-selection" };
       return { status: "ok", chunkIds };
+    }
+
+    case "structureNode": {
+      // Missing prerequisite content is the same defensive-backstop posture every other scope's
+      // own "-unavailable" case uses — the options screen's live structure picker should never
+      // reach this in practice.
+      if (!params.normalizedContent) return { status: "error", code: "structure-node-not-found" };
+      const resolved = resolveStructureNodeChunks(params.normalizedContent, scope.structureSnapshot, scope.nodeId);
+      if (resolved.status === "error") {
+        const code: SourceScopeResolutionErrorCode =
+          resolved.code === "stale-structure" ? "structure-node-stale"
+          : resolved.code === "node-not-found" ? "structure-node-not-found"
+          : "structure-node-empty";
+        return { status: "error", code };
+      }
+      return { status: "ok", chunkIds: resolved.chunkIds, sharedWithOtherNodes: resolved.sharedWithOtherNodes };
     }
   }
 }

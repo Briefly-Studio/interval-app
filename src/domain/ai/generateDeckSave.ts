@@ -181,6 +181,8 @@ export async function saveDraftDeck(scope: WorkspaceScope, session: GenerateDeck
       deletedCount: session.generatedCardCount - session.cards.length,
       savedCount: cards.length,
       abandoned: false,
+      scopeType: session.scopeType,
+      structureNodeType: session.structureNodeType,
     });
     return { status: "saved", deckId, cardCount: cards.length };
   } finally {

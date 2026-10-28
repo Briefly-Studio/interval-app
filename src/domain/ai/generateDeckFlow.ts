@@ -1,7 +1,7 @@
 import type { LibrarySourceRecord } from "../../models/librarySource";
 import { loadSourceCoverage } from "../sourceCoverageService";
 import type { WorkspaceScope } from "../../storage/workspaceScope";
-import type { NormalizationResult, NormalizedChunk } from "../normalization/types";
+import type { NormalizationResult, NormalizedChunk, NormalizedSourceContent } from "../normalization/types";
 import { normalizeSource } from "../normalization/normalizeSource";
 import { generateStudyDeck } from "./aiService";
 import { generateAttemptId } from "./generationAttemptId";
@@ -18,6 +18,7 @@ import {
 import { runMultiBatchGeneration, type MultiBatchProgress } from "./multiBatchGeneration";
 import { selectModelProvider } from "./providerSelection";
 import { resolveSourceGenerationScope, type SourceGenerationScope, type SourceScopeResolutionErrorCode } from "./sourceGenerationScope";
+import { extractSourceStructure, type SourceStructure } from "../sourceStructure";
 import type { GeneratedDeckDraft, GenerationErrorCode, GenerationOptions } from "./types";
 
 // Orchestrates one end-to-end generation attempt for the UX shell:
@@ -68,10 +69,19 @@ export type GenerateDeckFlowCallbacks = {
  * `options` (card count/difficulty/style never affect context selection). This lets the options
  * screen disclose up front whether the source will fit before the user taps Generate.
  *
- * `scopeChunks`/`pageCount` (also only present when `canGenerate`) are the raw ingredients the
- * options screen needs to offer/validate a source scope choice (Automatic/Entire source/
- * Uncovered/Page range/Section range) — see sourceGenerationScope.ts. Exposing the already-
- * computed chunk list here is strictly cheaper than having the screen normalize a second time.
+ * `scopeChunks`/`pageCount`/`structure`/`normalizedContent` (also only present when
+ * `canGenerate`) are the raw ingredients the options screen needs to offer/validate a source
+ * scope choice (Automatic/Entire source/Uncovered/Page range/Section range/a real structural
+ * region) — see sourceGenerationScope.ts. Exposing the already-computed chunk list here is
+ * strictly cheaper than having the screen normalize a second time. `structure` is likewise
+ * derived from this SAME normalization — extractSourceStructure (sourceStructure.ts) is
+ * pure/synchronous, so this adds no extra async work or second normalization pass. It is this
+ * call's own fresh structure snapshot, carried unchanged by the screen into the scope it builds
+ * (see SourceGenerationScope's "structureNode" variant) for later staleness comparison at
+ * generate time — never recomputed here a second time for that purpose. `normalizedContent` is
+ * the same object `scopeChunks` was already sliced from (no second normalization) — only needed
+ * so the screen's OWN live validation can resolve a structureNode scope the same way
+ * runGenerateDeckFlow will; every other scope only ever needs `scopeChunks`.
  */
 export async function checkGenerationAvailability(source: LibrarySourceRecord): Promise<{
   state: GenerationAvailabilityState;
@@ -79,11 +89,13 @@ export async function checkGenerationAvailability(source: LibrarySourceRecord): 
   coverage: GenerationCoverage | null;
   scopeChunks: NormalizedChunk[] | null;
   pageCount?: number;
+  structure: SourceStructure | null;
+  normalizedContent: NormalizedSourceContent | null;
 }> {
   const normalization = await normalizeSource(source);
   const availability = deriveGenerationAvailability(normalization);
   if (!availability.canGenerate) {
-    return { ...availability, coverage: null, scopeChunks: null };
+    return { ...availability, coverage: null, scopeChunks: null, structure: null, normalizedContent: null };
   }
   const context = prepareGenerationContext(normalization.content);
   return {
@@ -91,6 +103,8 @@ export async function checkGenerationAvailability(source: LibrarySourceRecord): 
     coverage: summarizeGenerationCoverage(context),
     scopeChunks: normalization.content.chunks,
     pageCount: normalization.content.metadata.pageCount,
+    structure: extractSourceStructure(normalization.content),
+    normalizedContent: normalization.content,
   };
 }
 
@@ -114,6 +128,7 @@ function finalizeReadyOutcome(
   attemptId: string,
   source: LibrarySourceRecord,
   sourceScope: WorkspaceScope,
+  scope: SourceGenerationScope,
   draft: GeneratedDeckDraft,
   normalization: NormalizationResult,
   options: GenerationOptions
@@ -131,6 +146,12 @@ function finalizeReadyOutcome(
       chunkCount: draft.generation.selectedChunkIds.length,
       excludedChunkCount: draft.generation.excludedChunkCount,
     }),
+    scopeType: scope.type,
+    // Only ever "heading" or "worksheet", never the node's own id/title — see
+    // generateDeckSession.ts's own doc comment on this field.
+    structureNodeType: scope.type === "structureNode"
+      ? scope.structureSnapshot.nodes.find((node) => node.id === scope.nodeId)?.type
+      : undefined,
   });
   return { status: "ready" };
 }
@@ -172,6 +193,11 @@ export async function runGenerateDeckFlow(
     scope,
     coverage,
     pageCount: normalization.content.metadata.pageCount,
+    // Only actually read by the resolver for scope.type === "structureNode" — passed
+    // unconditionally here since it's just the NormalizedSourceContent already in hand (same
+    // "re-normalize fresh at generation time" convention as `chunks` above), never a second
+    // normalization pass.
+    normalizedContent: normalization.content,
   });
   if (resolvedScope.status === "error") {
     return { status: "scope-error", code: resolvedScope.code };
@@ -205,7 +231,7 @@ export async function runGenerateDeckFlow(
       if (callbacks?.isCanceled?.()) return { status: "canceled" };
       if (multiOutcome.status === "error") return { status: "error", code: multiOutcome.error.code,
         multiBatch: { completed: multiOutcome.completedBatchCount, total: plan.batches.length } };
-      return finalizeReadyOutcome(attemptId, source, sourceScope, multiOutcome.draft, normalization, options);
+      return finalizeReadyOutcome(attemptId, source, sourceScope, scope, multiOutcome.draft, normalization, options);
     }
     // Exactly one batch — identical cost/behavior to the single-call path below, just reusing
     // the already-computed, already-validated batch chunk list instead of the raw resolved set.
@@ -229,7 +255,7 @@ export async function runGenerateDeckFlow(
     return { status: "error", code: outcome.error.code };
   }
 
-  return finalizeReadyOutcome(attemptId, source, sourceScope, outcome.draft, normalization, options);
+  return finalizeReadyOutcome(attemptId, source, sourceScope, scope, outcome.draft, normalization, options);
 }
 
 // GenerationErrorCode → i18n key for a friendly, non-technical message. Internal codes are never
@@ -260,6 +286,9 @@ export const SOURCE_SCOPE_ERROR_COPY_KEYS: Record<SourceScopeResolutionErrorCode
   "page-range-unavailable": "generateDeck.scope.error.pageRangeUnavailable",
   "invalid-range": "generateDeck.scope.error.invalidRange",
   "empty-selection": "generateDeck.scope.error.emptySelection",
+  "structure-node-stale": "generateDeck.scope.error.structureNodeStale",
+  "structure-node-not-found": "generateDeck.scope.error.structureNodeNotFound",
+  "structure-node-empty": "generateDeck.scope.error.structureNodeEmpty",
 };
 
 // Same purpose again, for batch-plan failures (batchPlanning.ts) — resolved after scope

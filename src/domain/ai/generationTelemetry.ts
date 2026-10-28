@@ -1,3 +1,5 @@
+import type { GenerateDeckSession } from "./generateDeckSession";
+
 // Privacy-safe RUNTIME quality telemetry for one generation attempt's review outcome — distinct
 // from the offline evaluation harness (src/domain/ai/evaluation/**): this file only ever
 // describes what actually happened during a REAL user/founder session, never a fixture. See
@@ -35,6 +37,13 @@ export type GenerationReviewOutcome = {
   savedCount: number;
   /** True when the draft was discarded/navigated away from instead of saved. */
   abandoned: boolean;
+  /** Which SourceGenerationScope kind this generation used (sourceGenerationScope.ts) — a
+   * category string like "automatic" or "structureNode", never a nodeId, page/section number,
+   * or any other value derived from this source's own content. */
+  scopeType: GenerateDeckSession["scopeType"];
+  /** Only present when `scopeType === "structureNode"` — "heading" or "worksheet", never the
+   * selected node's own id or title (see GenerateDeckSession.structureNodeType). */
+  structureNodeType?: GenerateDeckSession["structureNodeType"];
 };
 
 export function emitGenerationReviewOutcome(outcome: GenerationReviewOutcome): void {
@@ -46,5 +55,7 @@ export function emitGenerationReviewOutcome(outcome: GenerationReviewOutcome): v
     deletedCount: outcome.deletedCount,
     savedCount: outcome.savedCount,
     abandoned: outcome.abandoned,
+    scopeType: outcome.scopeType,
+    structureNodeType: outcome.structureNodeType,
   });
 }

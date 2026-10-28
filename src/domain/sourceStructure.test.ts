@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { zipSync, strToU8 } from "fflate";
-import { extractSourceStructure, resolveStructureNodeChunks, SOURCE_STRUCTURE_LIMITS } from "./sourceStructure";
+import { extractSourceStructure, resolveStructureNodeChunks, buildStructureBreadcrumbNodes, SOURCE_STRUCTURE_LIMITS } from "./sourceStructure";
 import { normalizeDocxSource, normalizeStructuredBlocks } from "./normalization/docxAdapter";
 import { buildSpreadsheetText, normalizeSpreadsheetSource, readSpreadsheetArchive } from "./normalization/spreadsheetAdapter";
 import { normalizePdfTextSource } from "./normalization/pdfAdapter";
@@ -213,4 +213,21 @@ test("malformed worksheet range metadata is omitted without affecting normalized
   assert.deepEqual(extractSourceStructure(content).nodes, []);
   assert.ok(extractSourceStructure(content).warnings.includes("malformed-structure"));
   assert.ok(content.chunks[0].text.includes("Body"));
+});
+test("structure breadcrumbs resolve a deep chain root-first, including the node itself", () => {
+  const content = docx(heading(1, "IAM") + heading(2, "Policies") + heading(3, "Details"));
+  const structure = extractSourceStructure(content);
+  const [iam, policies, details] = structure.nodes;
+  assert.deepEqual(buildStructureBreadcrumbNodes(structure, iam.id), [iam]);
+  assert.deepEqual(buildStructureBreadcrumbNodes(structure, policies.id), [iam, policies]);
+  assert.deepEqual(buildStructureBreadcrumbNodes(structure, details.id), [iam, policies, details]);
+});
+test("structure breadcrumbs disambiguate duplicate titles by real parent identity, and return [] for an unknown node", () => {
+  const content = docx(heading(1, "A") + heading(2, "Dup") + heading(1, "B") + heading(2, "Dup"));
+  const structure = extractSourceStructure(content);
+  const [, dup1, , dup2] = structure.nodes;
+  assert.notEqual(dup1.id, dup2.id);
+  assert.deepEqual(buildStructureBreadcrumbNodes(structure, dup1.id).map(n => n.title), ["A", "Dup"]);
+  assert.deepEqual(buildStructureBreadcrumbNodes(structure, dup2.id).map(n => n.title), ["B", "Dup"]);
+  assert.deepEqual(buildStructureBreadcrumbNodes(structure, "missing"), []);
 });

@@ -456,6 +456,36 @@ For anything not covered directly in this file, these are the authoritative docu
     deterministic forbidden-keyword check, a telemetry backend, or any CI pipeline wiring. No
     model/provider/prompt change, no Production/Staging AI enablement change, no sync-cursor or
     Source Coverage change.
+37. `docs/source-generation-scope.md`'s "Structure-aware scope (DOCX headings / XLSX worksheets)"
+    section — turns the Source Structure foundation (`docs/source-structure.md`, item 32's own
+    "Never implements chapter/heading-based selection... or XLSX worksheet selection" claim is now
+    OUTDATED and superseded by this item) into a real `SourceGenerationScope` choice. **Implemented,
+    merged into `v3.3-dev`; not yet founder-QA verified.** A new `{ type: "structureNode", nodeId,
+    structureSnapshot }` scope variant (`sourceGenerationScope.ts`) delegates entirely to the
+    pre-existing `resolveStructureNodeChunks` (`sourceStructure.ts`) — no staleness/empty-node
+    logic duplicated — mapping its three error codes 1:1 to new
+    `structure-node-{stale,not-found,empty}` codes. `checkGenerationAvailability`
+    (`generateDeckFlow.ts`) now also derives `structure: SourceStructure | null` from the SAME
+    normalization pass it already runs (pure/synchronous `extractSourceStructure` — no extra async
+    work). `buildSourceScopeChoices`/`buildStructureNodeChoices` (`sourceGenerationScopeUi.ts`)
+    offer a new "Document section"/"Worksheet" choice ONLY when `structure.nodes.length > 0` —
+    never for PDF/TXT, which carry zero structural evidence. `src/ui/StructureNodePicker.tsx` is
+    this codebase's first hierarchical/tree selection control (flat, indented, bounded, extends
+    `OptionRadioGroup`'s visual language, RTL-safe indentation via `useLayoutDirection().isRtl`) —
+    a new `buildStructureBreadcrumbNodes` helper (`sourceStructure.ts`) gives it/accessibility/the
+    pre-generation summary a node's real root-first ancestor chain, never altering the node's own
+    source-text `title`. `GenerateDeckSession` gained `scopeType`/`structureNodeType` (the latter
+    only "heading"/"worksheet", never a nodeId or title), read by the existing privacy-safe
+    `GenerationReviewOutcome` telemetry (`generationTelemetry.ts`) so scope-family usage is
+    observable without ever carrying source content. Multi-batch generation
+    (`docs/whole-source-generation.md`) needed zero code changes — `structureNode` resolves an
+    explicit `chunkIds` array exactly like `pageRange`/`sectionRange` already did. **Never
+    implements** combining scopes (e.g. "uncovered material within one section"),
+    coverage-by-structure-node, or any PDF/TXT heuristic chapter/section — both formats are
+    completely unaffected. No backend/AWS/CDK/EAS/Staging/Production change, no change to Source
+    Coverage's own calculations, no new npm dependency; the AI evaluation harness
+    (item 36) compiles against the widened `SourceGenerationScope` with zero changes (it only
+    ever constructs `{type:"entireSource"}`/bounded cases).
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -471,8 +501,18 @@ identifiers" above).
 real Heading1–Heading3 levels; XLSX preserves actual worksheet identities/visibility/empty
 sheets. PDF has no outline bridge and TXT has no semantic nodes. Existing chunk IDs/version 1
 remain stable for unchanged supported valid input. XLSX chunks may span sheets: inspect warnings
-before promising exclusive worksheet scope. No new scope picker, structure persistence/sync or
-Source Coverage math change. Run `npm run test:structure`; native Founder QA remains pending.
+before promising exclusive worksheet scope. No structure persistence/sync or Source Coverage math
+change. Run `npm run test:structure`; native Founder QA remains pending.
+
+**Update (Structured Generation Scope batch):** a `{ type: "structureNode", nodeId,
+structureSnapshot }` scope variant, picker (`src/ui/StructureNodePicker.tsx` — the codebase's
+first hierarchical/tree selection control), and breadcrumb helper
+(`buildStructureBreadcrumbNodes`) are now implemented — see `docs/source-generation-scope.md`'s
+"Structure-aware scope" section. Only ever offered when a source has real derived structure
+(`structure.nodes.length > 0`); PDF/TXT are completely unaffected (still zero heuristic
+chapters/sections). Do not widen this to combine with Uncovered/other scopes, add
+chapter/heading detection to PDF or TXT, or add coverage-by-structure-node without a separate,
+explicit founder decision — all three were deliberately out of scope for this batch.
 
 ## Core Product Rule
 
@@ -1078,6 +1118,16 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   persisted `GenerationMetadata` contract or any saved record. Not yet exercised against a real
   Development response outside this batch's own unit tests (which inject fake HTTP bodies, never
   a real Bedrock call).
+- **Structure-aware generation scope (item 37 above) is implemented but not yet founder-QA
+  verified on a real device** — only real device testing (a real DOCX with nested headings and
+  an XLSX with multiple worksheets in Generate Study Deck) can confirm the picker's indentation/
+  breadcrumb disambiguation, empty-node disabled rendering, VoiceOver/TalkBack announcements, the
+  "document changed" stale-selection recovery copy, and RTL indentation mirroring all behave
+  correctly end to end — the resolver/UI-choice-building logic itself is unit-tested against real
+  DOCX/XLSX normalization output (not device-rendered). See `docs/source-structure.md`'s "Tests
+  and Founder QA" section for the proposed device checklist. The AI evaluation harness (item 36)
+  was deliberately NOT extended with a structure-scope fixture/case for this batch — a known,
+  accepted gap, not an oversight (see `docs/source-generation-scope.md`'s closing section).
 
 ## Accessibility Guardrails
 

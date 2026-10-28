@@ -32,6 +32,8 @@ it does not change the reader or claim comprehensive Word outline fidelity.
 ```ts
 extractSourceStructure(content: NormalizedSourceContent): SourceStructure
 resolveStructureNodeChunks(content, structure, nodeId): StructureSelection
+buildStructureBreadcrumbNodes(structure, nodeId): SourceStructureNode[] // root-first ancestor
+                                                                        // chain, including nodeId
 
 SourceStructure {
   sourceId: string
@@ -169,13 +171,16 @@ followed, so those parts cannot safely contribute text. A genuine text/archive e
 can still return the existing `too-large` result. Warnings are domain diagnostics; no developer
 jargon or raw errors are newly rendered to users.
 
-## Future generation and coverage integration
+## Generation scope integration
 
-The existing `SourceGenerationScope`, page/section ranges, Uncovered resolution, generation
-screen, batching, prompt/provider and quotas are unchanged. Future `{ type: "structureNode",
-nodeId }` UI can resolve a fresh node through `resolveStructureNodeChunks`, then feed its ordered
-IDs into the existing `selectedChunkIds`/batch planner seam after handling stale/empty/overlap
-results. No scope variant was added prematurely.
+**Implemented (Structured Generation Scope batch)** — see `docs/source-generation-scope.md`'s
+"Structure-aware scope" section for the full design. `SourceGenerationScope` gained a
+`{ type: "structureNode", nodeId, structureSnapshot }` variant; `resolveSourceGenerationScope`'s
+new case delegates entirely to `resolveStructureNodeChunks` (mapping its three error codes 1:1)
+and feeds the resolved chunk IDs into the EXISTING `selectedChunkIds`/batch-planner seam with zero
+changes to batching, the prompt, the provider, or quotas. `buildStructureBreadcrumbNodes` (added
+alongside) gives the picker/accessibility layer a node's real root-first ancestor chain for
+disambiguation and announcement — it never alters a node's own `title`.
 
 Coverage remains live saved-card provenance over normalized chunk IDs. Processing a heading or
 worksheet does not mark it covered. Future coverage-by-node can intersect its chunk IDs with the
@@ -192,7 +197,9 @@ no-heading text, node identity/version/limits, worksheets/order/relationships/vi
 sheets, overlap disclosure, malformed input, and no fake TXT/PDF chapters. The normal adapters'
 existing parser suites also run. No extra dependency or runtime debug override was added.
 
-Device/API checklist (no new structure UI exists):
+Device/API checklist — a structure picker now exists in Generate Study Deck's options screen
+(`docs/source-generation-scope.md`'s "Structure-aware scope" section); this checklist still
+covers the domain layer first, then the picker itself:
 
 1. DOCX with Heading1/Heading2/Heading3: inspect extracted nodes/order/parent IDs and selection
    intervals. Repeat an “Introduction” title, use Arabic/Unicode, and put a heading immediately
@@ -208,6 +215,13 @@ Device/API checklist (no new structure UI exists):
    still have no generatable text. No AI prompt/model quality change is expected.
 6. Delete/archive/restore sources and replace/re-normalize content: no structure persistence to
    clean up, and old node snapshots must be rejected against changed current content.
-7. Arabic source titles remain source text. Existing UI RTL/accessibility behavior is unchanged;
-   a future structure UI must add logical hierarchy labels, bounded accessible titles, large-text
-   handling and all 13 locale strings. Native runtime QA is still pending.
+7. Arabic source titles remain source text, pinned LTR within an RTL layout exactly like every
+   other source-provided string; the surrounding chrome (labels, hints, breadcrumbs, counts)
+   follows the active locale and mirrors for RTL. On the real device: open a DOCX with nested
+   headings and an XLSX with multiple worksheets in Generate Study Deck, confirm the "Document
+   section"/"Worksheet" choice appears, the picker shows real indentation/breadcrumb
+   disambiguation for a repeated title, an empty node renders disabled (never hidden) with
+   VoiceOver/TalkBack announcing "no content" rather than just silence, re-attaching a changed
+   file after picking a node surfaces the "document changed" recovery copy (never a silent
+   fallback to Automatic), and the pre-generation summary/plan dialog name the picked
+   section/worksheet. Native runtime QA is still pending.
