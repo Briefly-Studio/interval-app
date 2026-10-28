@@ -77,18 +77,19 @@ do not rename them for branding alone.
   internal npm/build metadata, never rendered anywhere in the app). Left untouched deliberately —
   package files are treated as protected in beta-cleanup batches to avoid unrelated
   lockfile churn.
-- **Expo `slug`** — `app.json`'s `"slug": "briefly-app"`. Not user-visible in the app itself, but
-  is the identifier EAS/Expo's own infrastructure would use to associate this project with a
-  hosted project, update channel, or build history if one already exists. `eas.json` now exists
-  (build profiles only — `development` / `development-simulator`, no `projectId`, no `owner`), but
-  the project is still **not linked to an Expo account** (`eas login` / `eas init` deliberately
-  not run — see the tech-debt note). Changing the slug could silently disconnect the project from
-  infrastructure this repository can't see. Preserved out of caution; safe to revisit once EAS
-  project linkage is confirmed with the founder.
-- **iOS bundle identifier / Xcode product name** — `com.anonymous.briefly-app` /
-  `brieflyapp` (visible only in `ios/brieflyapp.xcodeproj`, gitignored, locally generated).
-  Explicitly out of scope per this batch's own instructions — bundle identifiers are a
-  signing/App-Store-identity concern, not a branding concern.
+- **Update (v3.3 Staging-readiness audit):** the two bullets that used to appear here — an
+  "Expo `slug`" bullet describing `app.json`'s slug as still `"briefly-app"` and the project as
+  not linked to an Expo account, and an "iOS bundle identifier" bullet describing the identifiers
+  as the `com.anonymous.*` placeholder — are now **obsolete and have been removed**, not merely
+  corrected in place, because the underlying facts changed, not just the wording. As of commit
+  `aa898d1` (2026-09-04) and `30c6b73` (2026-09-05), `app.json`'s `slug` is `"interval-app"`,
+  `ios.bundleIdentifier`/`android.package` are both the real, permanent
+  `com.brieflystudios.interval` (not a placeholder), and `app.config.ts` sets
+  `owner: "briefly-studios"` plus `extra.eas.projectId` — i.e. the project **is** linked to a real
+  Expo/EAS project. None of this was caught by a routine edit at the time; it was found stale by
+  this later audit. These are consequently no longer "Legacy Briefly identifiers" at all — see
+  "AWS Resources"/`docs/staging-beta-distribution.md` for current EAS/TestFlight state, and do not
+  reintroduce a claim that the bundle identifier or EAS linkage is still a placeholder.
 - **Support email domain** — `src/domain/supportContact.ts`'s `intervalsupport@briefly-studios.com`.
   This is a real, currently-owned external email address/domain, not leftover app branding —
   changing the string would misdirect real support requests unless a new domain/mailbox is
@@ -486,6 +487,32 @@ For anything not covered directly in this file, these are the authoritative docu
     Coverage's own calculations, no new npm dependency; the AI evaluation harness
     (item 36) compiles against the widened `SourceGenerationScope` with zero changes (it only
     ever constructs `{type:"entireSource"}`/bounded cases).
+38. `docs/v3.3-staging-readiness.md` — the v3.3 Development→Staging readiness audit/runbook.
+    **Audit only; no feature work, no code behavior change, no AWS/EAS mutation.** Independently
+    re-verified sync cursor hardening (item 35) and AI request idempotency (item 517's "AI request
+    idempotency" section) against actual committed code rather than trusting either doc —
+    **found both fully implemented, fully tested, and genuinely inert exactly as documented, with
+    zero discrepancies.** Ran the full automated suite (982 tests across 13 `npm run test:*`
+    commands plus `tsc`/lint/`git diff --check` — all green, one non-reproducing cold-start flake
+    in `test:idempotency` noted, not fixed) and a 10-combination `cdk synth` matrix across
+    Development/Staging (all clean, zero Production resource-name leakage). Found and fixed one
+    real documentation defect: `CLAUDE.md`'s own "Legacy Briefly identifiers"/tech-debt sections
+    and `docs/staging-beta-distribution.md` had drifted roughly seven weeks out of date, still
+    describing the iOS/Android bundle identifier as the `com.anonymous.*` placeholder, the project
+    as unlinked from EAS, and no App Store Connect record as existing — all three were already
+    resolved by commits `30c6b73`/`aa898d1`/`e1a1162` and this batch corrected the stale text in
+    place (see those sections' own "Update (v3.3 Staging-readiness audit)" notes). Produced the
+    first complete, code-verified rollout AND rollback/failure runbook for both not-yet-deployed
+    systems, a Development/multi-device/Staging/network-failure QA matrix, a minimal real-AI-
+    provider evaluation plan sized to stay well under the 20/day quota, and a conservative
+    readiness scorecard. **Explicitly did not resolve** the pre-existing, self-flagged
+    contradiction in this file about whether Development's real-AI Lambda has actually been
+    `cdk deploy`'d (see the "Current Known Technical Debt" entry starting "Update (live AWS
+    inspection, 2026-10-28)") — that required live AWS inspection, out of scope for this
+    source-only audit. **A follow-up live check on 2026-10-28 confirmed the Lambda's
+    existence/deployment**; whether its deployed code revision matches current source remains
+    unverified and is now the top recommended next action. No `cdk deploy`, `eas build`,
+    TestFlight submission, or database mutation of any kind was performed.
 
 Historical version documents (`docs/versions/*.md`, `docs/v2.0_kickoff.md`) remain historical and
 must never be treated as, or edited to look like, current specifications — see each file's own
@@ -967,30 +994,49 @@ grandfathering"). None of this blocked closing out the three-environment milesto
   fallback for every format without an embedded reader (video, `.xlsx`, `.pptx`, legacy `.doc`,
   encrypted DOCX). Still not implemented in-app: any editing, annotation, highlighting, OCR, or
   text extraction of an opened source, and any **video** reader (there is no `video` `SourceType`).
-- EAS Build now also has `staging`/`staging-internal` profiles (`eas.json`, see
-  `docs/staging-beta-distribution.md`) alongside `development`/`development-simulator`, but the
-  project is still **not linked to an Expo account/project** — that step requires interactive
-  founder action (`eas login`, `eas init`) and was deliberately not performed autonomously; local
-  builds (`npx expo run:ios`) remain the founder-QA-verified path for both physical iPhone and
-  Simulator. Do not run `eas login`/`eas init` against an assumed or default account. The Staging
-  profiles also need EAS-hosted environment variables created (Staging's real
-  `EXPO_PUBLIC_API_BASE_URL`/Cognito values — see that doc's "Environment variable strategy") and
-  an App Store Connect app record before a real TestFlight build can go out; the current
-  `com.anonymous.briefly-app`/`com.anonymous.brieflyapp` bundle identifiers are still placeholders
-  not suitable for that submission (see the same doc's "App identifier audit" — no identifier was
-  changed).
+- **Update (v3.3 Staging-readiness audit) — the bullet that used to appear here was stale, not
+  just the identifier bullets above.** EAS Build has `staging`/`staging-internal` profiles
+  (`eas.json`) alongside `development`/`development-simulator`, exactly as before, but every other
+  claim in the old bullet was found false against the actual committed config, not merely
+  outdated wording: the project **is** linked to a real Expo/EAS project
+  (`app.config.ts`'s `owner: "briefly-studios"` + `extra.eas.projectId`, since commit `aa898d1`,
+  2026-09-04); the iOS/Android identifiers are the real, permanent `com.brieflystudios.interval`,
+  not a placeholder (commit `30c6b73`, 2026-09-05); and `eas.json`'s `submit.staging.ios.ascAppId`
+  (`"6809260111"`, added commit `e1a1162`, 2026-10-15) is strong evidence an App Store Connect app
+  record already exists (not independently confirmed via Apple/ASC auth, which this audit
+  correctly did not attempt). A working CI pipeline
+  (`.github/workflows/staging-delivery.yml`, manual `workflow_dispatch` only) already runs
+  `eas build --platform ios --profile staging --non-interactive --auto-submit` using
+  `secrets.EXPO_TOKEN` — whether that secret is actually configured in this GitHub repo could not
+  be verified from a local checkout. `docs/staging-beta-distribution.md` has the same staleness in
+  its "App identifier audit"/"Expo/EAS account linkage" sections and needs the same correction. Do
+  not reintroduce "not linked"/"still a placeholder" language for any of these three facts without
+  first re-checking `app.json`/`app.config.ts`/`eas.json` directly — this file drifted out of sync
+  with reality for roughly seven weeks (2026-09-04 through this audit) because nothing prompted a
+  re-read after the underlying commits landed. Separately, a THIRD CI branch,
+  `ci/register-staging-delivery-main`, targeted `main` directly with a slightly different
+  `staging-delivery.yml` (no `--auto-submit`) and is **not merged into this branch's/`v3.3-dev`'s
+  lineage** — whether that work is obsolete (superseded by what IS merged here) or still needs
+  reconciling into `main` separately is a founder decision, not resolved by this audit. Local
+  builds (`npx expo run:ios`) remain the founder-QA-verified native-runtime path regardless of any
+  of the above; no EAS build has actually been produced or submitted yet by any of this tooling.
 - **Real provider-backed AI generation is enabled in Development only** (merged via
   `feat/enable-development-real-ai`/`feat/bedrock-nova2-phase-a`/`-b` — Bedrock/Nova 2 Lite,
   per this repository's own commit history). Staging remains on `createMockProvider()`;
   Production Generate remains gated off entirely. The mobile client must never hold a provider
   secret — this repository has not re-verified that constraint end-to-end as part of the current
-  multiformat-generation batch; treat it as carried forward, not re-audited here. **This
-  repository's own source disagrees with itself about whether the Development Lambda has
-  actually been `cdk deploy`'d**: `providerSelection.ts`'s own comment says the Development
-  backend "is now deployed and has been smoke-tested end to end," while `index.mjs`'s header and
-  `docs/cdk-infrastructure.md` describe it as code-complete but not confirmed deployed — this
-  cannot be resolved from source alone (it would require live, read-only AWS inspection) and is
-  noted here rather than silently resolved one way or the other.
+  multiformat-generation batch; treat it as carried forward, not re-audited here. **Update (live
+  AWS inspection, 2026-10-28): the prior self-contradiction over whether the Development Lambda
+  had actually been `cdk deploy`'d is now resolved for existence/deployment** —
+  `aws lambda get-function --function-name interval-dev-ai-generate-study-deck` confirms it
+  exists, is `Active`/`LastUpdateStatus: Successful`, CDK-managed under
+  `IntervalDevelopmentStack` (`nodejs24.x`/arm64, 512 MB/28 s,
+  `BEDROCK_MODEL_ID=us.amazon.nova-2-lite-v1:0`, `LastModified: 2026-10-19T23:05:21Z`). **Not
+  confirmed:** whether that deployed revision matches current `v3.3-dev` source —
+  `get-function` reports deployment metadata, not a source diff. Do not assume the deployed
+  function already contains the AI request idempotency or Bedrock `maxAttempts=1` changes
+  (next bullet) merely because it exists — both remain not deployed/activated anywhere,
+  including Development.
 - **A real, DynamoDB-backed rate limiter and usage meter are now implemented** for the AI
   Generate Study Deck Lambda (`backend/lambdas/ai-generate-study-deck/rateLimiter.mjs`, a new
   Development-only `interval-dev-ai-rate-limits` table) — closing the gap
