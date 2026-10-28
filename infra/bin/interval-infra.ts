@@ -28,6 +28,7 @@ new IntervalSyncStack(app, "IntervalDevelopmentStack", {
   env: { region },
   environmentName: "development",
   description: "Interval Development environment: sync API, Lambdas, DynamoDB, Cognito. See docs/cdk-infrastructure.md.",
+  aiIdempotencyMode: app.node.tryGetContext("developmentAiIdempotencyMode"),
   syncCursorMode: app.node.tryGetContext("developmentSyncCursorMode"),
   syncPushMaintenance: app.node.tryGetContext("developmentSyncPushMaintenance"),
 });
@@ -43,6 +44,7 @@ new IntervalSyncStack(app, "IntervalStagingStack", {
   env: { region },
   environmentName: "staging",
   description: "Interval Staging/Beta environment: sync API, Lambdas, DynamoDB, Cognito. See docs/cdk-infrastructure.md.",
+  aiIdempotencyMode: app.node.tryGetContext("stagingAiIdempotencyMode"),
   syncCursorMode: app.node.tryGetContext("stagingSyncCursorMode"),
   syncPushMaintenance: app.node.tryGetContext("stagingSyncPushMaintenance"),
 });

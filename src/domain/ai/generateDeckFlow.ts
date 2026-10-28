@@ -192,6 +192,7 @@ export async function runGenerateDeckFlow(
     if (callbacks?.isCanceled?.()) return { status: "canceled" };
     if (plan.batches.length > 1) {
       const multiOutcome = await runMultiBatchGeneration({
+        generationAttemptId: attemptId,
         provider: selectModelProvider(),
         normalizedContent: normalization.content,
         sourceTitle: source.displayTitle,
@@ -217,6 +218,7 @@ export async function runGenerateDeckFlow(
   }
   if (callbacks?.isCanceled?.()) return { status: "canceled" };
   const outcome = await generateStudyDeck(selectModelProvider(), {
+    generationAttemptId: attemptId,
     sourceTitle: source.displayTitle,
     normalizedContent: normalization.content,
     options,
@@ -236,6 +238,10 @@ export async function runGenerateDeckFlow(
 // shown; this table is the single translation point. Grouped so a reviewer can see every code is
 // handled.
 export const GENERATION_ERROR_COPY_KEYS: Record<GenerationErrorCode, string> = {
+  "idempotency-conflict": "generateDeck.error.requestConflict",
+  "request-in-progress": "generateDeck.error.requestProcessing",
+  "request-outcome-unknown": "generateDeck.error.requestUnknown",
+  "idempotency-storage-failure": "generateDeck.error.requestStorage",
   "normalization-not-ready": "generateDeck.error.notReady",
   "source-empty": "generateDeck.error.empty",
   "source-too-large": "generateDeck.error.tooLarge",

@@ -47,7 +47,8 @@ export async function generateStudyDeckRemote(
   baseUrl: string,
   accessToken: string,
   request: GenerateStudyDeckRequest,
-  context: GenerationContext
+  context: GenerationContext,
+  onExecutionInfo?: (info: { providerExecutionCount?: number; idempotencyReplay?: boolean }) => void
 ): Promise<unknown> {
   let res: Response;
   try {
@@ -74,6 +75,11 @@ export async function generateStudyDeckRemote(
     throw new AiHttpError(res.status, `generate-study-deck failed: ${res.status}`, body);
   }
 
+  if (body === undefined) throw new AiNetworkError("Generation response could not be confirmed.");
+  const executions = res.headers?.get?.("x-interval-provider-executions");
+  const replay = res.headers?.get?.("x-interval-idempotency-replay");
+  onExecutionInfo?.({ ...(executions === "0" || executions === "1" ? { providerExecutionCount: Number(executions) } : {}),
+    ...(replay === "true" || replay === "false" ? { idempotencyReplay: replay === "true" } : {}) });
   return body;
 }
 

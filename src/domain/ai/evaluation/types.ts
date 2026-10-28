@@ -96,6 +96,8 @@ export type EvaluationOutcomeCategory =
   | "harness-config-error";
 
 export type GenerationEvaluationResult = {
+  /** New provider executions reported by successful HTTP responses; absent when unknown. */
+  providerExecutionCount?: number;
   fixtureId: string;
   sourceType: EvaluationSourceType;
   difficulty: DifficultyOption;

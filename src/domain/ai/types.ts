@@ -43,6 +43,9 @@ export type GenerationStatus = "complete" | "insufficient-distinct-content";
 // ---- Generate Study Deck request (safe to log in full — never carries chunk TEXT) ----
 
 export type GenerateStudyDeckRequest = {
+  /** Optional in contract v1 for backend-first rollout. New callers always supply both UUIDs. */
+  generationAttemptId?: string;
+  requestId?: string;
   sourceId: string;
   sourceTitle: string;
   normalizationVersion: number;
@@ -198,6 +201,10 @@ export type GenerationErrorCode =
   // request because another one is already in flight for the same user — backend-enforced, never
   // a client-side guess.
   | "generation-in-progress"
+  | "idempotency-conflict"
+  | "request-in-progress"
+  | "request-outcome-unknown"
+  | "idempotency-storage-failure"
   | "generation-timeout"
   | "provider-unavailable"
   | "malformed-model-output"
@@ -224,5 +231,5 @@ export type GenerationError = {
 export type TokenUsage = { inputTokens: number; outputTokens: number; totalTokens: number };
 
 export type GenerateStudyDeckOutcome =
-  | { status: "ready"; draft: GeneratedDeckDraft; usage?: TokenUsage; durationMs?: number }
+  | { status: "ready"; draft: GeneratedDeckDraft; usage?: TokenUsage; durationMs?: number; providerExecutionCount?: number; idempotencyReplay?: boolean }
   | { status: "error"; error: GenerationError };

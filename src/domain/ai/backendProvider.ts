@@ -34,6 +34,7 @@ export type BackendProviderDeps = {
 // server's own `error` field only when it's actually one of these, rather than assuming any
 // string the server sends is safe to forward as-is.
 const KNOWN_ERROR_CODES: ReadonlySet<string> = new Set<GenerationErrorCode>([
+  "idempotency-conflict", "request-in-progress", "request-outcome-unknown", "idempotency-storage-failure",
   "normalization-not-ready",
   "source-empty",
   "source-too-large",
@@ -53,6 +54,10 @@ const KNOWN_ERROR_CODES: ReadonlySet<string> = new Set<GenerationErrorCode>([
 // (defense in depth: even though the backend Lambda is this repository's own code and already
 // sanitizes its error messages, this mobile-side mapping never depends on that remaining true).
 const MESSAGE_FOR: Partial<Record<GenerationErrorCode, string>> = {
+  "idempotency-conflict": "This generation request could not be resumed. Start again.",
+  "request-in-progress": "That generation request is still processing. Try again in a moment.",
+  "request-outcome-unknown": "We could not confirm whether that generation finished. Start again.",
+  "idempotency-storage-failure": "Generation could not start safely. Please try again.",
   "rate-limited": "You've reached the generation limit for now — try again later.",
   "daily-limit-reached": "You've reached today's AI generation limit. Try again tomorrow.",
   "generation-in-progress": "Another deck is already being generated. Finish that request before starting another.",
@@ -106,7 +111,7 @@ function isKnownErrorCode(value: unknown): value is GenerationErrorCode {
  * Falls back to the HTTP status code's own closest semantic fit when the body doesn't carry a
  * recognizable code at all (e.g. a 401 before any JSON body is attached).
  */
-function mapHttpErrorToOutcome(error: AiHttpError): ModelProviderOutcome {
+function mapHttpErrorToOutcome(error: AiHttpError, keyedRequest = false): ModelProviderOutcome {
   const status = getAiHttpStatus(error);
   const body = getAiHttpBody(error) as BackendErrorBody | undefined;
 
@@ -121,7 +126,7 @@ function mapHttpErrorToOutcome(error: AiHttpError): ModelProviderOutcome {
   // used for this request," which is exactly what provider-unavailable represents — there is no
   // dedicated "unauthenticated" code in this taxonomy, and inventing one is explicitly out of
   // scope for this batch (see docs/ai-generation-foundation.md's error model).
-  const fallbackCode: GenerationErrorCode = status === 429 ? "rate-limited" : status === 422 ? "validation-failed" : "provider-unavailable";
+  const fallbackCode: GenerationErrorCode = status === 429 ? "rate-limited" : status === 422 ? "validation-failed" : keyedRequest && (status ?? 0) >= 500 ? "request-outcome-unknown" : "provider-unavailable";
   return { status: "error", error: { code: fallbackCode, message: genericMessage(fallbackCode) } };
 }
 
@@ -143,17 +148,16 @@ export function createBackendProvider(deps: BackendProviderDeps): ModelProvider 
       }
 
       try {
-        const raw = await generateStudyDeckRemote(deps.getBaseUrl(), accessToken, input.request, input.context);
-        return { status: "ok", raw, usage: extractUsage(raw as BackendSuccessBody | undefined) };
+        let info: { providerExecutionCount?: number; idempotencyReplay?: boolean } = {};
+        const raw = await generateStudyDeckRemote(deps.getBaseUrl(), accessToken, input.request, input.context, value => { info = value; });
+        return { status: "ok", raw, usage: extractUsage(raw as BackendSuccessBody | undefined), ...info };
       } catch (error) {
         if (isAiNetworkError(error)) {
-          return {
-            status: "error",
-            error: { code: "provider-unavailable", message: genericMessage("provider-unavailable") },
-          };
+          const code = input.request.requestId ? "request-outcome-unknown" : "provider-unavailable";
+          return { status: "error", error: { code, message: genericMessage(code) } };
         }
         if (error instanceof AiHttpError) {
-          return mapHttpErrorToOutcome(error);
+          return mapHttpErrorToOutcome(error, !!input.request.requestId);
         }
         // Defensive catch-all — never let an unrecognized thrown value escape as an unhandled
         // rejection; still returns a safe, existing-taxonomy outcome.

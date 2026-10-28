@@ -18,6 +18,7 @@
     "test:coverage": "node --import ./scripts/ai-test-loader.mjs --test src/domain/sourceCoverage.test.ts src/models/generatedCardProvenance.test.ts",
     "test:provenance": "node --experimental-test-module-mocks --import ./scripts/ai-test-loader.mjs --test src/models/generatedCardProvenance.test.ts src/cloud/sync/generatedCardProvenance*.test.ts src/storage/generatedCardProvenanceStore.test.ts src/domain/sourceCoverageLiveness.test.ts",
     "test:generation-ux": "node --experimental-test-module-mocks --import ./scripts/ai-test-loader.mjs --test src/domain/ai/generationPresentation.test.ts src/domain/ai/generationRunGuard.test.ts src/domain/ai/multiBatchGeneration.test.ts src/domain/ai/testing/*.test.ts",
+    "test:idempotency": "node --import ./scripts/ai-test-loader.mjs --test backend/lambdas/ai-generate-study-deck/requestIdempotency.test.mjs backend/lambdas/ai-generate-study-deck/bedrockRetry.test.mjs src/domain/ai/requestIdentity.test.ts",
     "test:eval": "node --import ./scripts/ai-test-loader.mjs --test src/domain/ai/evaluation/*.test.ts src/domain/ai/generationAttemptId.test.ts src/domain/ai/generationTelemetry.test.ts",
     "eval:ai": "node --import ./scripts/ai-test-loader.mjs scripts/eval-ai.mjs"
   },
