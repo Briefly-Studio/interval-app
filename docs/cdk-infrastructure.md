@@ -934,3 +934,15 @@ at a time; switching environments today means hand-editing `.env` and restarting
 `docs/environment-config-contract.md`'s "Current status" section for exactly which local
 variables this maps to. No per-environment env files or switching scripts exist in this
 repository; that remains a possible future improvement, not implemented here).
+
+
+## AI request idempotency declarations (not deployed)
+
+`docs/ai-request-idempotency.md` governs the new dedicated short-lived response table in both
+Development and Staging, least-privilege point access, transactional admission and compatibility
+rollout. Committed per-environment modes remain `legacy`. Development's existing AI Lambda gets
+the table/mode environment values and item permissions; Staging still has no AI HTTP route and
+keeps its local mock. No Production stack/provider is enabled. Build/synth do not activate this
+feature; optional → client → required needs an explicit approved rollout. Generated results have
+24-hour logical retry eligibility plus asynchronous TTL deletion, AWS-managed encryption and no
+PITR backups. No sync tables, cursor modes or source structure are changed.

@@ -94,7 +94,7 @@ export function buildEvaluationReport(params: { providerMode: ProviderMode; prov
   };
 }
 
-const TABLE_COLUMNS = ["Fixture", "Type", "Difficulty", "Tier", "Cards", "Target", "Status", "Concepts", "Dupes", "Latency(ms)", "Tokens"] as const;
+const TABLE_COLUMNS = ["Fixture", "Type", "Difficulty", "Tier", "Cards", "Target", "Status", "Concepts", "Dupes", "Latency(ms)", "Tokens", "New calls"] as const;
 
 function rowFor(result: GenerationEvaluationResult): string[] {
   return [
@@ -109,6 +109,7 @@ function rowFor(result: GenerationEvaluationResult): string[] {
     String(result.exactDuplicateCount),
     String(result.latencyMs),
     result.tokenUsage ? String(result.tokenUsage.totalTokens) : "-",
+    result.providerExecutionCount !== undefined ? String(result.providerExecutionCount) : "-",
   ];
 }
 

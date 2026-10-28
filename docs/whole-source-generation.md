@@ -175,7 +175,8 @@ the full selection was not processed and no deck was saved, with guidance to wai
 Other failures retain the existing reason plus the same incomplete/no-save disclosure.
 
 Retry is explicit and restarts at step 1; real-AI copy says daily requests may be used again.
-There is no automatic retry, refund, resume, persisted partial result, or idempotency change.
+There is no automatic retry, refund, resume or persisted partial deck. Request-level replay is
+now implemented behind backend migration modes; see `docs/ai-request-idempotency.md`.
 Cancellation wins over simultaneous provider/network errors, so intentional cancellation is
 not presented as a failure. Starting an attempt clears any previous in-memory draft; only an
 uncanceled successful run publishes a new session.
@@ -280,11 +281,11 @@ across several of them instead of one.
 
 ## Known limitations
 
-- **No safe resume/idempotency.** A failure mid-sequence means a full restart from batch 1 on
-  retry — already-succeeded batches' quota units are not refunded or reused. This mirrors the
-  pre-existing, already-documented single-call "no request-level idempotency key" gap
-  (`docs/ai-generation-foundation.md`), just compounded across however many batches already ran.
-  A future batch could add a resumable plan with per-batch completion tracking; not attempted here.
+- **No batch resume.** User Retry still restarts from batch 1 with a fresh attempt/request set,
+  so already-succeeded steps can consume quota again. This differs from retained same-request
+  retry: each batch now has its own UUID, and activated backend idempotency replays the same
+  batch's authoritative response without another provider execution or quota unit. No automatic
+  retry/resume loop was added. See `docs/ai-request-idempotency.md` for activation/retention limits.
 - **Cancellation cannot interrupt an in-flight request.** Its result is discarded and no later
   step/session is published, but the server request may finish and consume quota. The local
   lease remains occupied until it settles; network/lifecycle timing is not guaranteed.
@@ -299,12 +300,15 @@ across several of them instead of one.
   purely client-side planning safety limit, not a server-enforced one — the server's existing
   20/day + single-concurrency enforcement is the real backstop either way.
 
-## Future resume/idempotency opportunities
+## Request identity and future resume
 
-A later batch could add a request-level idempotency key (closing the gap noted above for both
-single- and multi-batch generation at once) and/or a persisted, resumable plan — "batches 1-3
-already succeeded; retry from batch 4" — without changing this batch's planner/allocator/dedupe
-logic, only the orchestrator's own failure-handling branch.
+Every run shares one attempt UUID and preallocates a distinct provider request UUID per step.
+Retries of a retained prepared call reuse its UUID; a full restart uses new IDs. Cancellation
+continues discarding late client results even if the backend caches success. Activated backend
+replay protects per-request quota without changing allocation, dedupe, card targets or provenance.
+
+A persisted resumable plan (“steps 1–3 succeeded; continue at 4”) remains separate future work.
+Request replay alone does not provide a resume UI or recover an app-killed run.
 
 ## Founder QA
 

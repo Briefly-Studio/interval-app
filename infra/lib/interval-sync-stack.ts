@@ -24,6 +24,7 @@ export interface IntervalSyncStackProps extends cdk.StackProps {
   // itself (defense in depth — this stack is not the only place that could get it wrong).
   syncCursorMode?: string;
   syncPushMaintenance?: string;
+  aiIdempotencyMode?: string;
 }
 
 // Fail-closed exactly like the Lambda code's own resolveSyncCursorMode/resolveMaintenanceMode
@@ -507,6 +508,18 @@ export class IntervalSyncStack extends cdk.Stack {
     // instantiated by this stack at all (see this file's class comment), so this is unreachable
     // there regardless.
     // ---------------------------------------------------------------------
+    const aiIdempotencyMode = props.aiIdempotencyMode === undefined || props.aiIdempotencyMode === "legacy"
+      ? "legacy" : props.aiIdempotencyMode === "optional" ? "optional" : "required";
+    const aiRequestIdempotencyTable = new dynamodb.Table(this, "AiRequestIdempotencyTable", {
+      tableName: names.aiRequestIdempotency,
+      partitionKey: { name: "PK", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "SK", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: false, // ephemeral generated results; no backup retention beyond TTL
+      timeToLiveAttribute: "ttl",
+      removalPolicy,
+    });
     if (environmentName === "development") {
       const aiGenerateStudyDeckRole = new iam.Role(this, "AiGenerateStudyDeckRole", {
         roleName: names.aiGenerateStudyDeckRole,
@@ -615,10 +628,18 @@ export class IntervalSyncStack extends cdk.Stack {
       aiGenerateStudyDeckRole.addToPolicy(
         new iam.PolicyStatement({
           sid: "AiRateLimitsTableReadWrite",
-          actions: ["dynamodb:UpdateItem", "dynamodb:PutItem", "dynamodb:DeleteItem"],
+          actions: ["dynamodb:UpdateItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:ConditionCheckItem"],
           resources: [aiRateLimitsTable.tableArn],
         })
       );
+
+      // Transaction authorization uses the underlying item permissions, not a broad Scan/Query
+      // grant. ConditionCheckItem on the rate table fences the existing concurrency lease.
+      aiGenerateStudyDeckRole.addToPolicy(new iam.PolicyStatement({
+        sid: "AiRequestIdempotencyPointAccess",
+        actions: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"],
+        resources: [aiRequestIdempotencyTable.tableArn],
+      }));
 
       // Timing contract, restated from Phase A (src/domain/ai/limits.ts's
       // GENERATION_LIMITS.requestTimeoutMs=25_000 and backend/lambdas/ai-generate-study-deck/
@@ -649,7 +670,7 @@ export class IntervalSyncStack extends cdk.Stack {
         // something CDK enforces for you; `lambda.Code.fromAsset` packages whatever is actually
         // on disk at synth time, nothing more and nothing less.
         code: lambda.Code.fromAsset(path.join(__dirname, "../../backend/lambdas/ai-generate-study-deck"), {
-          exclude: ["*.test.mjs"],
+          exclude: ["*.test.mjs", "testing/**"],
         }),
         environment: {
           // Never a product/domain constant — read only from here, exactly as Phase A's
@@ -661,6 +682,8 @@ export class IntervalSyncStack extends cdk.Stack {
           // documented fail-closed trigger (rate limiting denies every request rather than
           // guessing a table name), never a silent allow.
           AI_RATE_LIMIT_TABLE: aiRateLimitsTable.tableName,
+          AI_IDEMPOTENCY_TABLE: aiRequestIdempotencyTable.tableName,
+          AI_IDEMPOTENCY_MODE: aiIdempotencyMode,
         },
       });
 

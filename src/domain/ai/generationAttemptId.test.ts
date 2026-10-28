@@ -8,7 +8,7 @@ test("generateAttemptId: v4-shaped hex string with hyphens in the expected posit
   assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 });
 
-test("generateAttemptId: never collides across a large sample (non-cryptographic but adequate for a correlation id)", () => {
+test("generateAttemptId: never collides across a large sample (OS/Web Crypto UUIDs)", () => {
   const seen = new Set<string>();
   for (let i = 0; i < 2000; i++) seen.add(generateAttemptId());
   assert.equal(seen.size, 2000);
